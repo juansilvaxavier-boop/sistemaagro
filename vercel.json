@@ -18,5 +18,8 @@
       "path": "/api/cron/backup",
       "schedule": "0 6 * * *"
     }
+  ],
+  "regions": [
+    "gru1"
   ]
 }
