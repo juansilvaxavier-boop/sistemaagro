@@ -5,6 +5,7 @@ const A = require('../auth');
 const S = require('../services');
 const W = require('../workflow');
 const { responderLista } = require('../lista');
+const E = require('../escopo');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -12,17 +13,9 @@ r.use(A.exige('propostas'));
 
 const STATUS_SQL = `CASE WHEN p.status IN ('rascunho','enviada') AND p.validade < date('now','localtime') THEN 'expirada' ELSE p.status END`;
 
-/** Vendedor vê as próprias propostas; supervisor, as da equipe; os demais, todas da empresa. */
+/** Propostas visíveis: empresa da sessão e abrangência do usuário (próprias, da equipe ou todas). */
 function escopo(req, alias = 'p') {
-  const u = req.user;
-  const cond = [`${alias}.empresa_id = ?`];
-  const params = [req.empresaId];
-  if (u.perfil === 'vendedor') cond.push(`${alias}.vendedor_id = ?`), params.push(u.id);
-  if (u.perfil === 'supervisor') {
-    cond.push(`${alias}.vendedor_id IN (SELECT id FROM usuarios WHERE equipe_id IN (SELECT id FROM equipes WHERE supervisor_id = ?) OR id = ?)`);
-    params.push(u.id, u.id);
-  }
-  return { sql: cond.join(' AND '), params };
+  return { sql: `${alias}.empresa_id = ? AND ${E.vendas(req.user, alias, { semSupervisor: true })}`, params: [req.empresaId] };
 }
 
 const LISTA_SQL = `
@@ -128,7 +121,9 @@ async function validar(req, b) {
 
 r.post('/', async (req, res) => {
   const b = { ...req.body };
-  if (req.user.perfil === 'vendedor' || !b.vendedor_id) b.vendedor_id = req.user.id;
+  if (E.abrangencia(req.user) === 'proprio' || !b.vendedor_id) b.vendedor_id = req.user.id;
+  const vs = E.vendedoresSql(req.user);
+  if (vs && !(await db.get(`SELECT 1 AS ok WHERE ? IN (${vs})`, Number(b.vendedor_id)))) throw new ErroNegocio('Vendedor fora da sua equipe.', 403);
   b.validade = b.validade || S.addDias(S.hoje(), 15);
   await validar(req, b);
   const id = await db.tx(async () => {
@@ -145,7 +140,9 @@ r.put('/:id', async (req, res) => {
   const p = await carregar(req);
   if (!['rascunho', 'enviada'].includes(p.status)) throw new ErroNegocio('Proposta aceita, recusada ou convertida não pode ser alterada. Duplique-a.');
   const b = { ...req.body, cliente_id: req.body?.cliente_id || p.cliente_id };
-  if (req.user.perfil === 'vendedor') delete b.vendedor_id;
+  if (E.abrangencia(req.user) === 'proprio') delete b.vendedor_id;
+  const vs = E.vendedoresSql(req.user);
+  if (b.vendedor_id && vs && !(await db.get(`SELECT 1 AS ok WHERE ? IN (${vs})`, Number(b.vendedor_id)))) throw new ErroNegocio('Vendedor fora da sua equipe.', 403);
   await validar(req, b);
   await db.tx(async () => {
     await db.update('propostas', p.id, b, CAMPOS);
@@ -216,7 +213,7 @@ r.post('/:id/duplicar', async (req, res) => {
   const id = await db.tx(async () => {
     const numero = await db.nextSeq('proposta', 5001);
     const novo = await db.insert('propostas', {
-      ...Object.fromEntries(CAMPOS.map((k) => [k, p[k]])), vendedor_id: req.user.perfil === 'vendedor' ? req.user.id : p.vendedor_id,
+      ...Object.fromEntries(CAMPOS.map((k) => [k, p[k]])), vendedor_id: E.abrangencia(req.user) === 'proprio' ? req.user.id : p.vendedor_id,
       numero, empresa_id: p.empresa_id, status: 'rascunho', validade: S.addDias(S.hoje(), 15),
     });
     await salvarItens(novo, await db.all('SELECT * FROM proposta_itens WHERE proposta_id = ?', p.id), p.forma_id);

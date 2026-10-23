@@ -49,6 +49,8 @@ function criarApp() {
   api.use('/pagar', require('./routes/pagar'));
   api.use('/chamados', require('./routes/chamados'));
   api.use('/propostas', require('./routes/propostas'));
+  api.use('/rh', require('./routes/rh'));
+  api.use('/assistente', require('./routes/assistente'));
   api.use('/admin', require('./routes/admin'));
   app.use('/api', api);
   app.use('/api', (req, res) => res.status(404).json({ erro: 'Rota não encontrada.' }));

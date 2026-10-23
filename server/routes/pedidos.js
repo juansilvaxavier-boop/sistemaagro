@@ -6,18 +6,14 @@ const S = require('../services');
 const W = require('../workflow');
 const { responderLista } = require('../lista');
 const { mascararObjeto, mascararLinhas } = require('../lgpd');
+const E = require('../escopo');
 
 const r = express.Router();
 const { ErroNegocio } = S;
 
-/** Restrição de visibilidade dos pedidos por perfil, sempre dentro da empresa da sessão. */
+/** Pedidos visíveis: empresa da sessão e abrangência do usuário (próprios, da equipe ou todos). */
 function escopo(req, alias = 'p') {
-  const u = req.user;
-  const cond = [`${alias}.empresa_id = ?`];
-  const params = [req.empresaId];
-  if (u.perfil === 'vendedor') cond.push(`${alias}.vendedor_id = ?`), params.push(u.id);
-  if (u.perfil === 'supervisor') cond.push(`(${alias}.supervisor_id = ? OR ${alias}.vendedor_id = ?)`), params.push(u.id, u.id);
-  return { sql: cond.join(' AND '), params };
+  return { sql: `${alias}.empresa_id = ? AND ${E.vendas(req.user, alias)}`, params: [req.empresaId] };
 }
 
 const etapaLabelSql = `CASE p.etapa ${Object.entries(W.ETAPAS).map(([k, v]) => `WHEN '${k}' THEN '${v.label}'`).join(' ')} END`;
@@ -155,6 +151,12 @@ async function salvarItens(pedidoId, itens, formaId) {
   }
 }
 
+/** Só dá para lançar pedido em nome de vendedor que está na abrangência do usuário. */
+async function validarVendedor(req, vendedorId) {
+  const v = E.vendedoresSql(req.user);
+  if (v && !(await db.get(`SELECT 1 AS ok WHERE ? IN (${v})`, Number(vendedorId)))) throw new ErroNegocio('Vendedor fora da sua equipe.', 403);
+}
+
 async function validarCabecalho(b) {
   if (b.cliente_id && !await db.get('SELECT id FROM clientes WHERE id = ?', b.cliente_id)) throw new ErroNegocio('Cliente não encontrado.');
   if (b.condicao_id && b.forma_id && !await db.get('SELECT id FROM condicoes_pagamento WHERE id = ? AND forma_id = ?', b.condicao_id, b.forma_id)) {
@@ -169,7 +171,9 @@ r.post('/', A.exige('pedido.criar'), async (req, res) => {
   const b = { ...req.body };
   if (!b.cliente_id) throw new ErroNegocio('Informe o cliente.');
   await S.exigirClienteLiberado(b.cliente_id);
-  if (req.user.perfil === 'vendedor' || !b.vendedor_id) b.vendedor_id = req.user.id;
+  if (E.abrangencia(req.user) === 'proprio' || !b.vendedor_id) b.vendedor_id = req.user.id;
+  await validarVendedor(req, b.vendedor_id);
+  await require('./clientes').exigirAcessoCliente(req.user, b.cliente_id);
   await validarCabecalho(b);
   const id = await db.tx(async () => {
     const vend = await db.get('SELECT u.id, e.supervisor_id FROM usuarios u LEFT JOIN equipes e ON e.id = u.equipe_id WHERE u.id = ?', b.vendedor_id);
@@ -189,7 +193,8 @@ r.put('/:id', A.exige('pedido.criar'), async (req, res) => {
   const p = await carregar(req, Number(req.params.id));
   if (p.etapa !== 'venda') throw new ErroNegocio('Só é possível alterar o pedido na etapa Vendedor.');
   const b = { ...req.body, cliente_id: req.body.cliente_id || p.cliente_id };
-  if (req.user.perfil === 'vendedor') delete b.vendedor_id;
+  if (E.abrangencia(req.user) === 'proprio') delete b.vendedor_id;
+  if (b.vendedor_id) await validarVendedor(req, b.vendedor_id);
   await validarCabecalho(b);
   await db.tx(async () => {
     await db.update('pedidos', p.id, pick(b, camposCabecalho), camposCabecalho);

@@ -5,6 +5,7 @@ const A = require('../auth');
 const S = require('../services');
 const W = require('../workflow');
 const { enviarXlsx } = require('../lista');
+const E = require('../escopo');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -25,10 +26,10 @@ function filtros(q, mapa) {
 }
 const fimDia = (v) => `${v} 23:59:59`;
 
-function forcarVendedor(req, q) {
-  if (req.user.perfil === 'vendedor') q.vendedor_id = req.user.id;
-  if (req.user.perfil === 'supervisor') q.supervisor_id = req.user.id;
-}
+/** Cada relatório só traz o que está na abrangência do usuário (próprio, equipe ou tudo). */
+const escopoParcelas = (ctx) => ` AND ${E.financeiro(ctx.user, 'p')}`;
+const escopoNotas = (ctx) => ` AND ${E.financeiro(ctx.user, 'nf')}`;
+const escopoPedidos = (ctx, alias) => ` AND ${E.vendas(ctx.user, alias)}`;
 
 const PARCELA_BASE = `
   FROM parcelas p JOIN clientes c ON c.id = p.cliente_id LEFT JOIN pedidos pe ON pe.id = p.pedido_id
@@ -51,7 +52,7 @@ const RELATORIOS = {
       return {
         colunas: [col('vendedor', 'Vendedor'), col('pedido', 'Pedido'), col('nota', 'NF'), col('documento', 'CPF/CNPJ'), col('cliente', 'Cliente'), col('parcela', 'Parcela'),
           col('vencimento', 'Vencimento', 'date'), col('saldo', 'Saldo', 'money'), col('status', 'Status'), col('forma', 'Forma'), col('banco', 'Banco'), col('supervisor', 'Supervisor')],
-        linhas: await db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} ${f.where} ORDER BY ${ordem}`, ctx.emp, ...f.params),
+        linhas: await db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND ${S.ABERTA_SQL}${escopoParcelas(ctx)} ${f.where} ORDER BY ${ordem}`, ctx.emp, ...f.params),
         totalizar: ['saldo'], agrupar: q.agrupar_vendedor === '1' ? 'vendedor' : null,
       };
     },
@@ -64,7 +65,7 @@ const RELATORIOS = {
         colunas: [col('data_pagamento', 'Data baixa', 'date'), col('pedido', 'Pedido'), col('nota', 'NF'), col('cliente', 'Cliente'), col('parcela', 'Parcela'),
           col('vencimento', 'Vencimento', 'date'), col('valor', 'Valor', 'money'), col('juros', 'Juros', 'money'), col('valor_pago', 'Pago', 'money'),
           col('tipo_baixa', 'Tipo baixa'), col('banco', 'Banco'), col('forma', 'Forma'), col('vendedor', 'Vendedor'), col('supervisor', 'Supervisor')],
-        linhas: await db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND p.valor_pago > 0 ${f.where} ORDER BY p.data_pagamento`, ctx.emp, ...f.params),
+        linhas: await db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND p.valor_pago > 0${escopoParcelas(ctx)} ${f.where} ORDER BY p.data_pagamento`, ctx.emp, ...f.params),
         totalizar: ['valor', 'juros', 'valor_pago'],
       };
     },
@@ -81,7 +82,7 @@ const RELATORIOS = {
           col('dias_atraso', 'Dias atraso'), col('saldo', 'Saldo', 'money'), col('forma', 'Forma'), col('banco', 'Banco'), col('vendedor', 'Vendedor'), col('supervisor', 'Supervisor')],
         linhas: await db.all(
           `SELECT ${PARCELA_COLS}, CAST(julianday('now','localtime') - julianday(p.vencimento) AS INTEGER) AS dias_atraso ${PARCELA_BASE}
-            WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime') ${f.where}${neg} ORDER BY p.vencimento`, ctx.emp, ...f.params,
+            WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime')${escopoParcelas(ctx)} ${f.where}${neg} ORDER BY p.vencimento`, ctx.emp, ...f.params,
         ),
         totalizar: ['saldo'],
       };
@@ -98,7 +99,7 @@ const RELATORIOS = {
           `SELECT nf.data_emissao, e.nome AS empresa, nf.numero, pe.numero AS pedido, c.nome AS cliente, v.nome AS vendedor, nf.valor, nf.status
              FROM notas_fiscais nf JOIN empresas e ON e.id = nf.empresa_id JOIN clientes c ON c.id = nf.cliente_id
              LEFT JOIN pedidos pe ON pe.id = nf.pedido_id LEFT JOIN usuarios v ON v.id = pe.vendedor_id
-            WHERE nf.status <> 'cancelada' ${q.empresa_id ? '' : 'AND nf.empresa_id = ' + Number(ctx.emp)} ${f.where} ORDER BY nf.data_emissao`, ...f.params,
+            WHERE nf.status <> 'cancelada' ${q.empresa_id ? '' : 'AND nf.empresa_id = ' + Number(ctx.emp)}${escopoNotas(ctx)} ${f.where} ORDER BY nf.data_emissao`, ...f.params,
         ),
         totalizar: ['valor'],
       };
@@ -120,7 +121,7 @@ const RELATORIOS = {
              FROM pedidos p JOIN clientes c ON c.id = p.cliente_id LEFT JOIN formas_pagamento f ON f.id = p.forma_id
              LEFT JOIN condicoes_pagamento cp ON cp.id = p.condicao_id LEFT JOIN usuarios v ON v.id = p.vendedor_id
              LEFT JOIN usuarios s ON s.id = p.supervisor_id LEFT JOIN equipes e ON e.id = v.equipe_id
-            WHERE p.empresa_id = ? ${f.where} ORDER BY p.created_at`, ctx.emp, ...f.params,
+            WHERE p.empresa_id = ?${escopoPedidos(ctx, 'p')} ${f.where} ORDER BY p.created_at`, ctx.emp, ...f.params,
         )).map((x) => ({ ...x, etapa: W.ETAPAS[x.etapa]?.label || x.etapa })),
         totalizar: ['valor_total'],
       };
@@ -138,7 +139,7 @@ const RELATORIOS = {
                   i.quantidade, i.unidade, i.valor_unitario, i.valor_total, i.brinde, i.lote
              FROM notas_fiscais nf JOIN pedidos pe ON pe.id = nf.pedido_id JOIN pedido_itens i ON i.pedido_id = pe.id JOIN produtos pr ON pr.id = i.produto_id
              LEFT JOIN produto_embalagens em ON em.id = i.embalagem_id JOIN clientes c ON c.id = nf.cliente_id JOIN empresas e ON e.id = nf.empresa_id
-            WHERE nf.status <> 'cancelada' ${q.empresa_id ? '' : 'AND nf.empresa_id = ' + Number(ctx.emp)} ${f.where} ORDER BY nf.data_emissao, nf.numero`, ...f.params,
+            WHERE nf.status <> 'cancelada' ${q.empresa_id ? '' : 'AND nf.empresa_id = ' + Number(ctx.emp)}${escopoPedidos(ctx, 'pe')} ${f.where} ORDER BY nf.data_emissao, nf.numero`, ...f.params,
         ),
         totalizar: ['valor_total'],
       };
@@ -167,7 +168,7 @@ const RELATORIOS = {
            FROM notas_fiscais nf JOIN pedidos pe ON pe.id = nf.pedido_id JOIN pedido_itens i ON i.pedido_id = pe.id
            JOIN produtos pr ON pr.id = i.produto_id LEFT JOIN grupos_produto g ON g.id = pr.grupo_id LEFT JOIN produto_embalagens em ON em.id = i.embalagem_id
            JOIN clientes c ON c.id = pe.cliente_id LEFT JOIN usuarios v ON v.id = pe.vendedor_id
-          WHERE nf.status <> 'cancelada' AND nf.empresa_id = ? ${f.where}
+          WHERE nf.status <> 'cancelada' AND nf.empresa_id = ?${escopoPedidos(ctx, 'pe')} ${f.where}
           GROUP BY ${[...grupos, ...(analitico ? ['nf.id', 'c.id'] : [])].join(', ')}
           ${q.quantidade_min ? 'HAVING SUM(i.quantidade) >= ' + Number(q.quantidade_min) : ''}
           ORDER BY ${analitico ? 'chave, emissao' : 'valor DESC'}`, ctx.emp, ...f.params,
@@ -181,7 +182,7 @@ const RELATORIOS = {
     },
   },
   'contas-pagar': {
-    titulo: 'Contas a Pagar', perm: 'financeiro.pagar',
+    titulo: 'Contas a Pagar', perm: 'financeiro.pagar', soTodos: true,
     async gerar(q, ctx) {
       const { STATUS_SQL, SALDO_SQL } = require('./pagar');
       const f = filtros(q, {
@@ -204,7 +205,7 @@ const RELATORIOS = {
     },
   },
   'fluxo-caixa': {
-    titulo: 'Fluxo de Caixa Previsto', perm: 'relatorios.financeiro',
+    titulo: 'Fluxo de Caixa Previsto', perm: 'relatorios.financeiro', soTodos: true,
     async gerar(q, ctx) {
       const de = q.venc_de || S.hoje();
       const ate = q.venc_ate || S.addDias(de, 30);
@@ -271,13 +272,13 @@ const RELATORIOS = {
   },
   'vendedores-supervisor': {
     titulo: 'Vendedores por Supervisor', perm: 'relatorios.vendas',
-    async gerar() {
+    async gerar(q, ctx) {
       return {
         colunas: [col('supervisor', 'Supervisor'), col('equipe', 'Equipe'), col('vendedor', 'Vendedor'), col('login', 'Login'), col('email', 'E-mail'), col('ativo', 'Ativo', 'bool')],
         linhas: await db.all(
           `SELECT IFNULL(s.nome,'(sem supervisor)') AS supervisor, e.nome AS equipe, v.nome AS vendedor, v.login, v.email, v.ativo
              FROM usuarios v LEFT JOIN equipes e ON e.id = v.equipe_id LEFT JOIN usuarios s ON s.id = e.supervisor_id
-            WHERE v.perfil = 'vendedor' ORDER BY supervisor, e.nome, v.nome`,
+            WHERE v.perfil = 'vendedor' AND ${E.pessoas(ctx.user, 'v.id')} ORDER BY supervisor, e.nome, v.nome`,
         ),
         agrupar: 'supervisor',
       };
@@ -286,7 +287,7 @@ const RELATORIOS = {
 };
 
 r.get('/', async (req, res) => {
-  res.json(Object.entries(RELATORIOS).filter(([, d]) => A.can(req.user, d.perm)).map(([id, d]) => ({ id, titulo: d.titulo })));
+  res.json(Object.entries(RELATORIOS).filter(([, d]) => A.can(req.user, d.perm) && (!d.soTodos || E.veTudo(req.user))).map(([id, d]) => ({ id, titulo: d.titulo })));
 });
 
 r.get('/:tipo', async (req, res) => {
@@ -294,7 +295,11 @@ r.get('/:tipo', async (req, res) => {
   if (!def) throw new ErroNegocio('Relatório não encontrado', 404);
   if (!A.can(req.user, def.perm)) throw new ErroNegocio('Sem acesso a este relatório.', 403);
   const q = { ...req.query };
-  forcarVendedor(req, q);
+  // Outra empresa só para quem tem acesso a ela.
+  if (q.empresa_id && Number(q.empresa_id) !== req.empresaId
+    && !(await db.get('SELECT 1 AS ok FROM usuario_empresas WHERE usuario_id = ? AND empresa_id = ?', req.user.id, Number(q.empresa_id)))
+    && !['admin', 'diretoria'].includes(req.user.perfil)) throw new ErroNegocio('Sem acesso a esta empresa.', 403);
+  if (def.soTodos && !E.veTudo(req.user)) throw new ErroNegocio('Este relatório mostra dados de toda a empresa e não está disponível para o seu usuário.', 403);
   const out = await def.gerar(q, { emp: req.empresaId, user: req.user });
   const totais = {};
   for (const k of out.totalizar || []) totais[k] = S.r2(out.linhas.reduce((a, l) => a + (Number(l[k]) || 0), 0));

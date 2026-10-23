@@ -161,7 +161,7 @@ html.menu-compacto .sidebar-user { justify-content: center; }
   background: color-mix(in srgb, var(--superficie) 82%, transparent); backdrop-filter: saturate(160%) blur(10px); border-bottom: 1px solid var(--borda); }
 #breadcrumb { font-weight: 600; color: var(--texto); min-width: 0; }
 #breadcrumb small { color: var(--texto-2); font-weight: 400; }
-#conteudo { padding: 20px clamp(12px, 2.2vw, 28px) 40px; outline: none; }
+#conteudo { padding: 20px clamp(12px, 2.2vw, 28px) 80px; outline: none; }
 .backdrop-menu { display: none; }
 @media (max-width: 991.98px) {
   #sidebar { transform: translateX(-100%); width: min(300px, 86vw); }
@@ -275,7 +275,18 @@ a.kpi-link:hover .kpi { transform: translateY(-2px); box-shadow: var(--sombra-al
 .paleta-res a.sel, .paleta-res a:hover { background: var(--agro-suave); }
 
 /* Chat */
-.chat { position: fixed; right: 16px; bottom: 16px; width: min(380px, calc(100vw - 32px)); height: min(620px, calc(100vh - 92px)); z-index: 1060;
+.dock { position: fixed; right: 16px; bottom: 16px; z-index: 1045; display: flex; gap: 8px; }
+.dock.d-none { display: none; }
+.dock-btn { position: relative; display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--borda); background: var(--superficie); color: var(--texto);
+  border-radius: 99px; padding: 10px 16px; font-weight: 600; font-size: .88rem; box-shadow: var(--sombra-alta); }
+.dock-btn i { font-size: 1.1rem; color: var(--agro); }
+.dock-btn:hover { background: var(--agro-suave); }
+.dock-btn.ativo { background: var(--agro); color: #fff; border-color: var(--agro); }
+.dock-btn.ativo i { color: inherit; }
+[data-bs-theme="dark"] .dock-btn.ativo { color: #08130c; }
+.dock-badge { position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: #dc3545; color: #fff;
+  font-size: .7rem; font-weight: 700; line-height: 20px; text-align: center; }
+.chat { position: fixed; right: 16px; bottom: 72px; width: min(380px, calc(100vw - 32px)); height: min(600px, calc(100vh - 150px)); z-index: 1046;
   background: var(--superficie); border: 1px solid var(--borda); border-radius: 16px; box-shadow: var(--sombra-alta); display: flex; flex-direction: column; overflow: hidden; }
 .chat-cab { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--borda); background: var(--superficie-2); min-height: 56px; }
 .chat-corpo { flex: 1; overflow-y: auto; padding: 8px; }
@@ -293,7 +304,26 @@ a.kpi-link:hover .kpi { transform: translateY(-2px); box-shadow: var(--sombra-al
 .dia-chat { text-align: center; font-size: .7rem; color: var(--texto-2); margin: 10px 0 4px; }
 .chat-envio { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--borda); }
 .chat-envio textarea { resize: none; max-height: 120px; }
-@media (max-width: 575.98px) { .chat { right: 0; bottom: 0; width: 100vw; height: 100dvh; border-radius: 0; } }
+.ass-aviso { font-size: .68rem; color: var(--texto-2); text-align: center; padding: 0 10px 8px; }
+.ass-boas-vindas { text-align: center; padding: 24px 12px; color: var(--texto-2); }
+.ass-boas-vindas > i { font-size: 2rem; color: var(--agro); }
+.ass-sugestoes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.bolha.ass-resposta { max-width: 92%; }
+.bolha.ass-resposta a { color: var(--agro); font-weight: 600; }
+.bolha.ass-resposta code { font-size: .8rem; }
+.ass-digitando { display: flex; gap: 4px; }
+.ass-digitando span { width: 7px; height: 7px; border-radius: 50%; background: var(--texto-2); animation: ass-pulo 1s infinite ease-in-out; }
+.ass-digitando span:nth-child(2) { animation-delay: .15s; }
+.ass-digitando span:nth-child(3) { animation-delay: .3s; }
+@keyframes ass-pulo { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .ass-digitando span { animation: none; } }
+@media (max-width: 575.98px) {
+  .chat { right: 0; bottom: 0; width: 100vw; height: 100dvh; border-radius: 0; }
+  .dock { right: 12px; bottom: 12px; }
+  .dock-btn { padding: 12px; }
+  .dock-btn span:not(.dock-badge) { display: none; }
+}
+@media print { .dock { display: none !important; } }
 
 /* Perfil */
 .perfil-cab { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }

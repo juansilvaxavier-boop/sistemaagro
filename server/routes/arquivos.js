@@ -8,6 +8,7 @@ const A = require('../auth');
 const { ErroNegocio } = require('../services');
 const { responderLista } = require('../lista');
 const { escopoClientes } = require('./clientes');
+const E = require('../escopo');
 const { registrar } = require('../auditoria');
 
 const MAX_MB = Number(process.env.UPLOAD_MAX_MB || 4);
@@ -36,8 +37,7 @@ async function exigirVinculo(req, { cliente_id, pedido_id, pedido_numero }) {
   if (pedido_id) {
     const p = await db.get('SELECT id, cliente_id, vendedor_id, supervisor_id, empresa_id FROM pedidos WHERE id = ?', Number(pedido_id));
     if (!p || p.empresa_id !== req.empresaId) throw new ErroNegocio('Pedido não encontrado.', 404);
-    if (req.user.perfil === 'vendedor' && p.vendedor_id !== req.user.id) throw new ErroNegocio('Pedido fora da sua carteira.', 403);
-    if (req.user.perfil === 'supervisor' && p.supervisor_id !== req.user.id && p.vendedor_id !== req.user.id) throw new ErroNegocio('Pedido fora da sua equipe.', 403);
+    if (!(await db.get(`SELECT 1 AS ok FROM pedidos p WHERE p.id = ? AND ${E.vendas(req.user, 'p')}`, p.id))) throw new ErroNegocio('Pedido fora da sua abrangência.', 403);
     if (cliente_id && Number(cliente_id) !== p.cliente_id) throw new ErroNegocio('O pedido não pertence a este cliente.');
     return { cliente_id: p.cliente_id, pedido_id: p.id };
   }
@@ -62,7 +62,7 @@ r.get('/', async (req, res) => {
             a.nome_original, a.mime, a.tamanho, u.nome AS usuario, a.usuario_id, a.created_at
           FROM arquivos a LEFT JOIN clientes c ON c.id = a.cliente_id LEFT JOIN pedidos p ON p.id = a.pedido_id
           LEFT JOIN usuarios u ON u.id = a.usuario_id
-          WHERE ${e.sql} ${filtro.length ? 'AND ' + filtro.join(' AND ') : ''}`,
+          WHERE a.colaborador_id IS NULL AND ${e.sql} AND (a.pedido_id IS NULL OR ${E.vendas(req.user, 'p')}) ${filtro.length ? 'AND ' + filtro.join(' AND ') : ''}`,
     params, sort: 'created_at', exact: ['categoria'],
   });
 });
@@ -86,7 +86,8 @@ r.post('/', upload.array('arquivos', 10), async (req, res) => {
 });
 
 async function carregar(req) {
-  const a = await db.get('SELECT * FROM arquivos WHERE id = ?', Number(req.params.id));
+  // Documentos de colaboradores (RH) só pelas rotas do RH.
+  const a = await db.get('SELECT * FROM arquivos WHERE id = ? AND colaborador_id IS NULL', Number(req.params.id));
   if (!a) throw new ErroNegocio('Arquivo não encontrado', 404);
   await exigirVinculo(req, a);
   return a;

@@ -4,6 +4,8 @@ const db = require('../db');
 const A = require('../auth');
 const S = require('../services');
 const { responderLista } = require('../lista');
+const E = require('../escopo');
+const { exigirAcessoCliente } = require('./clientes');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -34,14 +36,15 @@ r.get('/carteira', A.exige('cobranca'), async (req, res) =>
         (SELECT status FROM negativacoes n WHERE n.cliente_id = c.id ORDER BY n.id DESC LIMIT 1) AS serasa,
         (SELECT tipo FROM blacklist b WHERE b.cliente_id = c.id AND b.ativo = 1 LIMIT 1) AS blacklist
       FROM parcelas p JOIN clientes c ON c.id = p.cliente_id LEFT JOIN usuarios v ON v.id = c.vendedor_id
-      WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} AND (? = 1 OR p.vencimento < date('now','localtime'))
+      WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} AND (? = 1 OR p.vencimento < date('now','localtime')) AND ${E.financeiro(req.user, 'p')}
       GROUP BY c.id, v.nome`,
     params: [req.empresaId, req.query.incluir_a_vencer === '1' ? 1 : 0], sort: 'saldo_vencido', dir: 'desc', exact: ['faixa'],
   }),
 );
 
 r.get('/resumo', A.exige('cobranca'), async (req, res) => {
-  const base = `FROM parcelas p WHERE p.empresa_id = ? AND ${S.ABERTA_SQL}`;
+  const base = `FROM parcelas p WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} AND ${E.financeiro(req.user, 'p')}`;
+  const acao = E.clientes(req.user, 'ca');
   const faixas = await db.all(
     `SELECT CASE WHEN p.vencimento >= date('now','localtime') THEN 'A vencer'
                  WHEN ${ATRASO_SQL} <= 30 THEN '1-30' WHEN ${ATRASO_SQL} <= 60 THEN '31-60'
@@ -54,15 +57,15 @@ r.get('/resumo', A.exige('cobranca'), async (req, res) => {
   const hoje = S.hoje();
   res.json({
     faixas,
-    promessas_hoje: await db.get(`SELECT COUNT(*) AS n, IFNULL(SUM(valor_promessa),0) AS v FROM cobranca_acoes WHERE data_promessa = ?`, hoje),
+    promessas_hoje: await db.get(`SELECT COUNT(*) AS n, IFNULL(SUM(valor_promessa),0) AS v FROM cobranca_acoes a JOIN clientes ca ON ca.id = a.cliente_id WHERE data_promessa = ? AND ${acao}`, hoje),
     promessas_vencidas: (await db.get(
-      `SELECT COUNT(*) AS n FROM cobranca_acoes a WHERE a.data_promessa < ? AND a.data_promessa >= date(?, '-30 days')
+      `SELECT COUNT(*) AS n FROM cobranca_acoes a JOIN clientes ca ON ca.id = a.cliente_id WHERE ${acao} AND a.data_promessa < ? AND a.data_promessa >= date(?, '-30 days')
          AND EXISTS (SELECT 1 FROM parcelas p WHERE p.cliente_id = a.cliente_id AND ${S.ABERTA_SQL} AND p.vencimento < ?)`, hoje, hoje, hoje,
     )).n,
-    acoes_hoje: (await db.get(`SELECT COUNT(*) AS n FROM cobranca_acoes WHERE date(created_at) = ?`, hoje)).n,
+    acoes_hoje: (await db.get(`SELECT COUNT(*) AS n FROM cobranca_acoes a JOIN clientes ca ON ca.id = a.cliente_id WHERE date(a.created_at) = ? AND ${acao}`, hoje)).n,
     recuperado_mes: (await db.get(
       `SELECT IFNULL(SUM(valor_pago),0) AS v FROM parcelas p WHERE p.empresa_id = ? AND p.status = 'liquidada'
-         AND p.data_pagamento >= ? AND p.data_pagamento > p.vencimento_original`, req.empresaId, hoje.slice(0, 7) + '-01',
+         AND p.data_pagamento >= ? AND p.data_pagamento > p.vencimento_original AND ${E.financeiro(req.user, 'p')}`, req.empresaId, hoje.slice(0, 7) + '-01',
     )).v,
   });
 });
@@ -72,14 +75,15 @@ r.get('/agenda', A.exige('cobranca'), async (req, res) => {
     `SELECT a.*, c.nome AS cliente, c.documento, u.nome AS usuario,
        (SELECT ROUND(SUM(${S.SALDO_PARCELA_SQL}),2) FROM parcelas p WHERE p.cliente_id = a.cliente_id AND ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime')) AS saldo_vencido
      FROM cobranca_acoes a JOIN clientes c ON c.id = a.cliente_id LEFT JOIN usuarios u ON u.id = a.usuario_id
-     WHERE (a.proxima_acao BETWEEN date('now','localtime','-7 days') AND date('now','localtime','+7 days'))
-        OR (a.data_promessa BETWEEN date('now','localtime','-7 days') AND date('now','localtime','+7 days'))
+     WHERE ((a.proxima_acao BETWEEN date('now','localtime','-7 days') AND date('now','localtime','+7 days'))
+        OR (a.data_promessa BETWEEN date('now','localtime','-7 days') AND date('now','localtime','+7 days'))) AND ${E.clientes(req.user, 'c')}
      ORDER BY COALESCE(a.data_promessa, a.proxima_acao)`,
   ));
 });
 
 r.get('/cliente/:id', A.exige('cobranca'), async (req, res) => {
   const id = Number(req.params.id);
+  await exigirAcessoCliente(req.user, id);
   const cliente = await db.get('SELECT c.*, v.nome AS vendedor FROM clientes c LEFT JOIN usuarios v ON v.id = c.vendedor_id WHERE c.id = ?', id);
   if (!cliente) throw new ErroNegocio('Cliente não encontrado', 404);
   res.json({
@@ -89,7 +93,7 @@ r.get('/cliente/:id', A.exige('cobranca'), async (req, res) => {
       `SELECT p.*, pe.numero AS pedido, nf.numero AS nota, ${S.STATUS_PARCELA_SQL} AS status_atual, ${S.SALDO_PARCELA_SQL} AS saldo,
          CASE WHEN p.vencimento < date('now','localtime') THEN ${ATRASO_SQL} ELSE 0 END AS dias_atraso
        FROM parcelas p LEFT JOIN pedidos pe ON pe.id = p.pedido_id LEFT JOIN notas_fiscais nf ON nf.id = p.nota_id
-       WHERE p.cliente_id = ? AND p.empresa_id = ? AND ${S.ABERTA_SQL} ORDER BY p.vencimento`, id, req.empresaId,
+       WHERE p.cliente_id = ? AND p.empresa_id = ? AND ${S.ABERTA_SQL} AND ${E.financeiro(req.user, 'p')} ORDER BY p.vencimento`, id, req.empresaId,
     ),
     acoes: await db.all(
       'SELECT a.*, u.nome AS usuario FROM cobranca_acoes a LEFT JOIN usuarios u ON u.id = a.usuario_id WHERE a.cliente_id = ? ORDER BY a.id DESC', id,
@@ -104,7 +108,7 @@ r.get('/acoes', A.exige('cobranca'), async (req, res) =>
   await responderLista(req, res, {
     sql: `SELECT a.id, a.cliente_id, c.nome AS cliente, a.tipo, a.resultado, a.descricao, a.data_promessa, a.valor_promessa, a.proxima_acao,
             u.nome AS usuario, a.created_at
-          FROM cobranca_acoes a JOIN clientes c ON c.id = a.cliente_id LEFT JOIN usuarios u ON u.id = a.usuario_id`,
+          FROM cobranca_acoes a JOIN clientes c ON c.id = a.cliente_id LEFT JOIN usuarios u ON u.id = a.usuario_id WHERE ${E.clientes(req.user, 'c')}`,
     sort: 'created_at', exact: ['tipo', 'cliente_id'],
   }),
 );
@@ -112,6 +116,7 @@ r.post('/acoes', A.exige('cobranca'), async (req, res) => {
   const b = req.body || {};
   if (!TIPOS_ACAO.includes(b.tipo)) throw new ErroNegocio('Tipo de ação inválido.');
   if (!b.cliente_id) throw new ErroNegocio('Informe o cliente.');
+  await exigirAcessoCliente(req.user, Number(b.cliente_id));
   if (b.resultado === 'promessa' && !b.data_promessa) throw new ErroNegocio('Informe a data da promessa de pagamento.');
   const id = await db.insert('cobranca_acoes', { ...b, usuario_id: req.user.id },
     ['cliente_id', 'parcela_id', 'tipo', 'resultado', 'descricao', 'data_promessa', 'valor_promessa', 'proxima_acao', 'usuario_id']);
@@ -131,9 +136,10 @@ r.post('/acordos', A.exige('cobranca'), async (req, res) => {
   if (!ids.length) throw new ErroNegocio('Selecione as parcelas do acordo.');
   const n = Math.max(parseInt(b.num_parcelas, 10) || 1, 1);
   if (!b.primeiro_vencimento) throw new ErroNegocio('Informe o primeiro vencimento.');
+  await exigirAcessoCliente(req.user, Number(b.cliente_id));
   const resultado = await db.tx(async () => {
     const parcelas = await db.all(
-      `SELECT p.*, ${S.SALDO_PARCELA_SQL} AS saldo FROM parcelas p WHERE p.id IN (${ids.map(() => '?').join(',')}) AND p.cliente_id = ? AND ${S.ABERTA_SQL}`,
+      `SELECT p.*, ${S.SALDO_PARCELA_SQL} AS saldo FROM parcelas p WHERE p.id IN (${ids.map(() => '?').join(',')}) AND p.cliente_id = ? AND ${S.ABERTA_SQL} AND ${E.financeiro(req.user, 'p')}`,
       ...ids, b.cliente_id,
     );
     if (parcelas.length !== ids.length) throw new ErroNegocio('Há parcelas inválidas ou que não estão em aberto.');

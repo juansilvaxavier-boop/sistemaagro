@@ -37,6 +37,9 @@ TEST_DATABASE_URL=postgresql://... npm test   # mesmos testes num PostgreSQL de 
 | `CRON_SECRET` | Protege a rota do backup agendado |
 | `UPLOAD_MAX_MB` | Tamanho máximo dos anexos (padrão 4) |
 | `ESTOQUE_BLOQUEAR` | `1` impede emitir NF-e sem saldo em estoque (padrão: permite e mostra alerta) |
+| `ANTHROPIC_API_KEY` | Liga o assistente de IA (sem ela, o assistente responde pelo manual) |
+| `ASSISTENTE_MODELO`, `ASSISTENTE_ESFORCO` | Modelo (padrão `claude-opus-5-5`) e esforço (padrão `low`) do assistente |
+| `ASSISTENTE_LIMITE_HORA` | Perguntas por usuário por hora (padrão 40) |
 
 ### Primeiro acesso em produção
 
@@ -62,6 +65,7 @@ Não há dados nem senhas de demonstração em produção. O sistema cria a empr
 | `carlos`, `fernanda` | Supervisor | `agro123` |
 | `analise` | Análise de crédito | `agro123` |
 | `producao`, `faturamento`, `expedicao`, `financeiro` | Setores | `agro123` |
+| `rh` | RH / DP | `agro123` |
 
 ### Importar dados do sistema anterior
 
@@ -83,12 +87,15 @@ depois da maior nota encontrada. Também pela linha de comando: `node scripts/im
 - Auditoria (*Segurança → Auditoria*): inclusões, alterações (antes e depois), exclusões, logins, acessos a cadastros de clientes,
   downloads, exportações e backups, com usuário, data e IP.
 - Direitos do titular: na aba *LGPD* do cliente, exportar todos os dados (JSON) ou anonimizar o cadastro, mantendo os registros fiscais.
+- Abrangência dos dados (*Dados que pode ver*, em *Usuários e Permissões*): o vendedor vê só o que gerou (pedidos, clientes da carteira,
+  propostas, parcelas, comissões, mensagens, arquivos e relatórios); o supervisor vê a equipe que supervisiona; os demais perfis veem tudo.
+  O administrador pode mudar o nível de cada usuário. A regra fica em `server/escopo.js` e vale para listas, detalhes, relatórios e para o assistente.
 - Painel: cada usuário vê o painel do seu setor (vendedor, as próprias vendas; supervisor, a equipe). Só quem tem *Ver o painel de qualquer setor* troca de painel.
 
 ## Recursos da interface
 
-Tema claro e escuro, menu recolhível, busca global (**Ctrl+K**) por pedido, cliente ou tela, chat interno entre usuários com
-indicação de leitura e de quem está online, *Meu perfil* com foto, avisos do navegador para mensagens e pedidos, e instalação como
+Tema claro e escuro, menu recolhível, busca global (**Ctrl+K**) por pedido, cliente ou tela, caixinha fixa no canto inferior
+direito com o **chat interno** (leitura, quem está online, contador de não lidas) e o **assistente de IA**, *Meu perfil* com foto, avisos do navegador para mensagens e pedidos, e instalação como
 aplicativo (PWA) no computador ou no celular.
 
 ## O que o sistema tem
@@ -146,6 +153,24 @@ Telas de apoio: **Histórico de Compra de Cliente** (por CPF/CNPJ) e **Cliente (
 | **Fornecedores** | *Cadastros → Fornecedores* | Dados cadastrais com validação de CNPJ/CPF, endereço, dados bancários e PIX, categoria e prazo de pagamento padrão (preenche o vencimento). |
 | **Chamados internos** | *Início → Chamados Internos* e botão *Chamado* no pedido | Abertura para um setor, prioridade com prazo (urgente 1 dia, alta 2, média 5, baixa 10), atribuição, comentários, pedido de informação, solução, avaliação de 1 a 5 e aviso em tempo real. |
 | **Proposta comercial** | *Vendas → Propostas Comerciais* | Orçamento com preço de tabela por forma de pagamento, desconto por item, frete e condições comerciais; impressão em PDF para o cliente; enviada → aceita/recusada (com motivo) → *Gerar pedido* com os mesmos itens e preços; duplicar; atualiza a oportunidade do CRM. |
+
+### RH e DP
+
+| Tela | O que faz |
+|---|---|
+| **Meu RH** (todos) | Dados do contrato, saldo de férias por período aquisitivo, ponto, benefícios, documentos e solicitações ao RH (férias, atestado com anexo, alteração cadastral, declaração, adiantamento). |
+| **Painel do RH** | Ativos, turnover, solicitações, férias vencendo ou vencidas, exames vencidos, aniversariantes, quadro por departamento e custo mensal. |
+| **Colaboradores** | Admissão e ficha com dados pessoais, contrato, salário, banco, dependentes, histórico (reajustes, promoções), benefícios, exames (ASO) e documentos; desligamento (desativa o acesso). Salário e banco só com *Gerir RH* ou *Folha*. |
+| **Férias** | Programação validada pela CLT: dias de direito pelas faltas (art. 130), até 3 períodos (um ≥ 14 dias, nenhum < 5), abono de até 1/3 e alerta do período concessivo. |
+| **Ponto e Ocorrências** | Faltas, atestados, atrasos, horas extras 50%/100%, banco de horas, advertências, suspensões e elogios. |
+| **Folha** | Gera os eventos do mês (horas extras, faltas, comissões, descontos de benefícios e lançamentos), ajuste manual, fechamento da competência (trava as ocorrências) e exportação para a contabilidade. INSS, IRRF e FGTS ficam com a contabilidade. |
+
+### Assistente de IA
+
+Botão *Assistente* no canto inferior direito. Explica como usar o sistema (a partir de `server/assistente-manual.md`) e consulta,
+só para leitura, os pedidos, clientes, pendências e férias do usuário, sempre dentro das permissões e da abrangência dele. Ele não
+aprova, altera nem cria nada. Usa a API da Anthropic (`ANTHROPIC_API_KEY`), com limite de perguntas por hora e registro de uso na
+tabela `assistente_uso`. Sem a chave, ou se a API falhar, responde buscando no manual.
 
 Relatórios novos: Contas a Pagar, Fluxo de Caixa Previsto (a receber × a pagar), Posição de Estoque e Movimentação de Estoque.
 

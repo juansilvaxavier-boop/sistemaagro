@@ -4,6 +4,7 @@ const db = require('../db');
 const sse = require('../sse');
 const W = require('../workflow');
 const { ErroNegocio } = require('../services');
+const E = require('../escopo');
 
 const r = express.Router();
 
@@ -27,7 +28,7 @@ r.get('/', async (req, res) => {
     FROM mensagens m JOIN usuarios u ON u.id = m.remetente_id
     LEFT JOIN usuarios d ON d.id = m.destinatario_id
     LEFT JOIN pedidos p ON p.id = m.pedido_id
-    WHERE (p.id IS NULL OR p.empresa_id = :emp) AND ${filtro}
+    WHERE (p.id IS NULL OR (p.empresa_id = :emp AND ${E.vendas(req.user, 'p')})) AND ${filtro}
     ORDER BY m.id DESC LIMIT 200`, params);
   res.json(rows);
 });
@@ -35,7 +36,7 @@ r.get('/', async (req, res) => {
 r.get('/nao-lidas', async (req, res) => {
   const { n } = await db.get(`
     SELECT COUNT(*) AS n FROM mensagens m LEFT JOIN pedidos p ON p.id = m.pedido_id
-    WHERE (p.id IS NULL OR p.empresa_id = :emp) AND ${PARA_MIM}
+    WHERE (p.id IS NULL OR (p.empresa_id = :emp AND ${E.vendas(req.user, 'p')})) AND ${PARA_MIM}
       AND NOT EXISTS (SELECT 1 FROM mensagem_leituras l WHERE l.mensagem_id = m.id AND l.usuario_id = :uid)`,
     { uid: req.user.id, perfil: req.user.perfil, emp: req.empresaId });
   res.json({ n });
@@ -47,7 +48,7 @@ r.post('/', async (req, res) => {
   if (!texto) throw new ErroNegocio('Escreva a mensagem.');
   let pedidoId = null;
   if (b.pedido_numero || b.pedido_id) {
-    const p = await db.get('SELECT id FROM pedidos WHERE (numero = ? OR id = ?) AND empresa_id = ?', Number(b.pedido_numero) || 0, Number(b.pedido_id) || 0, req.empresaId);
+    const p = await db.get(`SELECT id FROM pedidos p WHERE (numero = ? OR id = ?) AND empresa_id = ? AND ${E.vendas(req.user, 'p')}`, Number(b.pedido_numero) || 0, Number(b.pedido_id) || 0, req.empresaId);
     if (!p) throw new ErroNegocio('Pedido não encontrado.');
     pedidoId = p.id;
   }

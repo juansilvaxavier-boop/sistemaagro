@@ -16,6 +16,7 @@ const PERFIS = {
   faturamento: 'Faturamento',
   expedicao: 'Expedição',
   financeiro: 'Financeiro',
+  rh: 'RH / DP',
 };
 
 // Todas as permissões que podem ser liberadas individualmente para um usuário.
@@ -41,6 +42,10 @@ const CATALOGO = [
     ['financeiro.pagar', 'Contas a pagar'],
   ]],
   ['Relatórios', [['relatorios.vendas', 'Relatórios de vendas'], ['relatorios.financeiro', 'Relatórios financeiros'], ['relatorios.estoque', 'Relatórios de estoque']]],
+  ['RH e DP', [
+    ['rh', 'Ver colaboradores, férias, ponto e solicitações (sem salários)'], ['rh.gerir', 'Gerir RH: fichas, salários, férias, ocorrências, benefícios e exames'],
+    ['rh.folha', 'Eventos da folha e fechamento do mês'],
+  ]],
   ['Cadastros', [
     ['cadastros.produto', 'Produtos'], ['cadastros.forma', 'Formas de pagamento'], ['cadastros.transportadora', 'Transportadoras'],
     ['cadastros.fornecedor', 'Fornecedores'], ['cadastros.colaborador', 'Colaboradores'], ['cadastros.usuario', 'Usuários, equipes e permissões'], ['cadastros.empresa', 'Empresas'],
@@ -67,6 +72,7 @@ const PERMISSOES = {
   producao: ['dashboard', 'chat', 'chamados', 'fila.producao', 'arquivos', 'estoque', 'estoque.movimentar', 'relatorios.estoque'],
   faturamento: ['dashboard', 'chat', 'chamados', 'estoque', 'etiquetas', 'fila.faturamento', 'clientes', 'clientes.historico', 'serasa', 'financeiro.notas', 'arquivos', 'relatorios.financeiro', 'lgpd.dados'],
   expedicao: ['dashboard', 'chat', 'chamados', 'fila.expedicao', 'fila.transito', 'cadastros.transportadora', 'arquivos', 'estoque', 'estoque.movimentar', 'etiquetas', 'relatorios.estoque'],
+  rh: ['dashboard', 'chat', 'chamados', 'rh', 'rh.gerir', 'rh.folha', 'cadastros.colaborador', 'lgpd.dados', 'arquivos'],
   financeiro: [
     'dashboard', 'chat', 'chamados', 'financeiro.pagar', 'cadastros.fornecedor', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'cobranca', 'financeiro.parcelas', 'financeiro.lancamentos', 'financeiro.comissoes',
@@ -140,7 +146,7 @@ function lerCookie(req, nome) {
   return null;
 }
 
-const CAMPOS_USUARIO = 'u.id, u.nome, u.login, u.email, u.perfil, u.equipe_id, u.ativo, u.permissoes, u.trocar_senha, u.termo_aceito_em, u.colaborador_id';
+const CAMPOS_USUARIO = 'u.id, u.nome, u.login, u.email, u.perfil, u.equipe_id, u.ativo, u.permissoes, u.trocar_senha, u.termo_aceito_em, u.colaborador_id, u.abrangencia';
 
 async function carregarSessao(token) {
   if (!token) return null;
@@ -180,7 +186,7 @@ function autenticado(opts = {}) {
       return res.status(428).json({ erro: s.trocar_senha ? 'Troque a senha provisória para continuar.' : 'Aceite o termo de privacidade para continuar.' });
     }
     req.user = {
-      id: s.id, nome: s.nome, login: s.login, perfil: s.perfil, equipe_id: s.equipe_id, colaborador_id: s.colaborador_id,
+      id: s.id, nome: s.nome, login: s.login, perfil: s.perfil, equipe_id: s.equipe_id, colaborador_id: s.colaborador_id, abrangencia: s.abrangencia,
       permissoesEfetivas: permissoesDe(s), trocar_senha: !!s.trocar_senha, termo_aceito_em: s.termo_aceito_em,
     };
     req.empresaId = s.empresa_id;

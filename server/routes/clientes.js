@@ -36,13 +36,9 @@ function validarCnpj(c) {
   return calc(12) === Number(c[12]) && calc(13) === Number(c[13]);
 }
 
-/** Vendedor só enxerga os próprios clientes; supervisor, os da equipe. */
+/** Clientes visíveis conforme a abrangência: carteira própria, da equipe ou todos. */
 function escopoClientes(user, alias = 'c') {
-  if (user.perfil === 'vendedor') return { sql: `${alias}.vendedor_id = ?`, params: [user.id] };
-  if (user.perfil === 'supervisor') {
-    return { sql: `${alias}.vendedor_id IN (SELECT id FROM usuarios WHERE equipe_id IN (SELECT id FROM equipes WHERE supervisor_id = ?) OR id = ?)`, params: [user.id, user.id] };
-  }
-  return { sql: '1=1', params: [] };
+  return { sql: require('../escopo').clientes(user, alias), params: [] };
 }
 
 async function exigirAcessoCliente(user, clienteId) {
@@ -73,7 +69,7 @@ r.get('/busca', A.exige('clientes', 'pedido.criar', 'crm', 'cobranca', 'arquivos
 
 r.get('/:id', A.exige('clientes', 'pedido.criar', 'crm', 'cobranca', 'fila'), async (req, res) => {
   const id = Number(req.params.id);
-  if (['vendedor', 'supervisor'].includes(req.user.perfil)) await exigirAcessoCliente(req.user, id);
+  await exigirAcessoCliente(req.user, id);
   const c = await db.get('SELECT c.*, v.nome AS vendedor FROM clientes c LEFT JOIN usuarios v ON v.id = c.vendedor_id WHERE c.id = ?', id);
   if (!c) throw new ErroNegocio('Cliente não encontrado', 404);
   c.enderecos = await db.all('SELECT * FROM cliente_enderecos WHERE cliente_id = ? ORDER BY principal DESC, id', id);
@@ -130,7 +126,12 @@ async function salvarCliente(req, id) {
   for (const k of ['base_legal', 'consentimento_marketing']) if (b[k] === undefined) delete b[k];
   if (b.consentimento_marketing) b.consentimento_em ||= new Date().toISOString().slice(0, 10);
   if (b.documento !== undefined || !id) b.documento = validarDocumento(b.documento, b.tipo_pessoa || 'F');
-  if (req.user.perfil === 'vendedor') b.vendedor_id = req.user.id;
+  // Quem vê só os próprios dados cadastra na própria carteira; o supervisor, em alguém da equipe.
+  const E = require('../escopo');
+  if (E.abrangencia(req.user) === 'proprio') b.vendedor_id = req.user.id;
+  else if (b.vendedor_id && E.vendedoresSql(req.user) && !(await db.get(`SELECT 1 AS ok WHERE ? IN (${E.vendedoresSql(req.user)})`, Number(b.vendedor_id)))) {
+    throw new ErroNegocio('Vendedor fora da sua equipe.', 403);
+  }
   return await db.tx(async () => {
     if (b.documento) {
       const dup = await db.get('SELECT id FROM clientes WHERE documento = ? AND id <> ?', b.documento, id || 0);
@@ -147,7 +148,7 @@ async function salvarCliente(req, id) {
 
 r.post('/', A.exige('clientes.editar', 'pedido.criar'), async (req, res) => res.status(201).json({ id: await salvarCliente(req) }));
 r.put('/:id', A.exige('clientes.editar', 'serasa'), async (req, res) => {
-  if (['vendedor', 'supervisor'].includes(req.user.perfil)) await exigirAcessoCliente(req.user, Number(req.params.id));
+  await exigirAcessoCliente(req.user, Number(req.params.id));
   res.json({ id: await salvarCliente(req, Number(req.params.id)) });
 });
 
@@ -172,14 +173,14 @@ r.get('/historico/compras', A.exige('clientes.historico', 'fila'), async (req, r
      FROM pedidos p LEFT JOIN formas_pagamento f ON f.id = p.forma_id LEFT JOIN condicoes_pagamento c ON c.id = p.condicao_id
      LEFT JOIN usuarios v ON v.id = p.vendedor_id LEFT JOIN empresas e ON e.id = p.empresa_id
      LEFT JOIN notas_fiscais nf ON nf.pedido_id = p.id AND nf.status <> 'cancelada'
-     WHERE p.cliente_id = ? ORDER BY p.created_at DESC`, cliente.id,
+     WHERE p.cliente_id = ? AND ${require('../escopo').vendas(req.user, 'p')} ORDER BY p.created_at DESC`, cliente.id,
   );
   const fin = await db.get(
     `SELECT IFNULL(SUM(CASE WHEN ${S.ABERTA_SQL} THEN ${S.SALDO_PARCELA_SQL} END),0) AS em_aberto,
             IFNULL(SUM(CASE WHEN ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime') THEN ${S.SALDO_PARCELA_SQL} END),0) AS vencido,
             IFNULL(SUM(p.valor_pago),0) AS pago,
             MAX(CASE WHEN p.status = 'liquidada' THEN julianday(p.data_pagamento) - julianday(p.vencimento_original) END) AS maior_atraso
-       FROM parcelas p WHERE p.cliente_id = ?`, cliente.id,
+       FROM parcelas p WHERE p.cliente_id = ? AND ${require('../escopo').financeiro(req.user, 'p')}`, cliente.id,
   );
   const ativos = pedidos.filter((p) => p.etapa !== 'cancelado');
   res.json({
@@ -241,5 +242,6 @@ r.post('/blacklist/:id/excluir', A.exige('blacklist.editar'), async (req, res) =
 
 module.exports = r;
 module.exports.escopoClientes = escopoClientes;
+module.exports.exigirAcessoCliente = exigirAcessoCliente;
 module.exports.validarCpf = validarCpf;
 module.exports.validarCnpj = validarCnpj;

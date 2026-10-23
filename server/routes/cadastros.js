@@ -88,14 +88,16 @@ r.put('/colaboradores/:id', A.exige('cadastros.colaborador', 'cadastros.usuario'
 const TODAS_PERMISSOES = A.CATALOGO.flatMap(([, itens]) => itens.map(([k]) => k));
 r.get('/permissoes', A.exige('cadastros.usuario'), (req, res) => {
   const padrao = Object.fromEntries(Object.keys(A.PERFIS).map((p) => [p, A.PERMISSOES[p].includes('*') ? TODAS_PERMISSOES : TODAS_PERMISSOES.filter((k) => A.can(p, k))]));
-  res.json({ catalogo: A.CATALOGO, padrao, perfis: A.PERFIS });
+  const E = require('../escopo');
+  const abrangencia = Object.fromEntries(Object.keys(A.PERFIS).map((p) => [p, E.abrangencia({ perfil: p })]));
+  res.json({ catalogo: A.CATALOGO, padrao, perfis: A.PERFIS, niveis: E.NIVEIS, abrangencia });
 });
 
-const camposUsuario = ['nome', 'login', 'email', 'perfil', 'equipe_id', 'colaborador_id', 'comissao_pct', 'ativo', 'senha_hash', 'trocar_senha', 'permissoes'];
+const camposUsuario = ['nome', 'login', 'email', 'perfil', 'equipe_id', 'colaborador_id', 'comissao_pct', 'ativo', 'senha_hash', 'trocar_senha', 'permissoes', 'abrangencia'];
 r.get('/usuarios', A.exige('cadastros.usuario'), async (req, res) =>
   await responderLista(req, res, {
     sql: `SELECT u.id, u.nome, u.login, u.email, u.perfil, u.equipe_id, eq.nome AS equipe, c.nome AS colaborador, c.cargo, u.comissao_pct, u.ativo,
-            CASE WHEN u.permissoes IS NULL THEN 'Padrão do perfil' ELSE 'Personalizadas' END AS permissoes,
+            CASE WHEN u.permissoes IS NULL THEN 'Padrão do perfil' ELSE 'Personalizadas' END AS permissoes, u.abrangencia,
             CASE WHEN u.bloqueado_ate > ? THEN 1 ELSE 0 END AS bloqueado, u.ultimo_acesso,
             (SELECT string_agg(e.nome, ', ') FROM usuario_empresas ue JOIN empresas e ON e.id = ue.empresa_id WHERE ue.usuario_id = u.id) AS empresas
           FROM usuarios u LEFT JOIN equipes eq ON eq.id = u.equipe_id LEFT JOIN colaboradores c ON c.id = u.colaborador_id`,
@@ -103,7 +105,7 @@ r.get('/usuarios', A.exige('cadastros.usuario'), async (req, res) =>
   }),
 );
 r.get('/usuarios/:id', A.exige('cadastros.usuario'), async (req, res) => {
-  const u = await db.get('SELECT id, nome, login, email, perfil, equipe_id, colaborador_id, comissao_pct, ativo, permissoes, bloqueado_ate, ultimo_acesso, trocar_senha FROM usuarios WHERE id = ?', Number(req.params.id));
+  const u = await db.get('SELECT id, nome, login, email, perfil, equipe_id, colaborador_id, comissao_pct, ativo, permissoes, abrangencia, bloqueado_ate, ultimo_acesso, trocar_senha FROM usuarios WHERE id = ?', Number(req.params.id));
   if (!u) throw new ErroNegocio('Usuário não encontrado', 404);
   u.empresas = (await db.all('SELECT empresa_id FROM usuario_empresas WHERE usuario_id = ?', u.id)).map((x) => x.empresa_id);
   u.personalizadas = !!u.permissoes;
@@ -115,6 +117,11 @@ async function salvarUsuario(req, id) {
   if (b.login) b.login = String(b.login).trim().toLowerCase();
   if (b.login && !/^[a-z0-9._-]{3,40}$/.test(b.login)) throw new ErroNegocio('Login deve ter de 3 a 40 letras, números, ponto, hífen ou sublinhado.');
   if (b.perfil && !A.PERFIS[b.perfil]) throw new ErroNegocio('Perfil inválido.');
+  // Abrangência vazia = padrão do perfil.
+  if (b.abrangencia !== undefined) {
+    if (!b.abrangencia) b.abrangencia = null;
+    else if (!require('../escopo').NIVEIS[b.abrangencia]) throw new ErroNegocio('Abrangência inválida.');
+  }
   if (!id && !b.colaborador_id) throw new ErroNegocio('Selecione o colaborador. Cadastre-o antes em Colaboradores.');
   if (b.colaborador_id) {
     const c = await db.get('SELECT * FROM colaboradores WHERE id = ?', Number(b.colaborador_id));
@@ -140,6 +147,7 @@ async function salvarUsuario(req, id) {
     if (id) await db.update('usuarios', id, { ...b, permissoes: b.permissoes === undefined ? undefined : b.permissoes }, camposUsuario);
     else id = await db.insert('usuarios', b, camposUsuario);
     if (b.permissoes === null) await db.run('UPDATE usuarios SET permissoes = NULL WHERE id = ?', id);
+    if (b.abrangencia === null) await db.run('UPDATE usuarios SET abrangencia = NULL WHERE id = ?', id);
     if (Array.isArray(b.empresas)) {
       await db.run('DELETE FROM usuario_empresas WHERE usuario_id = ?', id);
       for (const e of b.empresas) await db.run('INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES (?, ?)', id, e);
@@ -312,7 +320,7 @@ r.get('/opcoes', async (req, res) => {
     ),
     usuarios: await db.all('SELECT id, nome, perfil, equipe_id FROM usuarios WHERE ativo = 1 ORDER BY nome'),
     vendedores: await db.all(
-      `SELECT id, nome, equipe_id FROM usuarios WHERE ativo = 1 AND perfil = 'vendedor' ${u.perfil === 'vendedor' ? 'AND id = ' + Number(u.id) : ''} ORDER BY nome`,
+      `SELECT id, nome, equipe_id FROM usuarios u WHERE ativo = 1 AND perfil IN ('vendedor','supervisor') AND ${require('../escopo').pessoas(u, 'u.id')} ORDER BY nome`,
     ),
   });
 });

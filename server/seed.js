@@ -72,6 +72,7 @@ async function seed() {
     const faturista = await u('Karina Duarte', 'faturamento', 'faturamento');
     const expedidor = await u('Lucas Pereira', 'expedicao', 'expedicao');
     const financeiro = await u('Marina Costa', 'financeiro', 'financeiro');
+    const rhUser = await u('Patrícia Nunes', 'rh', 'rh');
     const todos = await db.all('SELECT id, perfil FROM usuarios');
     for (const x of todos) {
       await db.run('INSERT INTO usuario_empresas VALUES (?, ?)', x.id, emp1);
@@ -495,6 +496,70 @@ async function seed() {
       const desc = S.r2(soma * (cond.desconto_pct || 0) / 100);
       await db.run('UPDATE propostas SET valor_produtos = ?, valor_desconto = ?, valor_total = ? WHERE id = ?', S.r2(soma), desc, S.r2(soma - desc), prid);
     }
+
+    // ---------- RH e DP ----------
+    const DEPTO = { admin: 'Administrativo', diretoria: 'Diretoria', supervisor: 'Comercial', vendedor: 'Comercial', analista: 'Crédito', producao: 'Produção',
+      faturamento: 'Faturamento', expedicao: 'Logística', financeiro: 'Financeiro', rh: 'RH' };
+    const CARGO = { admin: 'Analista de sistemas', diretoria: 'Diretor geral', supervisor: 'Supervisor de vendas', vendedor: 'Consultor de vendas', analista: 'Analista de crédito',
+      producao: 'Encarregado de produção', faturamento: 'Assistente de faturamento', expedicao: 'Encarregado de expedição', financeiro: 'Analista financeiro', rh: 'Analista de RH/DP' };
+    const SAL = { admin: 6200, diretoria: 18000, supervisor: 7200, vendedor: 3400, analista: 4600, producao: 3900, faturamento: 3100, expedicao: 3300, financeiro: 5200, rh: 4800 };
+    const colabDe = {};
+    for (const x of await db.all('SELECT id, nome, perfil, email FROM usuarios ORDER BY id')) {
+      const adm = S.addDias(hojeIso, -int(120, 2400));
+      const cid = await db.insert('colaboradores', {
+        nome: x.nome, cpf: cpf(), cargo: CARGO[x.perfil], setor: DEPTO[x.perfil], departamento: DEPTO[x.perfil], email: x.email, telefone: `34${int(988000000, 999999999)}`,
+        data_admissao: adm, data_nascimento: S.addDias(hojeIso, -int(22, 55) * 365 - int(0, 364)), empresa_id: emp1, tipo_contrato: 'clt', jornada: '44 h semanais',
+        salario: SAL[x.perfil], cidade: 'Patrocínio', uf: 'MG', pis: String(int(10000000000, 19999999999)), sexo: pick(['F', 'M']), estado_civil: pick(['Solteiro(a)', 'Casado(a)']),
+      });
+      await db.run('UPDATE usuarios SET colaborador_id = ? WHERE id = ?', cid, x.id);
+      colabDe[x.perfil] ||= [];
+      colabDe[x.perfil].push(cid);
+      await db.insert('rh_historico', { colaborador_id: cid, data: adm, tipo: 'admissao', cargo: CARGO[x.perfil], departamento: DEPTO[x.perfil], salario: S.r2(SAL[x.perfil] * 0.9), descricao: 'Admissão' });
+      if (S.diasEntre(adm, hojeIso) > 400) await db.insert('rh_historico', { colaborador_id: cid, data: S.addDias(adm, 365), tipo: 'reajuste', cargo: CARGO[x.perfil], departamento: DEPTO[x.perfil], salario: SAL[x.perfil], descricao: 'Reajuste anual (dissídio)' });
+      await db.insert('rh_beneficios', { colaborador_id: cid, tipo: 'vale_refeicao', descricao: 'R$ 35/dia', valor_empresa: 770, valor_desconto: 0 });
+      await db.insert('rh_beneficios', { colaborador_id: cid, tipo: 'plano_saude', descricao: 'Unimed enfermaria', valor_empresa: 420, valor_desconto: 90 });
+      await db.insert('rh_exames', { colaborador_id: cid, tipo: 'periodico', data: S.addDias(hojeIso, -int(30, 380)), resultado: 'apto', clinica: 'Clínica Ocupacional Cerrado' });
+    }
+    // Operadores sem acesso ao sistema.
+    const operadores = [];
+    for (const [i, nome] of ['Raimundo Batista', 'Cleiton Souza', 'Fabiana Rocha', 'Wesley Martins', 'Sebastião Lima', 'Juliana Freitas'].entries()) {
+      const adm = i === 5 ? S.addDias(hojeIso, -38) : S.addDias(hojeIso, -int(200, 1800));
+      const cid = await db.insert('colaboradores', {
+        nome, cpf: cpf(), cargo: i < 4 ? 'Operador de produção' : 'Auxiliar de expedição', setor: i < 4 ? 'Produção' : 'Logística', departamento: i < 4 ? 'Produção' : 'Logística',
+        data_admissao: adm, data_nascimento: `${1975 + int(0, 25)}-${hojeIso.slice(5, 7)}-${String(int(1, 28)).padStart(2, '0')}`, empresa_id: emp1, tipo_contrato: 'clt',
+        jornada: '44 h semanais (6x1)', salario: 2350 + int(0, 6) * 50, gestor_id: colabDe.producao[0], cidade: 'Patrocínio', uf: 'MG', experiencia_dias: 90,
+      });
+      operadores.push(cid);
+      await db.insert('rh_historico', { colaborador_id: cid, data: adm, tipo: 'admissao', cargo: 'Operador de produção', salario: 2350, descricao: 'Admissão' });
+      await db.insert('rh_beneficios', { colaborador_id: cid, tipo: 'vale_transporte', descricao: '2 conduções/dia', valor_empresa: 280, valor_desconto: 141 });
+      await db.insert('rh_exames', { colaborador_id: cid, tipo: i === 2 ? 'periodico' : 'admissional', data: i === 2 ? S.addDias(hojeIso, -350) : adm, validade: i === 2 ? S.addDias(hojeIso, 15) : S.addDias(adm, 365), resultado: 'apto', clinica: 'Clínica Ocupacional Cerrado' });
+    }
+    const mesAtual = hojeIso.slice(0, 7);
+    const dia = (n) => `${mesAtual}-${String(n).padStart(2, '0')}`;
+    const ocorr = [
+      [operadores[0], dia(3), 'hora_extra_50', 6, null, 'Carregamento de carreta'], [operadores[1], dia(5), 'falta', null, 1, 'Não compareceu'],
+      [operadores[2], dia(8), 'atestado', null, 2, 'Atestado entregue'], [operadores[0], dia(10), 'banco_credito', 4, null, 'Sábado trabalhado'],
+      [operadores[3], dia(12), 'atraso', 1.5, null, 'Chegou 1h30 depois'], [colabDe.expedicao[0], dia(9), 'hora_extra_50', 8, null, 'Embarque de pedidos atrasados'],
+      [operadores[4], dia(2), 'advertencia', null, null, 'Não usou EPI na área de mistura'], [operadores[0], dia(14), 'banco_debito', 2, null, 'Saída para consulta'],
+    ];
+    for (const [cid, data, tipo, horas, dias, descricao] of ocorr) if (data <= hojeIso) await db.insert('rh_ocorrencias', { colaborador_id: cid, data, tipo, horas, dias, descricao, usuario_id: rhUser });
+    // Férias: uma aprovada no próximo mês e uma solicitação aguardando o RH.
+    const antigo = (await db.all(`SELECT * FROM colaboradores WHERE data_admissao < ? ORDER BY data_admissao`, S.addDias(hojeIso, -400)));
+    if (antigo[0]) {
+      const RH = require('./rh');
+      const per = (await RH.periodosFerias(antigo[0])).filter((x) => x.completo && x.saldo > 0).at(-1);
+      if (per) await db.insert('rh_ferias', { colaborador_id: antigo[0].id, aquisitivo_inicio: per.inicio, inicio: S.addDias(hojeIso, 20), fim: S.addDias(hojeIso, 39), dias: 20, abono_dias: 10, status: 'aprovada', aprovado_por: rhUser, solicitado_por: rhUser });
+    }
+    if (antigo[1]) {
+      const RH = require('./rh');
+      const per = (await RH.periodosFerias(antigo[1])).filter((x) => x.completo && x.saldo > 0).at(-1);
+      if (per) {
+        const fid = await db.insert('rh_ferias', { colaborador_id: antigo[1].id, aquisitivo_inicio: per.inicio, inicio: S.addDias(hojeIso, 45), fim: S.addDias(hojeIso, 74), dias: 30, status: 'solicitada', observacao: 'Viagem com a família' });
+        await db.insert('rh_solicitacoes', { colaborador_id: antigo[1].id, tipo: 'ferias', descricao: 'Viagem com a família', data_inicio: S.addDias(hojeIso, 45), data_fim: S.addDias(hojeIso, 74), ferias_id: fid });
+      }
+    }
+    await db.insert('rh_solicitacoes', { colaborador_id: colabDe.vendedor[0], tipo: 'documento', descricao: 'Declaração de vínculo para financiamento' });
+    await db.insert('rh_solicitacoes', { colaborador_id: operadores[3], tipo: 'adiantamento', descricao: 'Adiantamento de 40% do salário', status: 'aprovada', resposta: 'Aprovado para o dia 20', respondido_por: rhUser, respondido_em: hojeIso });
 
     // ---------- Mensagens ----------
     const emAnalise = await db.all(`SELECT * FROM pedidos WHERE etapa IN ('analise','producao','faturamento') LIMIT 6`);

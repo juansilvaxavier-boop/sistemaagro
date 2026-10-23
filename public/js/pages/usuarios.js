@@ -68,6 +68,8 @@ function usuarios(conteudo) {
       { k: 'perfil', l: 'Perfil', filter: { options: Object.entries(state.me.perfis) }, render: (v) => esc(state.me.perfis[v] || v) },
       { k: 'permissoes', l: 'Permissões', filter: { options: [['Padrão do perfil', 'Padrão do perfil'], ['Personalizadas', 'Personalizadas']] },
         render: (v) => (v === 'Personalizadas' ? '<span class="badge text-bg-warning">Personalizadas</span>' : '<span class="text-body-secondary">Padrão do perfil</span>') },
+      { k: 'abrangencia', l: 'Dados que vê', filter: { options: [['proprio', 'Só os próprios'], ['equipe', 'Da equipe'], ['todos', 'Todos']] },
+        render: (v) => (v ? `<span class="badge text-bg-info">${esc({ proprio: 'Só os próprios', equipe: 'Da equipe', todos: 'Todos' }[v])}</span>` : '<span class="text-body-secondary">Padrão do perfil</span>') },
       { k: 'equipe', l: 'Equipe' }, { k: 'empresas', l: 'Empresas' }, { k: 'ultimo_acesso', l: 'Último acesso', t: 'datetime' },
       { k: 'ativo', l: 'Ativo', t: 'bool', filter: { options: [['1', 'Sim'], ['0', 'Não']] } },
     ],
@@ -103,6 +105,9 @@ export async function abrirUsuario(id, aoSalvar, colaborador) {
     ${campo('equipe_id', 'Equipe (vendedores)', { type: 'select', col: 'col-md-4', options: opcoes(state.opcoes.equipes, '—') })}
     ${campo('comissao_pct', 'Comissão padrão (%)', { type: 'number', col: 'col-md-4', attrs: 'step="0.01" min="0" max="100"' })}
     ${campo('ativo', 'Usuário ativo', { type: 'checkbox', col: 'col-md-4' })}
+    ${campo('abrangencia', 'Dados que pode ver', { type: 'select', col: 'col-md-8', options: [['', 'Padrão do perfil'], ...Object.entries(perm.niveis)],
+      help: 'Vendedor: só os próprios pedidos, clientes e parcelas. Supervisor: os da equipe que supervisiona. Demais setores: tudo da empresa.' })}
+    <div class="col-md-4 small text-body-secondary d-flex align-items-center" data-abr-padrao></div>
     <div class="col-md-6"><label class="form-label">Empresas liberadas</label>${state.opcoes.empresas.map((e) => `<div class="form-check">
       <input class="form-check-input" type="checkbox" data-empresa="${e.id}" id="emp-${e.id}" ${u.empresas?.includes(e.id) ? 'checked' : ''}><label class="form-check-label" for="emp-${e.id}">${esc(e.nome)}</label></div>`).join('')}</div>
     <div class="col-md-6"><label class="form-label" for="senha-u">${id ? 'Nova senha provisória (opcional)' : 'Senha provisória'}</label>
@@ -153,6 +158,9 @@ export async function abrirUsuario(id, aoSalvar, colaborador) {
   marcar(u.personalizadas ? u.permissoes : perm.padrao[u.perfil] || []);
   sincronizar();
   perfilSel.addEventListener('change', sincronizar);
+  const abrPadrao = () => { b.querySelector('[data-abr-padrao]').textContent = `Padrão de ${perm.perfis[perfilSel.value]}: ${perm.niveis[perm.abrangencia[perfilSel.value]] || ''}`; };
+  perfilSel.addEventListener('change', abrPadrao);
+  abrPadrao();
   b.querySelector('#personalizar').addEventListener('change', sincronizar);
   b.querySelectorAll('[data-marcar]').forEach((x) => x.addEventListener('click', () => caixas.forEach((c) => { c.checked = x.dataset.marcar === '1'; })));
   b.querySelector('[data-restaurar]').addEventListener('click', () => marcar(perm.padrao[perfilSel.value] || []));

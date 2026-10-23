@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.js": {
-      "includeFiles": "server/schema.sql",
+      "includeFiles": "server/{schema.sql,assistente-manual.md}",
       "maxDuration": 60
     }
   },

@@ -1,4 +1,4 @@
-// Chat interno: painel lateral com contatos, conversa e aviso em tempo real.
+// Chat interno: caixinha fixa no canto inferior direito, com contatos, conversa e aviso em tempo real.
 // Sem conexão em tempo real (hospedagem serverless), a conversa aberta é atualizada a cada poucos segundos.
 import { get, post, esc, fmt, avatar, state, erro, toast } from './core.js';
 
@@ -12,6 +12,7 @@ export function alternar(forcar) {
   const painel = $('#chat');
   const abrir = forcar ?? painel.hidden;
   painel.hidden = !abrir;
+  $('#btn-chat').classList.toggle('ativo', abrir);
   clearInterval(timer);
   if (abrir) {
     aberta ? abrirConversa(aberta.id) : listarContatos();
@@ -23,6 +24,7 @@ export async function atualizarBadge() {
   const { n } = await get('/api/chat/nao-lidas').catch(() => ({ n: 0 }));
   const b = $('#badge-chat');
   b.classList.toggle('d-none', !n);
+  b.textContent = n > 99 ? '99+' : n || '';
   b.title = `${n} não lida(s)`;
 }
 

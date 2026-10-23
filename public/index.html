@@ -108,7 +108,6 @@
           <button class="btn btn-busca d-none d-md-inline-flex" id="btn-busca" type="button"><i class="bi bi-search"></i><span>Buscar pedido, cliente ou tela</span><kbd>Ctrl K</kbd></button>
           <button class="btn btn-icon d-md-none" id="btn-busca-mob" aria-label="Buscar"><i class="bi bi-search"></i></button>
           <button class="btn btn-empresa d-none d-md-inline-flex" id="btn-empresa" title="Trocar empresa"><i class="bi bi-building"></i> <span id="empresa-nome" class="text-truncate"></span></button>
-          <button class="btn btn-icon position-relative" id="btn-chat" title="Chat" aria-label="Chat"><i class="bi bi-chat-dots"></i><span class="badge-ponto d-none" id="badge-chat"></span></button>
           <button class="btn btn-icon position-relative" id="btn-mensagens" title="Mensagens dos setores" aria-label="Mensagens dos setores"><i class="bi bi-bell"></i><span class="badge-ponto d-none" id="badge-msg"></span></button>
           <button class="btn btn-icon" id="btn-tema" title="Alternar tema claro/escuro" aria-label="Alternar tema"><i class="bi bi-moon-stars"></i></button>
           <div class="dropdown">
@@ -130,7 +129,28 @@
     </div>
   </div>
 
-  <!-- Chat (painel lateral) -->
+  <!-- Caixinha fixa no canto inferior direito: assistente de IA e chat interno -->
+  <div class="dock d-none" id="dock">
+    <button class="dock-btn" id="btn-assistente" title="Assistente de IA" aria-label="Assistente de IA"><i class="bi bi-stars"></i><span>Assistente</span></button>
+    <button class="dock-btn" id="btn-chat" title="Chat interno" aria-label="Chat interno"><i class="bi bi-chat-dots"></i><span>Chat</span><span class="dock-badge d-none" id="badge-chat"></span></button>
+  </div>
+
+  <aside id="assistente" class="chat" aria-label="Assistente de IA" hidden>
+    <div class="chat-cab">
+      <div class="flex-grow-1 text-truncate"><strong><i class="bi bi-stars text-success"></i> Assistente Agroterra</strong>
+        <small class="d-block text-body-secondary" id="ass-modo">tira dúvidas sobre o sistema</small></div>
+      <button class="btn btn-icon" id="ass-nova" title="Nova conversa" aria-label="Nova conversa"><i class="bi bi-arrow-counterclockwise"></i></button>
+      <button class="btn btn-icon" id="ass-fechar" aria-label="Fechar assistente"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="chat-corpo" id="ass-corpo"></div>
+    <form class="chat-envio" id="ass-form">
+      <textarea class="form-control" id="ass-texto" rows="1" maxlength="4000" placeholder="Pergunte sobre o sistema" aria-label="Pergunta"></textarea>
+      <button class="btn btn-primary" aria-label="Perguntar"><i class="bi bi-send-fill"></i></button>
+    </form>
+    <div class="ass-aviso">Respostas geradas por IA (Anthropic) podem conter erros. Não envie senhas.</div>
+  </aside>
+
+  <!-- Chat interno -->
   <aside id="chat" class="chat" aria-label="Chat interno" hidden>
     <div class="chat-cab">
       <button class="btn btn-icon d-none" id="chat-voltar" aria-label="Voltar"><i class="bi bi-arrow-left"></i></button>

@@ -1,12 +1,14 @@
 import { state, get, post, esc, toast, pode, erro, avatar, fmt, debounce, qs } from './core.js';
 import { TEXTO_TERMO } from './privacidade.js';
 import * as chat from './chat.js';
+import * as assistente from './assistente.js';
 
 const MENU = [
   {
     grupo: 'Início', itens: [
       { href: '#/dashboard', l: 'Painel', i: 'bi-grid-1x2', p: 'dashboard' },
       { href: '#/chamados', l: 'Chamados Internos', i: 'bi-headset', p: 'chamados', etapa: 'chamados' },
+      { href: '#/meu-rh', l: 'Meu RH', i: 'bi-person-badge' },
     ],
   },
   {
@@ -63,6 +65,16 @@ const MENU = [
       { href: '#/cadastros/empresas', l: 'Empresas', i: 'bi-building', p: 'cadastros.empresa' },
     ],
   },
+  {
+    grupo: 'RH e DP', itens: [
+      { href: '#/rh', l: 'Painel do RH', i: 'bi-person-workspace', p: 'rh' },
+      { href: '#/rh/colaboradores', l: 'Colaboradores', i: 'bi-person-vcard', p: 'rh' },
+      { href: '#/rh/ferias', l: 'Férias', i: 'bi-sun', p: 'rh' },
+      { href: '#/rh/ocorrencias', l: 'Ponto e Ocorrências', i: 'bi-clock-history', p: 'rh' },
+      { href: '#/rh/solicitacoes', l: 'Solicitações', i: 'bi-inbox', p: 'rh', etapa: 'rh_solicitacoes' },
+      { href: '#/rh/folha', l: 'Folha (eventos do mês)', i: 'bi-cash-stack', p: 'rh.folha' },
+    ],
+  },
   { grupo: 'Relatórios', itens: [{ href: '#/relatorios', l: 'Relatórios', i: 'bi-bar-chart-line', p: 'relatorios' }] },
   {
     grupo: 'Segurança', itens: [
@@ -88,6 +100,9 @@ const ROTAS = [
   [/^#\/estoque$/, () => import('./pages/estoque.js')],
   [/^#\/pagar$/, () => import('./pages/pagar.js')],
   [/^#\/chamados$/, () => import('./pages/chamados.js')],
+  [/^#\/rh$/, () => import('./pages/rh.js')],
+  [/^#\/rh\/(\w+)$/, () => import('./pages/rh.js')],
+  [/^#\/meu-rh$/, () => import('./pages/meu-rh.js')],
   [/^#\/crm$/, () => import('./pages/crm.js')],
   [/^#\/crm\/cliente\/(\d+)$/, () => import('./pages/crm.js'), 'cliente'],
   [/^#\/cobranca$/, () => import('./pages/cobranca.js')],
@@ -125,6 +140,9 @@ aplicarTema(document.documentElement.dataset.bsTheme);
 const passos = ['passo-login', 'passo-empresa', 'passo-senha', 'passo-termo'];
 function mostrarPasso(id) {
   $('#app').classList.add('d-none');
+  $('#dock').classList.add('d-none');
+  chat.alternar(false);
+  assistente.alternar(false);
   $('#tela-login').classList.remove('d-none');
   for (const p of passos) $('#' + p).classList.toggle('d-none', p !== id);
   setTimeout(() => $('#' + id).querySelector('input:not([type=checkbox]),button.list-group-item')?.focus(), 50);
@@ -244,7 +262,11 @@ $('#btn-empresa').addEventListener('click', () => {
   else toast('Seu usuário tem acesso a apenas uma empresa.', 'info');
 });
 $('#btn-mensagens').addEventListener('click', () => { location.hash = '#/mensagens'; });
-$('#btn-chat').addEventListener('click', () => chat.alternar());
+$('#btn-chat').addEventListener('click', () => { assistente.alternar(false); chat.alternar(); });
+$('#btn-assistente').addEventListener('click', () => { chat.alternar(false); assistente.alternar(); });
+assistente.configurar({
+  telas: () => MENU.flatMap((g) => g.itens.filter((i) => !i.p || pode(i.p)).map((i) => `${g.grupo} › ${i.l} (${i.href})`)),
+});
 const fecharMenu = () => { $('#sidebar').classList.remove('aberto'); $('#backdrop-menu').classList.remove('ativo'); };
 $('#btn-menu').addEventListener('click', () => { $('#sidebar').classList.add('aberto'); $('#backdrop-menu').classList.add('ativo'); });
 $('#backdrop-menu').addEventListener('click', fecharMenu);
@@ -275,6 +297,7 @@ async function abrirApp() {
   $('#app').classList.remove('d-none');
   pintarUsuario();
   $('#empresa-nome').textContent = state.me.empresa.nome;
+  $('#dock').classList.remove('d-none');
   $('#btn-chat').classList.toggle('d-none', !pode('chat'));
   state.opcoes = await get('/api/cadastros/opcoes');
   montarMenu();
@@ -307,6 +330,7 @@ export async function atualizarContadores() {
   try {
     const c = await get('/api/pedidos/contagem');
     if (pode('chamados')) c.chamados = (await get('/api/chamados/contagem')).para_mim;
+    if (pode('rh')) c.rh_solicitacoes = (await get('/api/rh/solicitacoes?f_status=aberta&pageSize=1')).total;
     document.querySelectorAll('[data-cont]').forEach((b) => {
       const n = c[b.dataset.cont] || 0;
       b.textContent = n > 999 ? '999+' : n.toLocaleString('pt-BR');
@@ -347,6 +371,12 @@ function conectarEventos() {
     const d = JSON.parse(e.data);
     toast(d.texto, 'warning', 'Chamado interno');
     avisar(`Chamado #${d.numero}`, d.texto, `/#/chamados?id=${d.id}`);
+    atualizarContadores();
+  });
+  fonte.addEventListener('rh', (e) => {
+    const d = JSON.parse(e.data);
+    toast(d.texto, 'info', 'RH');
+    avisar('RH', d.texto, pode('rh') ? '/#/rh/solicitacoes' : '/#/meu-rh');
     atualizarContadores();
   });
   fonte.addEventListener('chat_lida', (e) => chat.lidas(JSON.parse(e.data)));

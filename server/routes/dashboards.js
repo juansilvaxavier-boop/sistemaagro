@@ -4,6 +4,7 @@ const db = require('../db');
 const S = require('../services');
 const W = require('../workflow');
 const { PERFIS, can } = require('../auth');
+const E = require('../escopo');
 
 const r = express.Router();
 
@@ -32,7 +33,7 @@ async function serieMensal(sql, params, n = 6) {
 /** Condição de pedidos conforme o perfil (vendedor = próprios, supervisor = equipe). */
 function filtroPedidos(perfil, uid, empresaId) {
   if (perfil === 'vendedor') return { sql: 'p.empresa_id = ? AND p.vendedor_id = ?', params: [empresaId, uid] };
-  if (perfil === 'supervisor') return { sql: 'p.empresa_id = ? AND (p.supervisor_id = ? OR p.vendedor_id = ?)', params: [empresaId, uid, uid] };
+  if (perfil === 'supervisor') return { sql: `p.empresa_id = ? AND ${E.vendas({ id: uid, perfil: 'supervisor' }, 'p')}`, params: [empresaId] };
   return { sql: 'p.empresa_id = ?', params: [empresaId] };
 }
 
@@ -76,7 +77,7 @@ const PAINEIS = {
          AND EXISTS (SELECT 1 FROM pedido_historico h WHERE h.pedido_id = p.id AND h.etapa_destino = 'venda' AND h.etapa_origem IS NOT NULL)`, ...f.params,
     )).n;
     const com = (await db.get(`SELECT IFNULL(SUM(valor),0) AS v FROM comissoes WHERE usuario_id = ? AND periodo = ?`, ctx.uid, mesAtual())).v;
-    const inad = await inadimplencia('p.empresa_id = ? AND pe.vendedor_id = ?', [ctx.emp, ctx.uid]);
+    const inad = await inadimplencia(`p.empresa_id = ? AND ${E.financeiro({ id: ctx.uid, perfil: 'vendedor' }, 'p')}`, [ctx.emp]);
     return {
       cards: [
         money('Vendas no mês', vm.v, { icone: 'bi-graph-up-arrow', cor: 'success', sub: `${vm.n} pedidos` }),
@@ -106,7 +107,7 @@ const PAINEIS = {
     const f = filtroPedidos('supervisor', ctx.uid, ctx.emp);
     const vm = await vendasMes(f);
     const fs = await fila('supervisao', ctx.emp, f);
-    const inad = await inadimplencia('p.empresa_id = ? AND pe.supervisor_id = ?', [ctx.emp, ctx.uid]);
+    const inad = await inadimplencia(`p.empresa_id = ? AND ${E.financeiro({ id: ctx.uid, perfil: 'supervisor' }, 'p')}`, [ctx.emp]);
     const ranking = await db.all(
       `SELECT v.nome, IFNULL(SUM(p.valor_total),0) AS total FROM usuarios v
          JOIN equipes e ON e.id = v.equipe_id AND e.supervisor_id = ?
@@ -311,6 +312,32 @@ const PAINEIS = {
     };
   },
 };
+PAINEIS.rh = async (ctx) => {
+  const hoje = S.hoje();
+  const ativos = `COALESCE(c.empresa_id, ${Number(ctx.emp)}) = ${Number(ctx.emp)} AND c.ativo = 1 AND c.data_desligamento IS NULL`;
+  const t = await db.get(`SELECT (SELECT COUNT(*) FROM colaboradores c WHERE ${ativos}) AS ativos,
+      (SELECT COUNT(*) FROM rh_solicitacoes s JOIN colaboradores c ON c.id = s.colaborador_id WHERE s.status = 'aberta' AND ${ativos}) AS solicitacoes,
+      (SELECT COUNT(*) FROM rh_ferias f JOIN colaboradores c ON c.id = f.colaborador_id WHERE f.status = 'solicitada' AND ${ativos}) AS ferias_pendentes,
+      (SELECT COUNT(*) FROM rh_ferias f JOIN colaboradores c ON c.id = f.colaborador_id WHERE f.status = 'aprovada' AND ? BETWEEN f.inicio AND f.fim AND ${ativos}) AS em_ferias,
+      (SELECT COUNT(*) FROM rh_ocorrencias o JOIN colaboradores c ON c.id = o.colaborador_id WHERE substr(o.data,1,7) = ? AND o.tipo IN ('falta','atestado') AND ${ativos}) AS faltas_mes`,
+    hoje, hoje.slice(0, 7));
+  const admissoes = await serieMensal(`SELECT substr(data_admissao,1,7) AS mes, COUNT(*) AS v FROM colaboradores WHERE COALESCE(empresa_id, ?) = ? AND data_admissao >= ? GROUP BY mes`, [ctx.emp, ctx.emp], 12);
+  const deptos = await db.all(`SELECT COALESCE(c.departamento, c.setor, 'Sem departamento') AS nome, COUNT(*) AS n FROM colaboradores c WHERE ${ativos} GROUP BY 1 ORDER BY 2 DESC`);
+  return {
+    cards: [
+      card('Colaboradores ativos', t.ativos, { icone: 'bi-people', cor: 'primary', link: '#/rh/colaboradores' }),
+      card('Solicitações abertas', t.solicitacoes, { icone: 'bi-inbox', cor: t.solicitacoes ? 'warning' : 'success', link: '#/rh/solicitacoes' }),
+      card('Férias para aprovar', t.ferias_pendentes, { icone: 'bi-sun', cor: t.ferias_pendentes ? 'warning' : 'secondary', link: '#/rh/ferias' }),
+      card('Em férias hoje', t.em_ferias, { icone: 'bi-umbrella', cor: 'info' }),
+      card('Faltas e atestados no mês', t.faltas_mes, { icone: 'bi-calendar-x', cor: 'danger', link: '#/rh/ocorrencias' }),
+    ],
+    graficos: [
+      { titulo: 'Admissões (12 meses)', tipo: 'bar', ...serieComoGrafico(admissoes, 'Admissões') },
+      { titulo: 'Colaboradores por departamento', tipo: 'doughnut', labels: deptos.map((x) => x.nome), series: [{ nome: 'Pessoas', dados: deptos.map((x) => x.n) }] },
+    ],
+    tabelas: [],
+  };
+};
 PAINEIS.admin = PAINEIS.diretoria;
 
 function serieComoGrafico(s, nome) {
@@ -353,8 +380,8 @@ async function cardsModulos(perfil, ctx, user) {
     out.push(money('A pagar hoje', p.hoje, { icone: 'bi-calendar2-check', cor: 'warning', sub: `${p.qh} contas`, link: '#/pagar' }));
   }
   if (['vendedor', 'supervisor'].includes(perfil) || geral) {
-    const f = perfil === 'supervisor'
-      ? { sql: 'p.empresa_id = ? AND p.vendedor_id IN (SELECT id FROM usuarios WHERE equipe_id IN (SELECT id FROM equipes WHERE supervisor_id = ?) OR id = ?)', params: [ctx.emp, ctx.uid, ctx.uid] }
+    const f = ['vendedor', 'supervisor'].includes(perfil)
+      ? { sql: `p.empresa_id = ? AND ${E.vendas({ id: ctx.uid, perfil }, 'p', { semSupervisor: true })}`, params: [ctx.emp] }
       : filtroPedidos(perfil, ctx.uid, ctx.emp);
     const pr = await db.get(
       `SELECT COUNT(*) AS n, COALESCE(SUM(valor_total),0) AS v FROM propostas p WHERE ${f.sql} AND status = 'enviada' AND validade >= date('now','localtime')`, ...f.params,

@@ -4,6 +4,7 @@ const db = require('../db');
 const A = require('../auth');
 const S = require('../services');
 const { responderLista } = require('../lista');
+const E = require('../escopo');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -25,25 +26,37 @@ const PARCELAS_SQL = `
   LEFT JOIN usuarios s ON s.id = pe.supervisor_id
   LEFT JOIN formas_pagamento f ON f.id = pe.forma_id
   WHERE p.empresa_id = ?`;
+/** Parcelas visíveis ao usuário (as da abrangência dele). */
+const parcelasSql = (req) => `${PARCELAS_SQL} AND ${E.financeiro(req.user, 'p')}`;
+/** Confere se a parcela está na abrangência do usuário antes de qualquer alteração. */
+async function exigirParcela(req) {
+  const p = await db.get(`SELECT id FROM parcelas p WHERE p.id = ? AND p.empresa_id = ? AND ${E.financeiro(req.user, 'p')}`, Number(req.params.id), req.empresaId);
+  if (!p) throw new ErroNegocio('Parcela não encontrada', 404);
+}
 
 r.get('/parcelas', A.exige('financeiro.parcelas', 'cobranca'), async (req, res) =>
-  await responderLista(req, res, { sql: PARCELAS_SQL, params: [req.empresaId], sort: 'vencimento', dir: 'asc', exact: ['status', 'cliente_id', 'pedido_id'] }),
+  await responderLista(req, res, { sql: parcelasSql(req), params: [req.empresaId], sort: 'vencimento', dir: 'asc', exact: ['status', 'cliente_id', 'pedido_id'] }),
 );
 
 r.get('/parcelas/:id', A.exige('financeiro.parcelas', 'cobranca'), async (req, res) => {
-  const p = await db.get(`SELECT * FROM (${PARCELAS_SQL}) t WHERE id = ?`, req.empresaId, req.params.id);
+  const p = await db.get(`SELECT * FROM (${parcelasSql(req)}) t WHERE id = ?`, req.empresaId, req.params.id);
   if (!p) throw new ErroNegocio('Parcela não encontrada', 404);
   p.eventos = await db.all('SELECT e.*, u.nome AS usuario FROM parcela_eventos e LEFT JOIN usuarios u ON u.id = e.usuario_id WHERE parcela_id = ? ORDER BY e.id DESC', p.id);
   p.negativacoes = await db.all('SELECT * FROM negativacoes WHERE parcela_id = ? ORDER BY id DESC', p.id);
   res.json(p);
 });
 
-r.post('/parcelas/:id/baixa', A.exige('financeiro.parcelas'), async (req, res) => res.json(await db.tx(async () => await S.baixarParcela(Number(req.params.id), req.body || {}, req.user.id))));
+r.post('/parcelas/:id/baixa', A.exige('financeiro.parcelas'), async (req, res) => {
+  await exigirParcela(req);
+  res.json(await db.tx(async () => await S.baixarParcela(Number(req.params.id), req.body || {}, req.user.id)));
+});
 r.post('/parcelas/:id/prorrogar', A.exige('financeiro.parcelas', 'cobranca'), async (req, res) => {
+  await exigirParcela(req);
   await db.tx(async () => await S.prorrogarParcela(Number(req.params.id), req.body || {}, req.user.id));
   res.json({ ok: true });
 });
 r.post('/parcelas/:id/status', A.exige('financeiro.parcelas'), async (req, res) => {
+  await exigirParcela(req);
   const status = req.body?.status;
   if (!['a_pagar', 'negociada', 'acordo_judicial', 'cancelada'].includes(status)) throw new ErroNegocio('Status inválido.');
   await db.tx(async () => {
@@ -53,6 +66,7 @@ r.post('/parcelas/:id/status', A.exige('financeiro.parcelas'), async (req, res) 
   res.json({ ok: true });
 });
 r.post('/parcelas/:id/serasa', A.exige('financeiro.negativados'), async (req, res) => {
+  await exigirParcela(req);
   const p = await db.get(`SELECT p.*, ${S.SALDO_PARCELA_SQL} AS saldo FROM parcelas p WHERE p.id = ? AND p.empresa_id = ?`, req.params.id, req.empresaId);
   if (!p) throw new ErroNegocio('Parcela não encontrada', 404);
   if (!['a_pagar', 'acordo_judicial'].includes(p.status) || p.vencimento >= S.hoje()) throw new ErroNegocio('Só parcelas vencidas podem ser enviadas ao Serasa.');
@@ -64,6 +78,7 @@ r.post('/parcelas/:id/serasa', A.exige('financeiro.negativados'), async (req, re
   res.status(201).json({ id });
 });
 r.post('/parcelas/:id/blacklist', A.exige('blacklist.editar'), async (req, res) => {
+  await exigirParcela(req);
   const p = await db.get('SELECT * FROM parcelas WHERE id = ?', req.params.id);
   if (!p) throw new ErroNegocio('Parcela não encontrada', 404);
   const motivo = req.body?.motivo || `Inadimplência na parcela ${p.numero} (venc. ${p.vencimento})`;
@@ -86,7 +101,7 @@ r.get('/negativacoes', A.exige('financeiro.negativados'), async (req, res) =>
     sql: `SELECT n.id, n.parcela_id, c.documento, c.nome AS cliente, pe.numero AS pedido, p.numero AS parcela, p.vencimento,
             n.valor, ${S.STATUS_PARCELA_SQL} AS status_parcela, n.status, n.protocolo, n.motivo_rejeicao, u.nome AS usuario, n.created_at, n.updated_at
           FROM negativacoes n JOIN parcelas p ON p.id = n.parcela_id JOIN clientes c ON c.id = n.cliente_id
-          LEFT JOIN pedidos pe ON pe.id = p.pedido_id LEFT JOIN usuarios u ON u.id = n.usuario_id WHERE p.empresa_id = ?`,
+          LEFT JOIN pedidos pe ON pe.id = p.pedido_id LEFT JOIN usuarios u ON u.id = n.usuario_id WHERE p.empresa_id = ? AND ${E.financeiro(req.user, 'p')}`,
     params: [req.empresaId], sort: 'updated_at', exact: ['status'],
   }),
 );
@@ -111,7 +126,7 @@ r.get('/lancamentos', A.exige('financeiro.lancamentos'), async (req, res) =>
     sql: `SELECT l.id, l.vendedor_id, v.nome AS vendedor, l.periodo, l.tipo_ocorrencia, l.valor, l.descricao, pe.numero AS pedido,
             u.nome AS usuario, l.created_at
           FROM lancamentos_vendedor l JOIN usuarios v ON v.id = l.vendedor_id LEFT JOIN usuarios u ON u.id = l.usuario_id
-          LEFT JOIN pedidos pe ON pe.id = l.pedido_id`,
+          LEFT JOIN pedidos pe ON pe.id = l.pedido_id WHERE ${E.pessoas(req.user, 'l.vendedor_id')}`,
     sort: 'created_at', exact: ['tipo_ocorrencia'],
   }),
 );
@@ -133,7 +148,7 @@ r.get('/comissoes', A.exige('financeiro.comissoes'), async (req, res) =>
     sql: `SELECT c.id, c.usuario_id, u.nome AS colaborador, c.periodo, c.perfil, c.tipo_comissao, e.nome AS empresa_recibo,
             pe.numero AS pedido, c.valor_base, c.percentual, c.perda_pct, c.valor, c.status, c.observacao
           FROM comissoes c JOIN usuarios u ON u.id = c.usuario_id LEFT JOIN empresas e ON e.id = c.empresa_id
-          LEFT JOIN pedidos pe ON pe.id = c.pedido_id`,
+          LEFT JOIN pedidos pe ON pe.id = c.pedido_id WHERE ${E.pessoas(req.user, 'c.usuario_id')}`,
     sort: 'periodo', exact: ['status', 'perfil', 'tipo_comissao'],
   }),
 );
@@ -144,7 +159,7 @@ r.get('/comissoes/resumo', A.exige('financeiro.comissoes'), async (req, res) => 
        IFNULL((SELECT SUM(valor) FROM comissoes c WHERE c.usuario_id = u.id AND c.periodo = ?),0) AS comissoes,
        IFNULL((SELECT SUM(valor) FROM lancamentos_vendedor l WHERE l.vendedor_id = u.id AND l.periodo = ? AND l.tipo_ocorrencia = 'credito'),0) AS creditos,
        IFNULL((SELECT SUM(valor) FROM lancamentos_vendedor l WHERE l.vendedor_id = u.id AND l.periodo = ? AND l.tipo_ocorrencia <> 'credito'),0) AS descontos
-     FROM usuarios u WHERE u.perfil IN ('vendedor','supervisor') ORDER BY u.nome`,
+     FROM usuarios u WHERE u.perfil IN ('vendedor','supervisor') AND ${E.pessoas(req.user, 'u.id')} ORDER BY u.nome`,
     periodo, periodo, periodo, periodo,
   )).map((x) => ({ ...x, liquido: S.r2(x.comissoes + x.creditos - x.descontos) })));
 });
@@ -169,7 +184,7 @@ r.get('/devolucoes', A.exige('financeiro.devolucoes', 'financeiro.notas'), async
     sql: `SELECT d.id, nf.numero AS nota, pe.numero AS pedido, c.nome AS cliente, d.motivo, d.tipo, d.valor, d.frete, d.total,
             d.baixa_parcelas, u.nome AS usuario, d.created_at
           FROM devolucoes d JOIN notas_fiscais nf ON nf.id = d.nota_id JOIN clientes c ON c.id = nf.cliente_id
-          LEFT JOIN pedidos pe ON pe.id = d.pedido_id LEFT JOIN usuarios u ON u.id = d.usuario_id WHERE nf.empresa_id = ?`,
+          LEFT JOIN pedidos pe ON pe.id = d.pedido_id LEFT JOIN usuarios u ON u.id = d.usuario_id WHERE nf.empresa_id = ? AND ${E.financeiro(req.user, 'nf')}`,
     params: [req.empresaId], sort: 'created_at',
   }),
 );
@@ -196,12 +211,12 @@ r.get('/notas', A.exige('financeiro.notas'), async (req, res) =>
     sql: `SELECT nf.id, nf.numero, nf.serie, nf.data_emissao, pe.numero AS pedido, c.documento, c.nome AS cliente, nf.valor, nf.status, nf.natureza, nf.chave,
             (SELECT COUNT(*) FROM cartas_correcao cc WHERE cc.nota_id = nf.id) AS cartas_correcao,
             (SELECT IFNULL(SUM(valor),0) FROM devolucoes d WHERE d.nota_id = nf.id) AS devolvido
-          FROM notas_fiscais nf JOIN clientes c ON c.id = nf.cliente_id LEFT JOIN pedidos pe ON pe.id = nf.pedido_id WHERE nf.empresa_id = ?`,
+          FROM notas_fiscais nf JOIN clientes c ON c.id = nf.cliente_id LEFT JOIN pedidos pe ON pe.id = nf.pedido_id WHERE nf.empresa_id = ? AND ${E.financeiro(req.user, 'nf')}`,
     params: [req.empresaId], sort: 'numero', exact: ['status'],
   }),
 );
 r.get('/notas/:id', A.exige('financeiro.notas'), async (req, res) => {
-  const n = await db.get('SELECT nf.*, c.nome AS cliente, c.documento, pe.numero AS pedido FROM notas_fiscais nf JOIN clientes c ON c.id = nf.cliente_id LEFT JOIN pedidos pe ON pe.id = nf.pedido_id WHERE nf.id = ? AND nf.empresa_id = ?', req.params.id, req.empresaId);
+  const n = await db.get(`SELECT nf.*, c.nome AS cliente, c.documento, pe.numero AS pedido FROM notas_fiscais nf JOIN clientes c ON c.id = nf.cliente_id LEFT JOIN pedidos pe ON pe.id = nf.pedido_id WHERE nf.id = ? AND nf.empresa_id = ? AND ${E.financeiro(req.user, 'nf')}`, req.params.id, req.empresaId);
   if (!n) throw new ErroNegocio('Nota não encontrada', 404);
   n.cartas = await db.all('SELECT cc.*, u.nome AS usuario FROM cartas_correcao cc LEFT JOIN usuarios u ON u.id = cc.usuario_id WHERE nota_id = ? ORDER BY sequencia', n.id);
   n.devolucoes = await db.all('SELECT * FROM devolucoes WHERE nota_id = ?', n.id);
