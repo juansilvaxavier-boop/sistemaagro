@@ -68,6 +68,7 @@ const MENU = [
     grupo: 'Segurança', itens: [
       { href: '#/auditoria', l: 'Auditoria', i: 'bi-journal-text', p: 'auditoria' },
       { href: '#/backups', l: 'Backups', i: 'bi-database-check', p: 'backup' },
+      { href: '#/importacao', l: 'Importar dados', i: 'bi-cloud-upload', p: 'importacao' },
       { href: '#/privacidade', l: 'Privacidade (LGPD)', i: 'bi-shield-lock' },
     ],
   },
@@ -100,7 +101,7 @@ const ROTAS = [
   [/^#\/relatorios$/, () => import('./pages/relatorios.js')],
   [/^#\/relatorios\/([\w-]+)$/, () => import('./pages/relatorios.js')],
   [/^#\/perfil$/, () => import('./pages/perfil.js')],
-  [/^#\/(auditoria|backups|privacidade)$/, () => import('./pages/seguranca.js')],
+  [/^#\/(auditoria|backups|privacidade|importacao)$/, () => import('./pages/seguranca.js')],
 ];
 
 const $ = (s) => document.querySelector(s);
@@ -405,7 +406,9 @@ const buscar = debounce(async (q) => {
   const t = telas().filter((i) => !termo || semAcento(i.l + ' ' + i.grupo).includes(termo)).slice(0, termo ? 8 : 10);
   if (t.length) blocos.push(['Telas', t.map((i) => ({ href: i.href, icone: i.i, texto: i.l, extra: i.grupo }))]);
   if (/^\d{4,}$/.test(termo) && pode('fila')) {
-    const p = await get('/api/pedidos/progressao' + qs({ f_numero: termo, pageSize: 5 })).catch(() => ({ rows: [] }));
+    // Até 6 dígitos é o número do pedido; mais que isso, o código do pedido no sistema anterior.
+    const filtro = termo.length > 6 ? { f_codigo_origem: termo } : { f_numero: termo };
+    const p = await get('/api/pedidos/progressao' + qs({ ...filtro, pageSize: 5 })).catch(() => ({ rows: [] }));
     if (p.rows.length) blocos.unshift(['Pedidos', p.rows.map((r) => ({ href: `#/fila/${r.etapa}?abrir=${r.id}`, icone: 'bi-cart3', texto: `Pedido ${r.numero} · ${r.cliente}`, extra: r.etapa_label }))]);
   }
   if (termo.length >= 3 && (pode('clientes') || pode('crm'))) {

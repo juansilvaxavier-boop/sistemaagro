@@ -1,5 +1,5 @@
 // Auditoria (quem alterou o quê), backups do banco e política de privacidade.
-import { get, post, esc, fmt, titulo, DataTable, modal, toast, tentar, baixar, pode, confirmar } from '../core.js';
+import { get, post, esc, fmt, titulo, DataTable, modal, toast, tentar, baixar, pode, confirmar, pedirTexto, kpi, erro, state } from '../core.js';
 import { TEXTO_TERMO } from '../privacidade.js';
 
 const ACOES = {
@@ -7,7 +7,7 @@ const ACOES = {
   login_falhou: ['Login recusado', 'warning'], visualizar: ['Visualização', 'light'], trocar_senha: ['Troca de senha', 'info'],
   aceitar_termo: ['Aceite do termo', 'info'], alterar_foto: ['Foto de perfil', 'light'], baixar_arquivo: ['Download de arquivo', 'light'],
   lgpd_exportar: ['LGPD: exportação', 'warning'], lgpd_anonimizar: ['LGPD: anonimização', 'danger'], backup_manual: ['Backup manual', 'info'],
-  backup_download: ['Download de backup', 'warning'],
+  backup_download: ['Download de backup', 'warning'], importacao: ['Importação de dados', 'primary'], importacao_desfeita: ['Importação desfeita', 'danger'],
 };
 const ENTIDADES = {
   clientes: 'Cliente', pedidos: 'Pedido', pedido_itens: 'Item do pedido', usuarios: 'Usuário', colaboradores: 'Colaborador', produtos: 'Produto',
@@ -18,6 +18,7 @@ const ENTIDADES = {
 export default async function (conteudo, { params: [tela] }) {
   if (tela === 'auditoria') return auditoria(conteudo);
   if (tela === 'backups') return backups(conteudo);
+  if (tela === 'importacao') return importar(conteudo);
   return privacidade(conteudo);
 }
 
@@ -94,4 +95,89 @@ function privacidade(conteudo) {
       <div><i class="bi bi-database-check text-agro"></i> Backup diário automático do banco.</div>
       ${pode('lgpd.titular') ? '<div><i class="bi bi-person-x text-agro"></i> Pedidos do titular: abra o cliente e use a aba <b>LGPD</b> para exportar ou anonimizar os dados.</div>' : ''}
     </div></div></div></div>`;
+}
+
+// ---------- Importação da planilha do sistema anterior ----------
+const ITENS = {
+  colaboradores: ['Vendedores e supervisores', 'n'], supervisores: ['Supervisores', 'n'], clientes: ['Clientes', 'n'], clientes_sem_documento: ['Clientes sem CPF/CNPJ', 'n'],
+  pedidos: ['Pedidos', 'n'], valor_pedidos: ['Valor dos pedidos', 'm'], notas: ['Notas fiscais', 'n'], valor_notas: ['Valor das notas', 'm'],
+  parcelas_abertas: ['Parcelas em aberto', 'n'], saldo_aberto: ['Saldo em aberto', 'm'], parcelas_pagas: ['Parcelas pagas', 'n'], valor_recebido: ['Valor recebido', 'm'],
+};
+const fmtItem = (k, v) => (ITENS[k]?.[1] === 'm' ? fmt.money(v) : fmt.num(v));
+const ICONE_AVISO = { erro: ['bi-x-octagon', 'danger'], atencao: ['bi-exclamation-triangle', 'warning'], info: ['bi-info-circle', 'info'] };
+
+async function importar(conteudo) {
+  const pagina = titulo(conteudo, 'Importar dados do sistema anterior', 'bi-cloud-upload');
+  const sit = await get('/api/admin/importacao');
+  const jaTem = sit.importado.pedidos > 0 || sit.importado.clientes > 0;
+  pagina.innerHTML = `<p class="text-body-secondary mt-n2">Envie a planilha de relatórios do sistema anterior (abas Vendas, Faturamento, Contas a Receber, Contas Recebidas, Parcelas Vencidas e Parcelas Liquidadas).
+    Primeiro o sistema mostra o que vai entrar; nada é gravado até você confirmar. Antes de gravar é feito um backup automático, e enviar a mesma planilha de novo não duplica registros.</p>
+    ${jaTem ? `<div class="alert alert-success d-flex align-items-center gap-2"><i class="bi bi-check-circle"></i><div>Já importado: <b>${fmt.num(sit.importado.clientes)}</b> clientes, <b>${fmt.num(sit.importado.pedidos)}</b> pedidos,
+      <b>${fmt.num(sit.importado.notas)}</b> notas e <b>${fmt.num(sit.importado.parcelas_abertas + sit.importado.parcelas_pagas)}</b> parcelas.</div>
+      ${pode('importacao') ? '<button class="btn btn-sm btn-outline-danger ms-auto" data-desfazer><i class="bi bi-arrow-counterclockwise"></i> Desfazer importação</button>' : ''}</div>` : ''}
+    <div class="card mb-3"><div class="card-body"><form class="row g-2 align-items-end" data-form>
+      <div class="col-md-8"><label class="form-label">Planilha (.xlsx)</label><input type="file" class="form-control" name="arquivo" accept=".xlsx" required></div>
+      <div class="col-md-4"><button class="btn btn-success w-100" type="submit"><span class="spinner-border spinner-border-sm d-none"></span> <i class="bi bi-search"></i> Analisar planilha</button></div>
+    </form></div></div><div data-resultado></div>`;
+  const form = pagina.querySelector('[data-form]');
+  const res = pagina.querySelector('[data-resultado]');
+  const enviar = async (aplicar) => {
+    const arquivo = form.arquivo.files[0];
+    if (!arquivo) { toast('Escolha a planilha.', 'warning'); return null; }
+    const fd = new FormData();
+    fd.append('arquivo', arquivo);
+    if (aplicar) fd.append('aplicar', '1');
+    return post('/api/admin/importacao', fd);
+  };
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const spin = form.querySelector('.spinner-border');
+    spin.classList.remove('d-none');
+    res.innerHTML = '<div class="vazio"><div class="spinner-border spinner-border-sm"></div> Lendo a planilha...</div>';
+    try {
+      const d = await enviar(false);
+      if (d) mostrarPrevia(res, d, () => aplicar());
+    } catch (err) { res.innerHTML = ''; erro(err); } finally { spin.classList.add('d-none'); }
+  });
+  async function aplicar() {
+    if (!await confirmar('Gravar os dados da planilha no sistema? Um backup é feito antes. Registros que já existem não são duplicados.', { ok: 'Importar agora' })) return;
+    res.innerHTML = '<div class="vazio"><div class="spinner-border spinner-border-sm"></div> Importando... pode levar até um minuto.</div>';
+    try {
+      const d = await enviar(true);
+      const ok = d.conferencia.every((c) => c.ok);
+      res.innerHTML = `<div class="alert alert-${ok ? 'success' : 'warning'}"><i class="bi bi-${ok ? 'check-circle' : 'exclamation-triangle'}"></i>
+        ${ok ? 'Importação concluída e conferida: tudo o que a planilha previa está no banco.' : 'Importação concluída, mas alguns totais não bateram. Confira abaixo.'}
+        Backup feito antes: nº ${d.backup_id} (em <a href="#/backups">Backups</a>).</div>
+        <div class="card"><div class="card-header py-2">Conferência</div><div class="card-body p-0"><table class="table table-sm mb-0"><thead><tr><th>Item</th><th class="num">Previsto</th><th class="num">No banco</th><th></th></tr></thead><tbody>
+        ${d.conferencia.map((c) => `<tr><td>${esc(ITENS[c.item]?.[0] || c.item)}</td><td class="num">${fmtItem(c.item, c.previsto)}</td><td class="num">${fmtItem(c.item, c.banco)}</td>
+          <td>${c.ok ? '<i class="bi bi-check-lg text-success"></i>' : '<i class="bi bi-x-lg text-danger"></i>'}</td></tr>`).join('')}</tbody></table></div></div>`;
+      window.atualizarContadores?.();
+    } catch (err) { res.innerHTML = ''; erro(err); }
+  }
+  pagina.querySelector('[data-desfazer]')?.addEventListener('click', async () => {
+    const txt = await pedirTexto('Isso apaga todos os clientes, pedidos, notas, parcelas, vendedores e equipes que vieram da importação (um backup é feito antes). Digite <b>DESFAZER</b> para confirmar.', { titulo: 'Desfazer importação', ok: 'Desfazer' });
+    if (txt === null) return;
+    if (await tentar(() => post('/api/admin/importacao/desfazer', { confirmacao: txt }), 'Importação desfeita.')) importar(conteudo);
+  });
+}
+
+function mostrarPrevia(el, d, aoAplicar) {
+  const t = d.totais;
+  el.innerHTML = `<div class="kpis mb-3">
+      ${kpi('Clientes', fmt.num(t.clientes), { icone: 'bi-people', sub: `${fmt.num(t.clientes_sem_documento)} sem CPF/CNPJ` })}
+      ${kpi('Pedidos', fmt.num(t.pedidos), { icone: 'bi-cart3', cor: 'info', sub: fmt.money(t.valor_pedidos) })}
+      ${kpi('Notas fiscais', fmt.num(t.notas), { icone: 'bi-receipt', cor: 'success', sub: fmt.money(t.valor_notas) })}
+      ${kpi('Parcelas em aberto', fmt.num(t.parcelas_abertas), { icone: 'bi-hourglass-split', cor: 'warning', sub: fmt.money(t.saldo_aberto) })}
+      ${kpi('Parcelas pagas', fmt.num(t.parcelas_pagas), { icone: 'bi-cash-coin', cor: 'success', sub: `${fmt.money(t.valor_recebido)} recebidos` })}
+      ${kpi('Vendedores e supervisores', fmt.num(t.colaboradores), { icone: 'bi-person-badge', cor: 'secondary', sub: `${t.supervisores} supervisores · entram sem acesso` })}
+    </div>
+    <div class="row g-3"><div class="col-lg-8"><div class="card"><div class="card-header py-2">Ajustes e pontos de atenção</div><div class="card-body">
+      ${d.avisos.map((a) => { const [i, c] = ICONE_AVISO[a.tipo]; return `<div class="d-flex gap-2 mb-3"><i class="bi ${i} text-${c} fs-5"></i><div><div>${esc(a.texto)}</div>
+        ${a.exemplos.length ? `<div class="small text-body-secondary mt-1">Ex.: ${a.exemplos.map(esc).join(' · ')}</div>` : ''}</div></div>`; }).join('')}
+    </div></div></div><div class="col-lg-4"><div class="card mb-3"><div class="card-header py-2">Vendas por mês</div><div class="card-body p-0"><table class="table table-sm mb-0">
+      ${Object.entries(t.vendas_por_mes).sort().map(([m, [n, v]]) => `<tr><td>${m.split('-').reverse().join('/')}</td><td class="num">${fmt.num(n)}</td><td class="num">${fmt.money(v)}</td></tr>`).join('')}</table></div></div>
+      <div class="card"><div class="card-body small">Pedidos por etapa: ${Object.entries(t.pedidos_por_etapa).map(([k, v]) => `${esc(state.me.etapas[k]?.label || k)} <b>${fmt.num(v)}</b>`).join(' · ')}
+        <div class="mt-2">A numeração da NF-e continua depois da nota <b>${t.maior_nf}</b>.</div></div></div></div></div>
+    <div class="d-flex gap-2 justify-content-end mt-3"><button class="btn btn-success" data-aplicar><i class="bi bi-cloud-upload"></i> Importar agora</button></div>`;
+  el.querySelector('[data-aplicar]').addEventListener('click', aoAplicar);
 }

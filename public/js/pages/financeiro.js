@@ -250,7 +250,7 @@ function notas(conteudo) {
       { k: 'numero', l: 'Nº' }, { k: 'serie', l: 'Série' }, { k: 'data_emissao', l: 'Emissão', t: 'datetime' }, { k: 'pedido', l: 'Pedido' },
       { k: 'documento', l: 'CPF/CNPJ', t: 'doc' }, { k: 'cliente', l: 'Cliente' }, { k: 'valor', l: 'Valor', t: 'money' }, { k: 'devolvido', l: 'Devolvido', t: 'money' },
       { k: 'status', l: 'Status', t: 'status', filter: { options: [['autorizada', 'Autorizada'], ['cancelada', 'Cancelada'], ['devolvida', 'Devolvida'], ['devolvida_parcial', 'Devolvida parcial']] } },
-      { k: 'cartas_correcao', l: 'CC-e', t: 'num' }, { k: 'chave', l: 'Chave de acesso', cls: 'small' },
+      { k: 'natureza', l: 'Natureza da operação' }, { k: 'cartas_correcao', l: 'CC-e', t: 'num' }, { k: 'chave', l: 'Chave de acesso', cls: 'small' },
     ],
     actions: (r) => (r.status === 'cancelada' ? '' : [
       r.status === 'autorizada' ? btnAcao('cancelar', 'bi-x-octagon', 'Cancelar nota', 'outline-danger') : '',

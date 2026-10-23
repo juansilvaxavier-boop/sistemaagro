@@ -134,6 +134,41 @@ r.get('/backups/:id/download', A.exige('backup'), async (req, res) => {
   res.end(Buffer.from(b.conteudo));
 });
 
+// ---------- Importação da planilha do sistema anterior ----------
+const multer = require('multer');
+const importacao = require('../importacao');
+const uploadPlanilha = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024, files: 1 } });
+
+r.get('/importacao', A.exige('importacao'), async (req, res) => res.json({ importado: await importacao.situacao() }));
+
+/** Sem "aplicar": só lê a planilha e mostra o que vai entrar. Com "aplicar": faz backup, importa e confere. */
+r.post('/importacao', A.exige('importacao'), uploadPlanilha.single('arquivo'), async (req, res) => {
+  if (!req.file) throw new ErroNegocio('Envie a planilha (.xlsx).');
+  if (!/\.xlsx$/i.test(Buffer.from(req.file.originalname, 'latin1').toString('utf8'))) throw new ErroNegocio('A planilha precisa estar no formato .xlsx.');
+  let dados;
+  try {
+    dados = importacao.transformar(await importacao.lerPlanilha(req.file.buffer), { empresaId: req.empresaId });
+  } catch (e) {
+    throw new ErroNegocio(`Não consegui ler a planilha: ${e.message}`);
+  }
+  const resposta = { totais: dados.totais, avisos: dados.avisos, relatorio: importacao.relatorio(dados, req.file.originalname) };
+  if (req.body?.aplicar !== '1') return res.json({ ...resposta, importado: await importacao.situacao() });
+  const backup = await gerarBackup('manual', req.user.id);
+  const t0 = Date.now();
+  await importacao.executar(importacao.gerarSql(dados));
+  const conferencia = importacao.conferir(dados.totais, await importacao.situacao());
+  await registrar('importacao', 'planilha', importacao.ORIGEM, null, { arquivo: req.file.originalname, backup: backup.id, segundos: (Date.now() - t0) / 1000, ok: conferencia.every((c) => c.ok) });
+  res.json({ ...resposta, aplicado: true, backup_id: backup.id, conferencia });
+});
+
+r.post('/importacao/desfazer', A.exige('importacao'), async (req, res) => {
+  if (String(req.body?.confirmacao || '').trim().toUpperCase() !== 'DESFAZER') throw new ErroNegocio('Digite DESFAZER para confirmar.');
+  const backup = await gerarBackup('manual', req.user.id);
+  await importacao.executar(importacao.sqlDesfazer());
+  await registrar('importacao_desfeita', 'planilha', importacao.ORIGEM, null, { backup: backup.id });
+  res.json({ ok: true, backup_id: backup.id, importado: await importacao.situacao() });
+});
+
 /** Rota chamada pelo agendador (Vercel Cron), protegida por CRON_SECRET. */
 async function cronBackup(req, res) {
   const segredo = process.env.CRON_SECRET;

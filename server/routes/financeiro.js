@@ -193,7 +193,7 @@ r.post('/devolucoes', A.exige('financeiro.devolucoes', 'financeiro.notas'), asyn
 // ---------- Nota fiscal de saída ----------
 r.get('/notas', A.exige('financeiro.notas'), async (req, res) =>
   await responderLista(req, res, {
-    sql: `SELECT nf.id, nf.numero, nf.serie, nf.data_emissao, pe.numero AS pedido, c.documento, c.nome AS cliente, nf.valor, nf.status, nf.chave,
+    sql: `SELECT nf.id, nf.numero, nf.serie, nf.data_emissao, pe.numero AS pedido, c.documento, c.nome AS cliente, nf.valor, nf.status, nf.natureza, nf.chave,
             (SELECT COUNT(*) FROM cartas_correcao cc WHERE cc.nota_id = nf.id) AS cartas_correcao,
             (SELECT IFNULL(SUM(valor),0) FROM devolucoes d WHERE d.nota_id = nf.id) AS devolvido
           FROM notas_fiscais nf JOIN clientes c ON c.id = nf.cliente_id LEFT JOIN pedidos pe ON pe.id = nf.pedido_id WHERE nf.empresa_id = ?`,

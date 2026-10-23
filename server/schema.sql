@@ -779,3 +779,27 @@ CREATE TABLE IF NOT EXISTS proposta_itens (
   valor_total double precision NOT NULL DEFAULT 0,
   brinde integer DEFAULT 0
 );
+
+-- ============ Importação do sistema anterior ============
+-- "origem" identifica o registro importado (permite conferir, reimportar sem duplicar e desfazer).
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS origem text;
+ALTER TABLE colaboradores ADD COLUMN IF NOT EXISTS origem text;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS origem text;
+ALTER TABLE equipes ADD COLUMN IF NOT EXISTS origem text;
+ALTER TABLE formas_pagamento ADD COLUMN IF NOT EXISTS origem text;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS origem text;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS codigo_origem text;
+ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS origem text;
+ALTER TABLE notas_fiscais ADD COLUMN IF NOT EXISTS natureza text;
+ALTER TABLE parcelas ADD COLUMN IF NOT EXISTS origem text;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clientes_origem ON clientes(origem);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_colaboradores_origem ON colaboradores(origem);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_usuarios_origem ON usuarios(origem);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_equipes_origem ON equipes(origem);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_formas_origem ON formas_pagamento(origem);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_pedidos_origem ON pedidos(origem);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_notas_origem ON notas_fiscais(origem);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_parcelas_origem ON parcelas(origem);
+CREATE INDEX IF NOT EXISTS idx_pedidos_codigo_origem ON pedidos(codigo_origem);
+CREATE INDEX IF NOT EXISTS idx_parcelas_cliente ON parcelas(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_notas_cliente ON notas_fiscais(cliente_id);

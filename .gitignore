@@ -3,3 +3,8 @@ data/
 uploads/
 *.log
 dist/
+
+# Planilhas e exportações com dados pessoais nunca vão para o repositório
+*.xlsx
+*.xls
+*.csv

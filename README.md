@@ -63,6 +63,17 @@ Não há dados nem senhas de demonstração em produção. O sistema cria a empr
 | `analise` | Análise de crédito | `agro123` |
 | `producao`, `faturamento`, `expedicao`, `financeiro` | Setores | `agro123` |
 
+### Importar dados do sistema anterior
+
+Em **Segurança → Importar dados**, envie a planilha de relatórios do sistema anterior (abas Vendas, Faturamento, Contas a Receber,
+Contas Recebidas, Parcelas Vencidas, Parcelas Liquidadas e Cadastros). O sistema mostra a prévia com totais e pontos de atenção e só grava
+depois da confirmação, com backup automático antes. Cada registro importado guarda a origem: reenviar a planilha (por exemplo, com um mês a mais)
+não duplica nada, e o botão *Desfazer importação* remove tudo o que veio dela.
+
+O que entra: vendedores e supervisores (como colaboradores, usuários **sem acesso** e equipes), clientes com CPF/CNPJ, cidade e telefone,
+pedidos (com o número antigo pesquisável na busca), notas fiscais de saída e parcelas pagas e em aberto. A numeração da NF-e continua
+depois da maior nota encontrada. Também pela linha de comando: `node scripts/importar-planilha.js planilha.xlsx --aplicar`.
+
 ## Segurança, LGPD e auditoria
 
 - Senha com no mínimo 8 caracteres (letras e números), troca obrigatória da senha provisória e bloqueio por 15 minutos após 5 tentativas erradas.

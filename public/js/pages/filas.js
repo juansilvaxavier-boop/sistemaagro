@@ -24,6 +24,7 @@ const C = {
   prevista: { k: 'data_entrega_prevista', l: 'Entrega prevista', t: 'date' },
   entrega: { k: 'data_entrega', l: 'Entregue em', t: 'date' },
   etapa: { k: 'etapa', l: 'Etapa', t: 'etapa' },
+  origem: { k: 'codigo_origem', l: 'Nº sistema anterior' },
   volumes: { k: 'volumes', l: 'Volumes', t: 'num' },
   rastreio: { k: 'codigo_rastreio', l: 'Rastreio' },
   desde: { k: 'etapa_desde', l: 'Na etapa desde', t: 'datetime' },
@@ -41,7 +42,7 @@ const COLUNAS = {
   transito: ['numero', 'nota', 'cliente', 'cidade', 'uf', 'transportadora', 'volumes', 'rastreio', 'embarque', 'prevista', 'entrega'],
   devolucao: ['numero', 'nota', 'cliente', 'valor', 'vendedor', 'desde'],
 };
-const PROGRESSAO = ['numero', 'data', 'documento', 'cliente', 'valor', 'vendedor', 'supervisor', 'etapa', 'desde', 'nota'];
+const PROGRESSAO = ['numero', 'data', 'documento', 'cliente', 'valor', 'vendedor', 'supervisor', 'etapa', 'desde', 'nota', 'origem'];
 
 export default async function (conteudo, { params: [etapa] }) {
   const info = state.me.etapas[etapa];

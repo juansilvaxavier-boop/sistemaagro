@@ -47,7 +47,7 @@ const CATALOGO = [
   ]],
   ['Segurança e LGPD', [
     ['lgpd.dados', 'Ver CPF/CNPJ, telefone e e-mail completos'], ['lgpd.titular', 'Exportar e anonimizar dados de titulares'],
-    ['auditoria', 'Ver auditoria'], ['backup', 'Backups do banco'],
+    ['auditoria', 'Ver auditoria'], ['backup', 'Backups do banco'], ['importacao', 'Importar dados do sistema anterior'],
   ]],
 ];
 

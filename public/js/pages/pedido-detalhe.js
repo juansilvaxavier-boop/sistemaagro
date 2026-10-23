@@ -104,6 +104,7 @@ function resumo(d) {
         ${p.frete_valor != null ? `· Frete ${fmt.money(p.frete_valor)} (${p.frete_prazo_dias || '-'} dias, cot. ${esc(p.frete_codigo_cotacao || '-')})` : ''} ${p.frete_ignorado ? `<span class="badge text-bg-secondary">Cotação ignorada: ${esc(p.frete_motivo_ignorar)}</span>` : ''}</div>
       <div class="mt-1">${endereco(end)}</div>
       ${p.observacao ? `<div class="mt-2"><b>Obs.:</b> ${esc(p.observacao)}</div>` : ''}
+      ${p.codigo_origem ? `<div class="mt-1"><b>Nº no sistema anterior:</b> ${esc(p.codigo_origem)}</div>` : ''}
       ${p.observacao_supervisor ? `<div class="mt-1"><b>Obs. supervisor:</b> ${esc(p.observacao_supervisor)}</div>` : ''}
     </div></div></div>
     <div class="col-12">${tabelaSimples([
