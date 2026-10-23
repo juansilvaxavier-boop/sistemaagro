@@ -5,7 +5,6 @@ const A = require('./auth');
 const { ErroNegocio } = require('./services');
 
 function criarApp() {
-  db.open();
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '2mb' }));
@@ -23,7 +22,7 @@ function criarApp() {
     next();
   });
 
-  app.get('/api/saude', (req, res) => res.json({ ok: true, pedidos: db.get('SELECT COUNT(*) AS n FROM pedidos').n, node: process.version }));
+  app.get('/api/saude', async (req, res) => res.json({ ok: true, banco: (await db.get('SELECT 1 AS ok')).ok === 1, node: process.version }));
   app.use('/api/auth', require('./routes/auth'));
   const api = express.Router();
   api.use(A.autenticado());
@@ -51,8 +50,9 @@ function criarApp() {
     if (err instanceof ErroNegocio) return res.status(err.status).json({ erro: err.message });
     if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ erro: 'Arquivo maior que o permitido.' });
     if (err.type === 'entity.parse.failed') return res.status(400).json({ erro: 'JSON inválido.' });
-    if (String(err.message).includes('UNIQUE constraint')) return res.status(409).json({ erro: 'Registro duplicado.' });
-    if (String(err.message).includes('FOREIGN KEY')) return res.status(400).json({ erro: 'Referência inválida ou registro em uso.' });
+    if (err.code === '23505') return res.status(409).json({ erro: 'Registro duplicado.' });
+    if (err.code === '23503') return res.status(400).json({ erro: 'Referência inválida ou registro em uso.' });
+    if (err.code === '22P02' || err.code === '22007') return res.status(400).json({ erro: 'Valor inválido em um dos campos.' });
     console.error(err);
     res.status(500).json({ erro: 'Erro interno. Tente novamente.' });
   });
@@ -60,13 +60,16 @@ function criarApp() {
 }
 
 if (require.main === module) {
-  db.open();
-  if (!db.get('SELECT id FROM usuarios LIMIT 1')) {
-    console.log('Banco vazio: carregando dados de demonstração...');
-    require('./seed').seed();
-  }
-  const port = Number(process.env.PORT || 3000);
-  criarApp().listen(port, () => console.log(`Agroterra Sistema em http://localhost:${port}`));
+  (async () => {
+    await db.open();
+    if (process.env.DEMO === '1' && !(await db.get('SELECT id FROM usuarios LIMIT 1'))) {
+      console.log('DEMO=1 e banco vazio: carregando dados de demonstração...');
+      (await require('./seed')).seed();
+    }
+    (await require('./bootstrap')).bootstrap();
+    const port = Number(process.env.PORT || 3000);
+    criarApp().listen(port, () => console.log(`Agroterra Sistema em http://localhost:${port}`));
+  })();
 }
 
 module.exports = { criarApp };

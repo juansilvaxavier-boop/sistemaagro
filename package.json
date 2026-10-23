@@ -14,12 +14,14 @@
     "test": "node --no-warnings --test test/*.test.js"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.11",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.2",
     "chart.js": "^4.6.1",
     "exceljs": "^4.4.0",
     "express": "^5.3.0",
-    "multer": "^2.5.0"
+    "multer": "^2.5.0",
+    "pg": "^8.23.1"
   },
   "overrides": {
     "uuid": "^11.1.1"

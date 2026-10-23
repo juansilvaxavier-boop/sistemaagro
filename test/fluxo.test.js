@@ -49,7 +49,7 @@ test('pedido percorre todas as etapas até a entrega', async () => {
   assert.equal((await analise.post(`/api/pedidos/${id}/acao`, { acao: 'aprovar' })).destino, 'diretoria');
 
   assert.equal((await diretoria.post(`/api/pedidos/${id}/acao`, { acao: 'aprovar' })).destino, 'producao');
-  const comissoes = db.all('SELECT * FROM pedido_comissoes WHERE pedido_id = ?', id);
+  const comissoes = await db.all('SELECT * FROM pedido_comissoes WHERE pedido_id = ?', id);
   assert.equal(comissoes.length, 2, 'vendedor e supervisor recebem comissão padrão');
 
   // Produção exige lote
@@ -63,11 +63,11 @@ test('pedido percorre todas as etapas até a entrega', async () => {
   assert.equal(fat.destino, 'expedicao');
   assert.ok(fat.nota.numero);
   assert.equal(fat.nota.chave.length, 44);
-  const parcelas = db.all('SELECT * FROM parcelas WHERE pedido_id = ? ORDER BY numero', id);
-  p = db.get('SELECT * FROM pedidos WHERE id = ?', id);
+  const parcelas = await db.all('SELECT * FROM parcelas WHERE pedido_id = ? ORDER BY numero', id);
+  p = await db.get('SELECT * FROM pedidos WHERE id = ?', id);
   assert.equal(parcelas.length, 3);
   assert.equal(Math.round(parcelas.reduce((a, x) => a + x.valor, 0) * 100), Math.round(p.valor_total * 100));
-  assert.equal(db.get('SELECT COUNT(*) AS n FROM comissoes WHERE pedido_id = ?', id).n, 2);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM comissoes WHERE pedido_id = ?', id)).n, 2);
 
   r = await expedicao.req('POST', `/api/pedidos/${id}/acao`, { acao: 'embarcar' });
   assert.equal(r.status, 400);
@@ -88,16 +88,16 @@ test('vendedor sem equipe pula supervisão e pagamento à vista passa pela cobra
   const { id } = await criarPedido(helena, { forma_id: forma.id, condicao_id: cond.id, tipo_entrega: 'retirada' });
   assert.equal((await helena.post(`/api/pedidos/${id}/acao`, { acao: 'enviar' })).destino, 'analise');
   const analise = await sessao('analise');
-  const cli = db.get('SELECT cliente_id FROM pedidos WHERE id = ?', id).cliente_id;
+  const cli = (await db.get('SELECT cliente_id FROM pedidos WHERE id = ?', id)).cliente_id;
   await analise.post(`/api/clientes/${cli}/serasa`, { justificativa: 'teste' });
   await analise.post(`/api/pedidos/${id}/acao`, { acao: 'aprovar' });
   const dir = await sessao('diretoria');
   assert.equal((await dir.post(`/api/pedidos/${id}/acao`, { acao: 'aprovar' })).destino, 'cobranca');
   const fin = await sessao('financeiro');
   assert.equal((await fin.post(`/api/pedidos/${id}/acao`, { acao: 'confirmar_pagamento' })).destino, 'producao');
-  const p = db.get('SELECT * FROM pedidos WHERE id = ?', id);
+  const p = await db.get('SELECT * FROM pedidos WHERE id = ?', id);
   assert.ok(p.pagamento_confirmado_em);
-  assert.equal(db.get('SELECT valor_desconto > 0 AS d FROM pedidos WHERE id = ?', id).d, 1, 'desconto da condição à vista aplicado');
+  assert.ok((await db.get('SELECT valor_desconto > 0 AS d FROM pedidos WHERE id = ?', id)).d, 'desconto da condição à vista aplicado');
 });
 
 test('blacklist bloqueia novos pedidos e alerta não bloqueia', async () => {
@@ -120,10 +120,10 @@ test('blacklist bloqueia novos pedidos e alerta não bloqueia', async () => {
 test('vendedor só vê os próprios pedidos e clientes', async () => {
   const ana = await sessao('ana');
   const pedidos = await ana.get('/api/pedidos/progressao?all=1');
-  const anaId = db.get(`SELECT id FROM usuarios WHERE login = 'ana'`).id;
+  const anaId = (await db.get(`SELECT id FROM usuarios WHERE login = 'ana'`)).id;
   assert.ok(pedidos.rows.length > 0);
   assert.ok(pedidos.rows.every((p) => p.vendedor === 'Ana Souza'));
-  const outro = db.get('SELECT id FROM pedidos WHERE vendedor_id <> ? LIMIT 1', anaId);
+  const outro = await db.get('SELECT id FROM pedidos WHERE vendedor_id <> ? LIMIT 1', anaId);
   assert.equal((await ana.req('GET', `/api/pedidos/${outro.id}`)).status, 404);
   const clientes = await ana.get('/api/clientes?all=1');
   assert.ok(clientes.rows.every((c) => c.vendedor_id === anaId));
@@ -150,24 +150,24 @@ test('filtro por coluna, paginação e exportação para Excel', async () => {
 
 test('financeiro: baixa com atraso aplica penalidade de comissão e negativação segue o ciclo', async () => {
   const fin = await sessao('financeiro');
-  const vencida = db.get(
+  const vencida = await db.get(
     `SELECT p.* FROM parcelas p JOIN pedidos pe ON pe.id = p.pedido_id JOIN formas_pagamento f ON f.id = pe.forma_id
       WHERE p.status = 'a_pagar' AND p.vencimento < date('now','localtime','-20 days') AND f.nome = 'Boleto bancário'
         AND EXISTS (SELECT 1 FROM comissoes c WHERE c.pedido_id = p.pedido_id AND c.status = 'aberta') LIMIT 1`,
   );
   if (vencida) {
     await fin.post(`/api/financeiro/parcelas/${vencida.id}/baixa`, { tipo_baixa: 'PIX' });
-    const c = db.get('SELECT * FROM comissoes WHERE pedido_id = ? LIMIT 1', vencida.pedido_id);
+    const c = await db.get('SELECT * FROM comissoes WHERE pedido_id = ? LIMIT 1', vencida.pedido_id);
     assert.ok(c.perda_pct >= 25, `perda aplicada: ${c.perda_pct}`);
-    assert.equal(db.get('SELECT status FROM parcelas WHERE id = ?', vencida.id).status, 'liquidada');
+    assert.equal((await db.get('SELECT status FROM parcelas WHERE id = ?', vencida.id)).status, 'liquidada');
   }
-  const outra = db.get(`SELECT * FROM parcelas WHERE status = 'a_pagar' AND vencimento < date('now','localtime') AND id NOT IN (SELECT parcela_id FROM negativacoes) LIMIT 1`);
+  const outra = await db.get(`SELECT * FROM parcelas WHERE status = 'a_pagar' AND vencimento < date('now','localtime') AND id NOT IN (SELECT parcela_id FROM negativacoes) LIMIT 1`);
   const { id } = await fin.post(`/api/financeiro/parcelas/${outra.id}/serasa`);
   const inval = await fin.req('POST', `/api/financeiro/negativacoes/${id}/status`, { status: 'baixa_aceita' });
   assert.equal(inval.status, 400);
   await fin.post(`/api/financeiro/negativacoes/${id}/status`, { status: 'inclusao_aceita' });
   await fin.post(`/api/financeiro/parcelas/${outra.id}/baixa`, {});
-  assert.equal(db.get('SELECT status FROM negativacoes WHERE id = ?', id).status, 'baixa_solicitada', 'quitação pede baixa no Serasa');
+  assert.equal((await db.get('SELECT status FROM negativacoes WHERE id = ?', id)).status, 'baixa_solicitada', 'quitação pede baixa no Serasa');
 });
 
 test('cobrança: acordo substitui parcelas e devolução abate saldo', async () => {
@@ -183,29 +183,29 @@ test('cobrança: acordo substitui parcelas e devolução abate saldo', async () 
   assert.equal(Math.round(ac.valor_acordo * 100), Math.round((saldo - 10) * 100));
   const depois = await fin.get(`/api/cobranca/cliente/${cli.id}`);
   assert.equal(depois.parcelas.length, 2);
-  assert.ok(ids.every((i) => db.get('SELECT status FROM parcelas WHERE id = ?', i).status === 'negociada'));
-  const crm = db.get(`SELECT COUNT(*) AS n FROM crm_interacoes WHERE cliente_id = ? AND assunto LIKE 'Cobrança%'`, cli.id).n;
+  for (const i of ids) assert.equal((await db.get('SELECT status FROM parcelas WHERE id = ?', i)).status, 'negociada');
+  const crm = (await db.get(`SELECT COUNT(*) AS n FROM crm_interacoes WHERE cliente_id = ? AND assunto LIKE 'Cobrança%'`, cli.id)).n;
   assert.ok(crm >= 1, 'ação de cobrança entra no histórico do CRM');
 
-  const nota = db.get(`SELECT n.* FROM notas_fiscais n WHERE status = 'autorizada' AND EXISTS (SELECT 1 FROM parcelas p WHERE p.nota_id = n.id AND p.status = 'a_pagar' AND p.valor_pago = 0) LIMIT 1`);
-  const antes = db.get(`SELECT SUM(valor) AS v FROM parcelas WHERE nota_id = ? AND status = 'a_pagar'`, nota.id).v;
+  const nota = await db.get(`SELECT n.* FROM notas_fiscais n WHERE status = 'autorizada' AND EXISTS (SELECT 1 FROM parcelas p WHERE p.nota_id = n.id AND p.status = 'a_pagar' AND p.valor_pago = 0) LIMIT 1`);
+  const antes = (await db.get(`SELECT SUM(valor) AS v FROM parcelas WHERE nota_id = ? AND status = 'a_pagar'`, nota.id)).v;
   await fin.post('/api/financeiro/devolucoes', { nota_id: nota.id, motivo: 'Avaria', valor: 100, baixa_parcelas: true });
-  const dep = db.get(`SELECT SUM(valor) AS v FROM parcelas WHERE nota_id = ? AND status = 'a_pagar'`, nota.id).v;
+  const dep = (await db.get(`SELECT SUM(valor) AS v FROM parcelas WHERE nota_id = ? AND status = 'a_pagar'`, nota.id)).v;
   assert.equal(Math.round((antes - dep) * 100), 10000);
-  assert.equal(db.get('SELECT status FROM notas_fiscais WHERE id = ?', nota.id).status, 'devolvida_parcial');
+  assert.equal((await db.get('SELECT status FROM notas_fiscais WHERE id = ?', nota.id)).status, 'devolvida_parcial');
 });
 
 test('nota fiscal: carta de correção e cancelamento', async () => {
   const fin = await sessao('faturamento');
-  const nota = db.get(`SELECT * FROM notas_fiscais WHERE status = 'autorizada' AND NOT EXISTS (SELECT 1 FROM parcelas p WHERE p.nota_id = notas_fiscais.id AND p.valor_pago > 0) ORDER BY id DESC LIMIT 1`);
+  const nota = await db.get(`SELECT * FROM notas_fiscais WHERE status = 'autorizada' AND NOT EXISTS (SELECT 1 FROM parcelas p WHERE p.nota_id = notas_fiscais.id AND p.valor_pago > 0) ORDER BY id DESC LIMIT 1`);
   const cce = await fin.post(`/api/financeiro/notas/${nota.id}/carta-correcao`, { texto: 'Correção do endereço de entrega do destinatário' });
   assert.equal(cce.sequencia, 1);
   const curto = await fin.req('POST', `/api/financeiro/notas/${nota.id}/cancelar`, { motivo: 'curto' });
   assert.equal(curto.status, 400);
   await fin.post(`/api/financeiro/notas/${nota.id}/cancelar`, { motivo: 'Erro na emissão da nota fiscal', extemporaneo: true });
-  assert.equal(db.get('SELECT status FROM notas_fiscais WHERE id = ?', nota.id).status, 'cancelada');
-  assert.equal(db.get('SELECT etapa FROM pedidos WHERE id = ?', nota.pedido_id).etapa, 'faturamento', 'pedido volta para faturar');
-  assert.ok(db.all('SELECT status FROM parcelas WHERE nota_id = ?', nota.id).every((p) => p.status === 'cancelada'));
+  assert.equal((await db.get('SELECT status FROM notas_fiscais WHERE id = ?', nota.id)).status, 'cancelada');
+  assert.equal((await db.get('SELECT etapa FROM pedidos WHERE id = ?', nota.pedido_id)).etapa, 'faturamento', 'pedido volta para faturar');
+  assert.ok((await db.all('SELECT status FROM parcelas WHERE nota_id = ?', nota.id)).every((p) => p.status === 'cancelada'));
 });
 
 test('CRM, mensagens, arquivos e dashboards por perfil', async () => {
@@ -219,7 +219,7 @@ test('CRM, mensagens, arquivos e dashboards por perfil', async () => {
   assert.ok(v360.timeline.some((t) => t.titulo === 'Visita técnica'));
   assert.ok(v360.tarefas.some((t) => t.titulo === 'Enviar proposta'));
 
-  const pedido = db.get('SELECT p.id, p.numero FROM pedidos p JOIN usuarios u ON u.id = p.vendedor_id WHERE u.login = ? LIMIT 1', 'ana');
+  const pedido = await db.get('SELECT p.id, p.numero FROM pedidos p JOIN usuarios u ON u.id = p.vendedor_id WHERE u.login = ? LIMIT 1', 'ana');
   await ana.post('/api/mensagens', { pedido_numero: pedido.numero, setor_destino: 'analista', texto: 'Prioridade, por favor' });
   const analise = await sessao('analise');
   const nl = await analise.get('/api/mensagens/nao-lidas');
@@ -266,6 +266,6 @@ test('segurança: login inválido, CSRF e permissões', async () => {
   const prod = await sessao('producao');
   assert.equal((await prod.req('GET', '/api/cadastros/usuarios')).status, 403);
   assert.equal((await prod.req('GET', '/api/pedidos/fila/analise')).status, 403);
-  const p = db.get(`SELECT id FROM pedidos WHERE etapa = 'analise' LIMIT 1`);
+  const p = await db.get(`SELECT id FROM pedidos WHERE etapa = 'analise' LIMIT 1`);
   assert.equal((await prod.req('POST', `/api/pedidos/${p.id}/acao`, { acao: 'aprovar' })).status, 403);
 });

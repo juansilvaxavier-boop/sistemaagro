@@ -35,7 +35,7 @@ const PARCELA_BASE = `
   LEFT JOIN notas_fiscais nf ON nf.id = p.nota_id LEFT JOIN usuarios v ON v.id = pe.vendedor_id
   LEFT JOIN usuarios s ON s.id = pe.supervisor_id LEFT JOIN bancos b ON b.id = p.banco_id
   LEFT JOIN formas_pagamento f ON f.id = pe.forma_id`;
-const PARCELA_COLS = `p.id, pe.numero AS pedido, nf.numero AS nota, c.documento, c.nome AS cliente, p.numero || '/' || IFNULL(p.total_parcelas,'') AS parcela,
+const PARCELA_COLS = `p.id, pe.numero AS pedido, nf.numero AS nota, c.documento, c.nome AS cliente, p.numero || '/' || IFNULL(p.total_parcelas::text, '') AS parcela,
   p.vencimento, p.valor, p.juros, p.valor_pago, ${S.SALDO_PARCELA_SQL} AS saldo, ${S.STATUS_PARCELA_SQL} AS status, f.nome AS forma, b.nome AS banco,
   v.nome AS vendedor, s.nome AS supervisor, p.data_pagamento, p.tipo_baixa`;
 const filtroParcelaComum = {
@@ -45,33 +45,33 @@ const filtroParcelaComum = {
 const RELATORIOS = {
   'contas-receber': {
     titulo: 'Contas a Receber', perm: 'relatorios.financeiro',
-    gerar(q, ctx) {
+    async gerar(q, ctx) {
       const f = filtros(q, { venc_de: ['p.vencimento >= ?'], venc_ate: ['p.vencimento <= ?'], ...filtroParcelaComum });
       const ordem = q.agrupar_vendedor === '1' ? 'v.nome, p.vencimento' : 'p.vencimento';
       return {
         colunas: [col('vendedor', 'Vendedor'), col('pedido', 'Pedido'), col('nota', 'NF'), col('documento', 'CPF/CNPJ'), col('cliente', 'Cliente'), col('parcela', 'Parcela'),
           col('vencimento', 'Vencimento', 'date'), col('saldo', 'Saldo', 'money'), col('status', 'Status'), col('forma', 'Forma'), col('banco', 'Banco'), col('supervisor', 'Supervisor')],
-        linhas: db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} ${f.where} ORDER BY ${ordem}`, ctx.emp, ...f.params),
+        linhas: await db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} ${f.where} ORDER BY ${ordem}`, ctx.emp, ...f.params),
         totalizar: ['saldo'], agrupar: q.agrupar_vendedor === '1' ? 'vendedor' : null,
       };
     },
   },
   'contas-recebidas': {
     titulo: 'Contas Recebidas', perm: 'relatorios.financeiro',
-    gerar(q, ctx) {
+    async gerar(q, ctx) {
       const f = filtros(q, { baixa_de: ['p.data_pagamento >= ?'], baixa_ate: ['p.data_pagamento <= ?'], ...filtroParcelaComum });
       return {
         colunas: [col('data_pagamento', 'Data baixa', 'date'), col('pedido', 'Pedido'), col('nota', 'NF'), col('cliente', 'Cliente'), col('parcela', 'Parcela'),
           col('vencimento', 'Vencimento', 'date'), col('valor', 'Valor', 'money'), col('juros', 'Juros', 'money'), col('valor_pago', 'Pago', 'money'),
           col('tipo_baixa', 'Tipo baixa'), col('banco', 'Banco'), col('forma', 'Forma'), col('vendedor', 'Vendedor'), col('supervisor', 'Supervisor')],
-        linhas: db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND p.valor_pago > 0 ${f.where} ORDER BY p.data_pagamento`, ctx.emp, ...f.params),
+        linhas: await db.all(`SELECT ${PARCELA_COLS} ${PARCELA_BASE} WHERE p.empresa_id = ? AND p.valor_pago > 0 ${f.where} ORDER BY p.data_pagamento`, ctx.emp, ...f.params),
         totalizar: ['valor', 'juros', 'valor_pago'],
       };
     },
   },
   vencidas: {
     titulo: 'Vencidas', perm: 'relatorios.financeiro',
-    gerar(q, ctx) {
+    async gerar(q, ctx) {
       const f = filtros(q, { venc_de: ['p.vencimento >= ?'], venc_ate: ['p.vencimento <= ?'], ...filtroParcelaComum });
       let neg = '';
       if (q.negativado === 'sim') neg = ` AND EXISTS (SELECT 1 FROM negativacoes n WHERE n.parcela_id = p.id AND n.status IN ('inclusao_aceita','baixa_solicitada','baixa_rejeitada'))`;
@@ -79,7 +79,7 @@ const RELATORIOS = {
       return {
         colunas: [col('cliente', 'Cliente'), col('documento', 'CPF/CNPJ'), col('pedido', 'Pedido'), col('nota', 'NF'), col('parcela', 'Parcela'), col('vencimento', 'Vencimento', 'date'),
           col('dias_atraso', 'Dias atraso'), col('saldo', 'Saldo', 'money'), col('forma', 'Forma'), col('banco', 'Banco'), col('vendedor', 'Vendedor'), col('supervisor', 'Supervisor')],
-        linhas: db.all(
+        linhas: await db.all(
           `SELECT ${PARCELA_COLS}, CAST(julianday('now','localtime') - julianday(p.vencimento) AS INTEGER) AS dias_atraso ${PARCELA_BASE}
             WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime') ${f.where}${neg} ORDER BY p.vencimento`, ctx.emp, ...f.params,
         ),
@@ -89,12 +89,12 @@ const RELATORIOS = {
   },
   faturamento: {
     titulo: 'Faturamento', perm: 'relatorios.financeiro',
-    gerar(q, ctx) {
+    async gerar(q, ctx) {
       const f = filtros(q, { emissao_de: ['nf.data_emissao >= ?'], emissao_ate: ['nf.data_emissao <= ?', fimDia], empresa_id: ['nf.empresa_id = ?'] });
       return {
         colunas: [col('data_emissao', 'Emissão', 'datetime'), col('empresa', 'Empresa'), col('numero', 'NF'), col('pedido', 'Pedido'), col('cliente', 'Cliente'),
           col('vendedor', 'Vendedor'), col('valor', 'Valor', 'money'), col('status', 'Status')],
-        linhas: db.all(
+        linhas: await db.all(
           `SELECT nf.data_emissao, e.nome AS empresa, nf.numero, pe.numero AS pedido, c.nome AS cliente, v.nome AS vendedor, nf.valor, nf.status
              FROM notas_fiscais nf JOIN empresas e ON e.id = nf.empresa_id JOIN clientes c ON c.id = nf.cliente_id
              LEFT JOIN pedidos pe ON pe.id = nf.pedido_id LEFT JOIN usuarios v ON v.id = pe.vendedor_id
@@ -106,7 +106,7 @@ const RELATORIOS = {
   },
   vendas: {
     titulo: 'Vendas', perm: 'relatorios.vendas', escopo: true,
-    gerar(q, ctx) {
+    async gerar(q, ctx) {
       const f = filtros(q, {
         cad_de: ['p.created_at >= ?'], cad_ate: ['p.created_at <= ?', fimDia], forma_id: ['p.forma_id = ?'], supervisor_id: ['p.supervisor_id = ?'],
         vendedor_id: ['p.vendedor_id = ?'], etapa: ['p.etapa = ?'], equipe_id: ['v.equipe_id = ?'],
@@ -114,26 +114,26 @@ const RELATORIOS = {
       return {
         colunas: [col('numero', 'Pedido'), col('created_at', 'Cadastro', 'datetime'), col('cliente', 'Cliente'), col('documento', 'CPF/CNPJ'), col('forma', 'Forma'),
           col('condicao', 'Condição'), col('vendedor', 'Vendedor'), col('supervisor', 'Supervisor'), col('equipe', 'Equipe'), col('etapa', 'Etapa'), col('valor_total', 'Valor', 'money')],
-        linhas: db.all(
+        linhas: (await db.all(
           `SELECT p.numero, p.created_at, c.nome AS cliente, c.documento, f.nome AS forma, cp.descricao AS condicao, v.nome AS vendedor, s.nome AS supervisor,
                   e.nome AS equipe, p.etapa, p.valor_total
              FROM pedidos p JOIN clientes c ON c.id = p.cliente_id LEFT JOIN formas_pagamento f ON f.id = p.forma_id
              LEFT JOIN condicoes_pagamento cp ON cp.id = p.condicao_id LEFT JOIN usuarios v ON v.id = p.vendedor_id
              LEFT JOIN usuarios s ON s.id = p.supervisor_id LEFT JOIN equipes e ON e.id = v.equipe_id
             WHERE p.empresa_id = ? ${f.where} ORDER BY p.created_at`, ctx.emp, ...f.params,
-        ).map((x) => ({ ...x, etapa: W.ETAPAS[x.etapa]?.label || x.etapa })),
+        )).map((x) => ({ ...x, etapa: W.ETAPAS[x.etapa]?.label || x.etapa })),
         totalizar: ['valor_total'],
       };
     },
   },
   'historico-vendas': {
     titulo: 'Histórico de Vendas', perm: 'relatorios.vendas', escopo: true,
-    gerar(q, ctx) {
+    async gerar(q, ctx) {
       const f = filtros(q, { emissao_de: ['nf.data_emissao >= ?'], emissao_ate: ['nf.data_emissao <= ?', fimDia], empresa_id: ['nf.empresa_id = ?'], vendedor_id: ['pe.vendedor_id = ?'], supervisor_id: ['pe.supervisor_id = ?'] });
       return {
         colunas: [col('data_emissao', 'Emissão', 'datetime'), col('empresa', 'Empresa'), col('nota', 'NF'), col('pedido', 'Pedido'), col('cliente', 'Cliente'), col('produto', 'Produto'),
           col('embalagem', 'Embalagem'), col('quantidade', 'Qtd'), col('unidade', 'Un'), col('valor_unitario', 'Unitário', 'money'), col('valor_total', 'Total', 'money'), col('brinde', 'Brinde', 'bool'), col('lote', 'Lote')],
-        linhas: db.all(
+        linhas: await db.all(
           `SELECT nf.data_emissao, e.nome AS empresa, nf.numero AS nota, pe.numero AS pedido, c.nome AS cliente, pr.nome AS produto, em.descricao AS embalagem,
                   i.quantidade, i.unidade, i.valor_unitario, i.valor_total, i.brinde, i.lote
              FROM notas_fiscais nf JOIN pedidos pe ON pe.id = nf.pedido_id JOIN pedido_itens i ON i.pedido_id = pe.id JOIN produtos pr ON pr.id = i.produto_id
@@ -146,7 +146,7 @@ const RELATORIOS = {
   },
   'venda-produtos': {
     titulo: 'Venda de Produtos', perm: 'relatorios.vendas', escopo: true,
-    gerar(q, ctx) {
+    async gerar(q, ctx) {
       const dims = {
         produto: ['pr.nome', 'Produto'], grupo: ['g.nome', 'Grupo'], cliente: ['c.nome', 'Cliente'], vendedor: ['v.nome', 'Vendedor'], mes: [`substr(nf.data_emissao,1,7)`, 'Mês'],
       };
@@ -159,7 +159,7 @@ const RELATORIOS = {
         emissao_de: ['nf.data_emissao >= ?'], emissao_ate: ['nf.data_emissao <= ?', fimDia], vendedor_id: ['pe.vendedor_id = ?'], supervisor_id: ['pe.supervisor_id = ?'], grupo_id: ['pr.grupo_id = ?'],
       });
       const analitico = q.tipo === 'analitico';
-      const linhas = db.all(
+      const linhas = await db.all(
         `SELECT ${dims[sum][0]} AS chave, ${q.por_embalagem === '1' ? 'em.descricao' : "''"} AS embalagem,
                 ${analitico ? "nf.numero AS nota, substr(nf.data_emissao,1,10) AS emissao, c.nome AS cliente_nome," : ''}
                 SUM(i.quantidade) AS quantidade, SUM(i.quantidade * IFNULL(em.quantidade,1)) AS volume, COUNT(DISTINCT pe.id) AS pedidos,
@@ -168,7 +168,7 @@ const RELATORIOS = {
            JOIN produtos pr ON pr.id = i.produto_id LEFT JOIN grupos_produto g ON g.id = pr.grupo_id LEFT JOIN produto_embalagens em ON em.id = i.embalagem_id
            JOIN clientes c ON c.id = pe.cliente_id LEFT JOIN usuarios v ON v.id = pe.vendedor_id
           WHERE nf.status <> 'cancelada' AND nf.empresa_id = ? ${f.where}
-          GROUP BY ${[...grupos, ...(analitico ? ['nf.id'] : [])].join(', ')}
+          GROUP BY ${[...grupos, ...(analitico ? ['nf.id', 'c.id'] : [])].join(', ')}
           ${q.quantidade_min ? 'HAVING SUM(i.quantidade) >= ' + Number(q.quantidade_min) : ''}
           ORDER BY ${analitico ? 'chave, emissao' : 'valor DESC'}`, ctx.emp, ...f.params,
       );
@@ -182,10 +182,10 @@ const RELATORIOS = {
   },
   'vendedores-supervisor': {
     titulo: 'Vendedores por Supervisor', perm: 'relatorios.vendas',
-    gerar() {
+    async gerar() {
       return {
         colunas: [col('supervisor', 'Supervisor'), col('equipe', 'Equipe'), col('vendedor', 'Vendedor'), col('login', 'Login'), col('email', 'E-mail'), col('ativo', 'Ativo', 'bool')],
-        linhas: db.all(
+        linhas: await db.all(
           `SELECT IFNULL(s.nome,'(sem supervisor)') AS supervisor, e.nome AS equipe, v.nome AS vendedor, v.login, v.email, v.ativo
              FROM usuarios v LEFT JOIN equipes e ON e.id = v.equipe_id LEFT JOIN usuarios s ON s.id = e.supervisor_id
             WHERE v.perfil = 'vendedor' ORDER BY supervisor, e.nome, v.nome`,
@@ -196,17 +196,17 @@ const RELATORIOS = {
   },
 };
 
-r.get('/', (req, res) => {
-  res.json(Object.entries(RELATORIOS).filter(([, d]) => A.can(req.user.perfil, d.perm)).map(([id, d]) => ({ id, titulo: d.titulo })));
+r.get('/', async (req, res) => {
+  res.json(Object.entries(RELATORIOS).filter(([, d]) => A.can(req.user, d.perm)).map(([id, d]) => ({ id, titulo: d.titulo })));
 });
 
 r.get('/:tipo', async (req, res) => {
   const def = RELATORIOS[req.params.tipo];
   if (!def) throw new ErroNegocio('Relatório não encontrado', 404);
-  if (!A.can(req.user.perfil, def.perm)) throw new ErroNegocio('Sem acesso a este relatório.', 403);
+  if (!A.can(req.user, def.perm)) throw new ErroNegocio('Sem acesso a este relatório.', 403);
   const q = { ...req.query };
   forcarVendedor(req, q);
-  const out = def.gerar(q, { emp: req.empresaId, user: req.user });
+  const out = await def.gerar(q, { emp: req.empresaId, user: req.user });
   const totais = {};
   for (const k of out.totalizar || []) totais[k] = S.r2(out.linhas.reduce((a, l) => a + (Number(l[k]) || 0), 0));
   if (req.query.export === 'xlsx') {

@@ -30,12 +30,12 @@ const REGRAS = {
   aVistaPassaPelaCobranca: true,
 };
 
-function destinoAposAnalise(p) {
+async function destinoAposAnalise(p) {
   if (p.valor_total >= REGRAS.diretoriaAPartirDe) return 'diretoria';
-  return destinoAposDiretoria(p);
+  return await destinoAposDiretoria(p);
 }
-function destinoAposDiretoria(p) {
-  const forma = p.forma_id ? db.get('SELECT tipo FROM formas_pagamento WHERE id = ?', p.forma_id) : null;
+async function destinoAposDiretoria(p) {
+  const forma = p.forma_id ? await db.get('SELECT tipo FROM formas_pagamento WHERE id = ?', p.forma_id) : null;
   if (REGRAS.aVistaPassaPelaCobranca && forma?.tipo === 'a_vista' && !p.pagamento_confirmado_em) return 'cobranca';
   return 'producao';
 }
@@ -94,83 +94,83 @@ const ACOES = {
   cancelado: {},
 };
 
-function validarPedidoCompleto(p) {
-  const itens = db.get('SELECT COUNT(*) AS n FROM pedido_itens WHERE pedido_id = ?', p.id).n;
+async function validarPedidoCompleto(p) {
+  const itens = (await db.get('SELECT COUNT(*) AS n FROM pedido_itens WHERE pedido_id = ?', p.id)).n;
   if (!itens) throw new S.ErroNegocio('Inclua ao menos um item no pedido.');
   if (!p.forma_id || !p.condicao_id) throw new S.ErroNegocio('Informe a forma e a condição de pagamento.');
-  const cond = db.get('SELECT * FROM condicoes_pagamento WHERE id = ?', p.condicao_id);
+  const cond = await db.get('SELECT * FROM condicoes_pagamento WHERE id = ?', p.condicao_id);
   if (cond?.valor_minimo && p.valor_total < cond.valor_minimo) {
     throw new S.ErroNegocio(`Valor mínimo para a condição "${cond.descricao}" é R$ ${cond.valor_minimo.toFixed(2)}.`);
   }
   if (!p.endereco_entrega_id && p.tipo_entrega !== 'retirada') throw new S.ErroNegocio('Informe o endereço de entrega.');
 }
 
-function validarAnalise(p) {
-  const consulta = db.get(`SELECT id FROM consultas_serasa WHERE cliente_id = ? AND created_at >= datetime('now','localtime','-30 days')`, p.cliente_id);
+async function validarAnalise(p) {
+  const consulta = await db.get(`SELECT id FROM consultas_serasa WHERE cliente_id = ? AND created_at >= datetime('now','localtime','-30 days')`, p.cliente_id);
   if (!consulta) throw new S.ErroNegocio('Faça a consulta Serasa do cliente antes de aprovar.');
   if (p.tipo_entrega === 'transportadora' && !p.frete_ignorado && !(p.transportadora_id && p.frete_valor != null)) {
     throw new S.ErroNegocio('Registre a cotação de frete ou ignore informando o motivo.');
   }
 }
 
-function validarLotes(p) {
-  const sem = db.get(`SELECT COUNT(*) AS n FROM pedido_itens WHERE pedido_id = ? AND (lote IS NULL OR lote = '')`, p.id).n;
+async function validarLotes(p) {
+  const sem = (await db.get(`SELECT COUNT(*) AS n FROM pedido_itens WHERE pedido_id = ? AND (lote IS NULL OR lote = '')`, p.id)).n;
   if (sem) throw new S.ErroNegocio(`Informe o lote de todos os itens (${sem} sem lote).`);
 }
 
-function validarFaturamento(p) {
+async function validarFaturamento(p) {
   if (!p.endereco_entrega_id && p.tipo_entrega !== 'retirada') throw new S.ErroNegocio('Informe o endereço de entrega antes de faturar.');
 }
 
-function validarEmbarque(p) {
+async function validarEmbarque(p) {
   if (!p.data_embarque || !p.data_entrega_prevista) throw new S.ErroNegocio('Informe a data de embarque e a data de entrega prevista.');
 }
 
-function validarEntrega(p) {
+async function validarEntrega(p) {
   if (!p.data_entrega) throw new S.ErroNegocio('Informe a data de entrega.');
 }
 
 function acoesDisponiveis(pedido, user) {
   const etapa = ETAPAS[pedido.etapa];
-  if (!etapa?.fila || !can(user.perfil, etapa.fila)) return [];
+  if (!etapa?.fila || !can(user, etapa.fila)) return [];
   return Object.entries(ACOES[pedido.etapa] || {}).map(([id, a]) => ({ id, label: a.label, avanca: !!a.avanca, exigeObs: !!a.exigeObs }));
 }
 
-function executar(pedidoId, acaoId, user, observacao) {
-  return db.tx(() => {
-    const p = db.get('SELECT * FROM pedidos WHERE id = ?', pedidoId);
+async function executar(pedidoId, acaoId, user, observacao) {
+  return await db.tx(async () => {
+    const p = await db.get('SELECT * FROM pedidos WHERE id = ?', pedidoId);
     if (!p) throw new S.ErroNegocio('Pedido não encontrado', 404);
     const etapa = ETAPAS[p.etapa];
     const acao = ACOES[p.etapa]?.[acaoId];
     if (!acao) throw new S.ErroNegocio(`Ação "${acaoId}" não disponível na etapa ${etapa?.label || p.etapa}.`);
-    if (!can(user.perfil, etapa.fila)) throw new S.ErroNegocio('Seu perfil não atua nesta etapa.', 403);
+    if (!can(user, etapa.fila)) throw new S.ErroNegocio('Seu perfil não atua nesta etapa.', 403);
     if (user.perfil === 'vendedor' && p.vendedor_id !== user.id) throw new S.ErroNegocio('Pedido de outro vendedor.', 403);
     if (acao.exigeObs && !String(observacao || '').trim()) throw new S.ErroNegocio('Informe o motivo/observação.');
 
-    if (acao.avanca) S.exigirClienteLiberado(p.cliente_id);
-    if (acao.validar) acao.validar(p);
+    if (acao.avanca) await S.exigirClienteLiberado(p.cliente_id);
+    if (acao.validar) await acao.validar(p);
 
-    const destino = typeof acao.destino === 'function' ? acao.destino(p) : acao.destino;
-    const extra = acao.aoExecutar ? acao.aoExecutar(p, user) : null;
+    const destino = typeof acao.destino === 'function' ? await acao.destino(p) : acao.destino;
+    const extra = acao.aoExecutar ? await acao.aoExecutar(p, user) : null;
     const campos = [`etapa = ?`, `etapa_desde = datetime('now','localtime')`, `updated_at = datetime('now','localtime')`];
     const params = [destino];
     if (p.etapa === 'analise' && acao.avanca) campos.push('analista_id = ?'), params.push(user.id);
     if (destino === 'producao') {
       campos.push(`data_chegada_producao = datetime('now','localtime')`);
       campos.push('prazo_producao = ?');
-      params.push(S.addDias(S.hoje(), prazoProducao(p.id)));
+      params.push(S.addDias(S.hoje(), await prazoProducao(p.id)));
     }
-    db.run(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ?`, ...params, p.id);
-    S.registrarHistorico(p.id, { origem: p.etapa, destino, acao: acao.label, observacao, usuarioId: user.id });
-    if (observacao) db.insert('pedido_comentarios', { pedido_id: p.id, usuario_id: user.id, etapa: p.etapa, texto: `[${acao.label}] ${observacao}` });
+    await db.run(`UPDATE pedidos SET ${campos.join(', ')} WHERE id = ?`, ...params, p.id);
+    await S.registrarHistorico(p.id, { origem: p.etapa, destino, acao: acao.label, observacao, usuarioId: user.id });
+    if (observacao) await db.insert('pedido_comentarios', { pedido_id: p.id, usuario_id: user.id, etapa: p.etapa, texto: `[${acao.label}] ${observacao}` });
 
     notificarEtapa(p, destino, user, acao.label);
     return { destino, nota: extra && extra.numero ? extra : undefined };
   });
 }
 
-function prazoProducao(pedidoId) {
-  const r = db.get(
+async function prazoProducao(pedidoId) {
+  const r = await db.get(
     'SELECT MAX(IFNULL(pr.prazo_producao_dias,3)) AS d FROM pedido_itens i JOIN produtos pr ON pr.id = i.produto_id WHERE i.pedido_id = ?',
     pedidoId,
   );

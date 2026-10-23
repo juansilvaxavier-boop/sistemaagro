@@ -1,12 +1,13 @@
-// Entrada para hospedagem serverless (Vercel): banco em /tmp com dados de demonstração.
-process.env.DB_PATH ||= '/tmp/agroterra.db';
-process.env.UPLOAD_DIR ||= '/tmp/uploads';
+// Entrada para hospedagem serverless (Vercel). O banco é o PostgreSQL do Supabase (DATABASE_URL).
 process.env.SSE_MAX_SECONDS ||= '55';
 
-const db = require('../server/db');
 const { criarApp } = require('../server/index');
+const { bootstrap } = require('../server/bootstrap');
 
-db.open();
-if (!db.get('SELECT id FROM usuarios LIMIT 1')) require('../server/seed').seed();
+const app = criarApp();
+const pronto = bootstrap();
 
-module.exports = criarApp();
+module.exports = async (req, res) => {
+  await pronto;
+  return app(req, res);
+};

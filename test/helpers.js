@@ -4,8 +4,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agroterra-test-'));
-process.env.DB_PATH = path.join(dir, 'teste.db');
-process.env.UPLOAD_DIR = path.join(dir, 'uploads');
+process.env.PGLITE_DIR = ':memory:';
+delete process.env.DATABASE_URL;
 
 const db = require('../server/db');
 const { seed } = require('../server/seed');
@@ -16,18 +16,18 @@ let base;
 
 async function iniciar() {
   if (server) return base;
-  db.open();
-  seed();
+  await db.open();
+  await seed();
   server = criarApp().listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://127.0.0.1:${server.address().port}`;
   return base;
 }
 
-function parar() {
+async function parar() {
   server?.close();
   server = undefined;
-  db.close();
+  await db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

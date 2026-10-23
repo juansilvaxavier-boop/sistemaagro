@@ -1,6 +1,7 @@
 // Resposta padrão das telas de lista: paginação, filtro por coluna e exportação para Excel.
 const ExcelJS = require('exceljs');
 const db = require('./db');
+const { mascararLinhas } = require('./lgpd');
 
 async function enviarXlsx(res, { titulo, colunas, linhas }) {
   const wb = new ExcelJS.Workbook();
@@ -44,7 +45,8 @@ function colunasExport(req) {
 
 /** Responde uma lista paginada (ou o arquivo Excel quando ?export=xlsx). */
 async function responderLista(req, res, opts) {
-  const resultado = db.paginate(req.query, opts);
+  const resultado = await db.paginate(req.query, opts);
+  mascararLinhas(req.user, resultado.rows);
   if (req.query.export === 'xlsx') {
     const colunas = colunasExport(req) || resultado.columns.map((k) => ({ k, l: k }));
     return enviarXlsx(res, { titulo: req.query.title || opts.titulo, colunas, linhas: resultado.rows });
