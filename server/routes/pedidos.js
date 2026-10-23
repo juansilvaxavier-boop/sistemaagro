@@ -5,6 +5,7 @@ const A = require('../auth');
 const S = require('../services');
 const W = require('../workflow');
 const { responderLista } = require('../lista');
+const { mascararObjeto, mascararLinhas } = require('../lgpd');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -79,7 +80,7 @@ async function carregar(req, id) {
 r.get('/:id', async (req, res) => {
   const p = await carregar(req, Number(req.params.id));
   const id = p.id;
-  res.json({
+  const dados = {
     pedido: {
       ...p,
       etapa_label: W.ETAPAS[p.etapa]?.label,
@@ -125,7 +126,10 @@ r.get('/:id', async (req, res) => {
          FROM pedidos WHERE cliente_id = ? AND id <> ? AND etapa <> 'cancelado'`, p.cliente_id, id,
     ),
     acoes: W.acoesDisponiveis(p, req.user),
-  });
+  };
+  mascararObjeto(req.user, dados.cliente);
+  mascararLinhas(req.user, dados.telefones.map((t) => Object.assign(t, { telefone: t.numero }))).forEach((t) => { t.numero = t.telefone; delete t.telefone; });
+  res.json(dados);
 });
 
 // ---------- Criação e edição (etapa Vendedor) ----------

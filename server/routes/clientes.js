@@ -3,6 +3,8 @@ const db = require('../db');
 const A = require('../auth');
 const S = require('../services');
 const { responderLista } = require('../lista');
+const { mascararObjeto, mascararLinhas } = require('../lgpd');
+const { registrar } = require('../auditoria');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -80,10 +82,15 @@ r.get('/:id', A.exige('clientes', 'pedido.criar', 'crm', 'cobranca', 'fila'), as
   c.ref_comerciais = await db.all('SELECT * FROM cliente_ref_comerciais WHERE cliente_id = ?', id);
   c.ref_bancarias = await db.all('SELECT * FROM cliente_ref_bancarias WHERE cliente_id = ?', id);
   c.blacklist = await S.situacaoBlacklist(id);
+  // LGPD: registra o acesso ao cadastro e esconde dados pessoais de quem não tem a permissão.
+  await registrar('visualizar', 'clientes', id, null, null);
+  mascararObjeto(req.user, c);
+  mascararLinhas(req.user, c.telefones.map((t) => Object.assign(t, { telefone: t.numero }))).forEach((t) => { t.numero = t.telefone; delete t.telefone; });
+  c.dados_mascarados = !A.can(req.user, 'lgpd.dados');
   res.json(c);
 });
 
-const camposCliente = ['tipo_pessoa', 'documento', 'nome', 'nome_fantasia', 'inscricao_estadual', 'inscricao_produtor', 'email', 'data_nascimento', 'vendedor_id', 'limite_credito', 'observacao'];
+const camposCliente = ['tipo_pessoa', 'documento', 'nome', 'nome_fantasia', 'inscricao_estadual', 'inscricao_produtor', 'email', 'data_nascimento', 'vendedor_id', 'limite_credito', 'observacao', 'base_legal', 'consentimento_marketing', 'consentimento_em'];
 const filhos = {
   enderecos: ['cliente_enderecos', ['tipo', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'zona_rural', 'posta_restante', 'como_chegar', 'principal']],
   telefones: ['cliente_telefones', ['tipo', 'numero', 'contato', 'whatsapp']],
@@ -114,6 +121,14 @@ async function sincronizar(tabela, campos, clienteId, itens) {
 async function salvarCliente(req, id) {
   const b = { ...req.body };
   if (!String(b.nome || '').trim()) throw new ErroNegocio('Informe o nome.');
+  // Quem vê os dados pessoais mascarados não pode sobrescrevê-los ao editar.
+  if (id && !A.can(req.user, 'lgpd.dados')) {
+    delete b.documento;
+    delete b.email;
+    delete b.telefones;
+  }
+  for (const k of ['base_legal', 'consentimento_marketing']) if (b[k] === undefined) delete b[k];
+  if (b.consentimento_marketing) b.consentimento_em ||= new Date().toISOString().slice(0, 10);
   if (b.documento !== undefined || !id) b.documento = validarDocumento(b.documento, b.tipo_pessoa || 'F');
   if (req.user.perfil === 'vendedor') b.vendedor_id = req.user.id;
   return await db.tx(async () => {

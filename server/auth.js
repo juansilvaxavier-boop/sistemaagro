@@ -85,8 +85,8 @@ function permissoesDe(usuario) {
 function can(quem, perm) {
   const lista = typeof quem === 'string' ? PERMISSOES[quem] || [] : quem?.permissoesEfetivas || permissoesDe(quem);
   if (lista.includes('*')) return true;
-  // "x" libera "x.y"; pedir "x" é atendido por qualquer "x.y".
-  return lista.includes(perm) || lista.some((p) => perm.startsWith(p + '.') || p.startsWith(perm + '.'));
+  // Permissão exata; pedir só o grupo ("fila") é atendido por qualquer item dele ("fila.venda").
+  return lista.includes(perm) || lista.some((p) => p.startsWith(perm + '.'));
 }
 
 function hashSenha(senha) {

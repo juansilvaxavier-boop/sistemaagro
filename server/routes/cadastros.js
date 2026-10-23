@@ -46,39 +46,114 @@ crud('/equipes', {
         FROM equipes e LEFT JOIN usuarios u ON u.id = e.supervisor_id`,
 });
 
-const camposUsuario = ['nome', 'login', 'email', 'perfil', 'equipe_id', 'comissao_pct', 'ativo', 'senha_hash'];
-r.get('/usuarios', A.exige('cadastros.usuario'), async (req, res) =>
+// ---------- Colaboradores ----------
+// O colaborador é a pessoa (funcionário); o usuário é o acesso dele ao sistema.
+const camposColaborador = ['nome', 'cpf', 'cargo', 'setor', 'email', 'telefone', 'data_admissao', 'empresa_id', 'observacao', 'ativo'];
+r.get('/colaboradores', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) =>
   await responderLista(req, res, {
-    sql: `SELECT u.id, u.nome, u.login, u.email, u.perfil, u.equipe_id, eq.nome AS equipe, u.comissao_pct, u.ativo,
-            (SELECT string_agg(e.nome, ', ') FROM usuario_empresas ue JOIN empresas e ON e.id = ue.empresa_id WHERE ue.usuario_id = u.id) AS empresas
-          FROM usuarios u LEFT JOIN equipes eq ON eq.id = u.equipe_id`,
+    sql: `SELECT c.id, c.nome, c.cpf, c.cargo, c.setor, c.email, c.telefone, c.data_admissao, e.nome AS empresa, c.ativo,
+            u.id AS usuario_id, u.login, u.perfil
+          FROM colaboradores c LEFT JOIN empresas e ON e.id = c.empresa_id LEFT JOIN usuarios u ON u.colaborador_id = c.id`,
     sort: 'nome', dir: 'asc',
   }),
 );
+r.get('/colaboradores/:id', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) => {
+  const c = await db.get('SELECT * FROM colaboradores WHERE id = ?', Number(req.params.id));
+  if (!c) throw new ErroNegocio('Colaborador não encontrado', 404);
+  c.usuario = await db.get('SELECT id, login, perfil, ativo FROM usuarios WHERE colaborador_id = ?', c.id);
+  res.json(c);
+});
+function dadosColaborador(b) {
+  const d = { ...b };
+  if (!String(d.nome || '').trim()) throw new ErroNegocio('Informe o nome do colaborador.');
+  if (d.cpf) {
+    d.cpf = String(d.cpf).replace(/\D/g, '');
+    if (!require('./clientes').validarCpf(d.cpf)) throw new ErroNegocio('CPF inválido.');
+  }
+  return d;
+}
+r.post('/colaboradores', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) =>
+  res.status(201).json({ id: await db.insert('colaboradores', dadosColaborador(req.body), camposColaborador) }));
+r.put('/colaboradores/:id', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) => {
+  const id = Number(req.params.id);
+  await db.tx(async () => {
+    await db.update('colaboradores', id, dadosColaborador(req.body), camposColaborador);
+    // Colaborador inativado perde o acesso ao sistema.
+    if (req.body.ativo === 0) await db.run('UPDATE usuarios SET ativo = 0 WHERE colaborador_id = ?', id);
+  });
+  res.json({ ok: true });
+});
+
+// ---------- Usuários e permissões ----------
+const TODAS_PERMISSOES = A.CATALOGO.flatMap(([, itens]) => itens.map(([k]) => k));
+r.get('/permissoes', A.exige('cadastros.usuario'), (req, res) => {
+  const padrao = Object.fromEntries(Object.keys(A.PERFIS).map((p) => [p, A.PERMISSOES[p].includes('*') ? TODAS_PERMISSOES : TODAS_PERMISSOES.filter((k) => A.can(p, k))]));
+  res.json({ catalogo: A.CATALOGO, padrao, perfis: A.PERFIS });
+});
+
+const camposUsuario = ['nome', 'login', 'email', 'perfil', 'equipe_id', 'colaborador_id', 'comissao_pct', 'ativo', 'senha_hash', 'trocar_senha', 'permissoes'];
+r.get('/usuarios', A.exige('cadastros.usuario'), async (req, res) =>
+  await responderLista(req, res, {
+    sql: `SELECT u.id, u.nome, u.login, u.email, u.perfil, u.equipe_id, eq.nome AS equipe, c.nome AS colaborador, c.cargo, u.comissao_pct, u.ativo,
+            CASE WHEN u.permissoes IS NULL THEN 'Padrão do perfil' ELSE 'Personalizadas' END AS permissoes,
+            CASE WHEN u.bloqueado_ate > ? THEN 1 ELSE 0 END AS bloqueado, u.ultimo_acesso,
+            (SELECT string_agg(e.nome, ', ') FROM usuario_empresas ue JOIN empresas e ON e.id = ue.empresa_id WHERE ue.usuario_id = u.id) AS empresas
+          FROM usuarios u LEFT JOIN equipes eq ON eq.id = u.equipe_id LEFT JOIN colaboradores c ON c.id = u.colaborador_id`,
+    params: [new Date().toISOString()], sort: 'nome', dir: 'asc',
+  }),
+);
 r.get('/usuarios/:id', A.exige('cadastros.usuario'), async (req, res) => {
-  const u = await db.get('SELECT id, nome, login, email, perfil, equipe_id, comissao_pct, ativo FROM usuarios WHERE id = ?', req.params.id);
+  const u = await db.get('SELECT id, nome, login, email, perfil, equipe_id, colaborador_id, comissao_pct, ativo, permissoes, bloqueado_ate, ultimo_acesso, trocar_senha FROM usuarios WHERE id = ?', Number(req.params.id));
   if (!u) throw new ErroNegocio('Usuário não encontrado', 404);
   u.empresas = (await db.all('SELECT empresa_id FROM usuario_empresas WHERE usuario_id = ?', u.id)).map((x) => x.empresa_id);
+  u.personalizadas = !!u.permissoes;
+  u.permissoes = A.permissoesDe(u).includes('*') ? TODAS_PERMISSOES : TODAS_PERMISSOES.filter((k) => A.can({ permissoes: u.permissoes, perfil: u.perfil }, k));
   res.json(u);
 });
 async function salvarUsuario(req, id) {
   const b = { ...req.body };
   if (b.login) b.login = String(b.login).trim().toLowerCase();
+  if (b.login && !/^[a-z0-9._-]{3,40}$/.test(b.login)) throw new ErroNegocio('Login deve ter de 3 a 40 letras, números, ponto, hífen ou sublinhado.');
   if (b.perfil && !A.PERFIS[b.perfil]) throw new ErroNegocio('Perfil inválido.');
-  if (b.senha) b.senha_hash = A.hashSenha(b.senha);
-  else if (!id) throw new ErroNegocio('Informe a senha inicial.');
-  return await db.tx(async () => {
-    if (id) await db.update('usuarios', id, b, camposUsuario);
+  if (!id && !b.colaborador_id) throw new ErroNegocio('Selecione o colaborador. Cadastre-o antes em Colaboradores.');
+  if (b.colaborador_id) {
+    const c = await db.get('SELECT * FROM colaboradores WHERE id = ?', Number(b.colaborador_id));
+    if (!c) throw new ErroNegocio('Colaborador não encontrado.');
+    const outro = await db.get('SELECT id FROM usuarios WHERE colaborador_id = ? AND id <> ?', c.id, id || 0);
+    if (outro) throw new ErroNegocio('Este colaborador já tem um usuário.');
+    b.nome ||= c.nome;
+    b.email ||= c.email;
+  }
+  if (b.senha) {
+    const fraca = A.validarSenha(b.senha);
+    if (fraca) throw new ErroNegocio(fraca);
+    b.senha_hash = A.hashSenha(b.senha);
+    b.trocar_senha = 1; // senha definida pelo administrador é provisória
+  } else if (!id) throw new ErroNegocio('Informe a senha provisória.');
+  // Permissões: null = padrão do perfil; lista = personalizadas (só chaves conhecidas).
+  if (b.personalizadas === 0 || b.personalizadas === false) b.permissoes = null;
+  else if (Array.isArray(b.permissoes)) b.permissoes = JSON.stringify(b.permissoes.filter((k) => TODAS_PERMISSOES.includes(k)));
+  else delete b.permissoes;
+  if (id === req.user.id && (b.ativo === 0 || (b.perfil && b.perfil !== req.user.perfil))) throw new ErroNegocio('Você não pode inativar nem trocar o perfil do seu próprio usuário.');
+  if (b.perfil === 'admin' && req.user.perfil !== 'admin') throw new ErroNegocio('Só um administrador pode criar outro administrador.', 403);
+  return db.tx(async () => {
+    if (id) await db.update('usuarios', id, { ...b, permissoes: b.permissoes === undefined ? undefined : b.permissoes }, camposUsuario);
     else id = await db.insert('usuarios', b, camposUsuario);
+    if (b.permissoes === null) await db.run('UPDATE usuarios SET permissoes = NULL WHERE id = ?', id);
     if (Array.isArray(b.empresas)) {
       await db.run('DELETE FROM usuario_empresas WHERE usuario_id = ?', id);
       for (const e of b.empresas) await db.run('INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES (?, ?)', id, e);
     }
+    if (b.ativo === 0) await db.run('DELETE FROM sessoes WHERE usuario_id = ?', id);
     return id;
   });
 }
 r.post('/usuarios', A.exige('cadastros.usuario'), async (req, res) => res.status(201).json({ id: await salvarUsuario(req) }));
 r.put('/usuarios/:id', A.exige('cadastros.usuario'), async (req, res) => res.json({ id: await salvarUsuario(req, Number(req.params.id)) }));
+r.post('/usuarios/:id/desbloquear', A.exige('cadastros.usuario'), async (req, res) => {
+  await db.update('usuarios', Number(req.params.id), { bloqueado_ate: null, tentativas_falhas: 0 });
+  res.json({ ok: true });
+});
 
 // ---------- Produtos ----------
 crud('/grupos-produto', { tabela: 'grupos_produto', campos: ['nome'], permLer: 'cadastros.produto' });

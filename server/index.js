@@ -23,6 +23,7 @@ function criarApp() {
   });
 
   app.get('/api/saude', async (req, res) => res.json({ ok: true, banco: (await db.get('SELECT 1 AS ok')).ok === 1, node: process.version }));
+  app.get('/api/cron/backup', (req, res, next) => require('./routes/admin').cronBackup(req, res).catch(next));
   app.use('/api/auth', require('./routes/auth'));
   const api = express.Router();
   api.use(A.autenticado());
@@ -36,6 +37,8 @@ function criarApp() {
   api.use('/arquivos', require('./routes/arquivos'));
   api.use('/dashboard', require('./routes/dashboards'));
   api.use('/relatorios', require('./routes/relatorios'));
+  api.use('/chat', require('./routes/chat'));
+  api.use('/admin', require('./routes/admin'));
   app.use('/api', api);
   app.use('/api', (req, res) => res.status(404).json({ erro: 'Rota não encontrada.' }));
 
