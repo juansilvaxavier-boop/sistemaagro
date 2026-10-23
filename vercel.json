@@ -1,0 +1,8 @@
+{
+  "buildCommand": "node scripts/build-static.js",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/index.js": { "includeFiles": "server/schema.sql", "maxDuration": 60 }
+  },
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }]
+}

@@ -6,8 +6,9 @@ const { ETAPAS } = require('../workflow');
 
 const r = express.Router();
 
-function setCookie(res, token) {
-  res.setHeader('Set-Cookie', `${A.COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${A.SESSION_HOURS * 3600}`);
+function setCookie(res, token, req) {
+  const seguro = req.secure || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${A.COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${A.SESSION_HOURS * 3600}${seguro}`);
 }
 
 function empresasDo(usuario) {
@@ -25,14 +26,16 @@ r.post('/login', (req, res) => {
   const empresas = empresasDo(u);
   if (!empresas.length) return res.status(403).json({ erro: 'Usuário sem empresa liberada.' });
   const token = A.criarSessao(u.id, empresas.length === 1 ? empresas[0].id : null);
-  setCookie(res, token);
+  setCookie(res, token, req);
   res.json({ empresas, empresaEscolhida: empresas.length === 1 ? empresas[0].id : null });
 });
 
 r.post('/empresa', A.autenticado({ semEmpresa: true }), (req, res) => {
   const id = Number(req.body?.empresa_id);
   if (!empresasDo(req.user).some((e) => e.id === id)) return res.status(403).json({ erro: 'Empresa não liberada para o usuário.' });
-  db.run('UPDATE sessoes SET empresa_id = ? WHERE token = ?', id, req.token);
+  // Nova sessão já com a empresa escolhida (o token assinado carrega a empresa).
+  db.run('DELETE FROM sessoes WHERE token = ?', req.token);
+  setCookie(res, A.criarSessao(req.user.id, id), req);
   res.json({ ok: true });
 });
 

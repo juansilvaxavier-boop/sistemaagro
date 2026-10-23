@@ -64,9 +64,18 @@ function conferirSenha(senha, armazenado) {
   return ref.length === calc.length && crypto.timingSafeEqual(ref, calc);
 }
 
+// Com SESSION_SECRET (hospedagem serverless, várias instâncias) o token é assinado e
+// carrega usuário, empresa e validade, então qualquer instância reconhece a sessão.
+const SEGREDO = process.env.SESSION_SECRET;
+const assinar = (dados) => crypto.createHmac('sha256', SEGREDO).update(dados).digest('base64url');
+
 function criarSessao(usuarioId, empresaId) {
-  const token = crypto.randomBytes(32).toString('hex');
   const expira = new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString();
+  let token = crypto.randomBytes(32).toString('hex');
+  if (SEGREDO) {
+    const dados = `${usuarioId}.${empresaId ?? 0}.${Date.parse(expira)}.${crypto.randomBytes(6).toString('hex')}`;
+    token = `${dados}.${assinar(dados)}`;
+  }
   db.run('DELETE FROM sessoes WHERE expira_em < ?', new Date().toISOString());
   db.run('INSERT INTO sessoes (token, usuario_id, empresa_id, expira_em) VALUES (?, ?, ?, ?)', token, usuarioId, empresaId ?? null, expira);
   return token;
@@ -88,8 +97,24 @@ function carregarSessao(token) {
        FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token = ?`,
     token,
   );
-  if (!s || !s.ativo || s.expira_em < new Date().toISOString()) return null;
-  return s;
+  if (s) return !s.ativo || s.expira_em < new Date().toISOString() ? null : s;
+  return SEGREDO ? sessaoAssinada(token) : null;
+}
+
+function sessaoAssinada(token) {
+  const partes = String(token).split('.');
+  if (partes.length !== 5) return null;
+  const dados = partes.slice(0, 4).join('.');
+  const esperado = Buffer.from(assinar(dados));
+  const recebido = Buffer.from(partes[4]);
+  if (esperado.length !== recebido.length || !crypto.timingSafeEqual(esperado, recebido)) return null;
+  const [uid, emp, exp] = partes.map(Number);
+  if (exp < Date.now()) return null;
+  const u = db.get('SELECT id, nome, login, email, perfil, equipe_id, ativo FROM usuarios WHERE id = ?', uid);
+  if (!u || !u.ativo) return null;
+  // Registra a sessão nesta instância para que a troca de empresa e o logout funcionem nela.
+  db.run('INSERT OR IGNORE INTO sessoes (token, usuario_id, empresa_id, expira_em) VALUES (?, ?, ?, ?)', token, uid, emp || null, new Date(exp).toISOString());
+  return { ...u, token, empresa_id: emp || null };
 }
 
 /** Middleware: exige usuário autenticado e empresa escolhida. */

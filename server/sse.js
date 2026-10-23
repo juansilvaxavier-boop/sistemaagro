@@ -12,7 +12,10 @@ function conectar(req, res) {
   const c = { res, user: req.user, empresaId: req.empresaId };
   clientes.add(c);
   const ping = setInterval(() => res.write(': ping\n\n'), 25000);
+  // Em hospedagem serverless a conexão é encerrada periodicamente; o navegador reconecta sozinho.
+  const limite = process.env.SSE_MAX_SECONDS ? setTimeout(() => res.end(), Number(process.env.SSE_MAX_SECONDS) * 1000) : null;
   req.on('close', () => {
+    clearTimeout(limite);
     clearInterval(ping);
     clientes.delete(c);
   });
