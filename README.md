@@ -110,6 +110,11 @@ tempo real (Server-Sent Events) e *Marcar como lida*.
 
 ### Filas do pedido
 
+Cada fila (e a aba *Progressão dos Pedidos*) tem um painel **Filtros**: períodos com atalhos (hoje, 7 e 30 dias, este mês,
+mês passado, este ano), faixa de valor e de dias na fila, cliente, CPF/CNPJ, vendedor, supervisor, equipe, forma de pagamento,
+UF, cidade, tipo de entrega, transportadora, nota e blacklist. Os filtros aparecem como etiquetas removíveis, ficam salvos na
+sessão e valem para a exportação e a impressão. No servidor, as listas aceitam `de_<coluna>`, `ate_<coluna>` e `em_<coluna>=a,b`.
+
 Cada fila tem as abas **Pedidos** (o que está parado na etapa) e **Progressão dos Pedidos** (histórico geral com filtro por etapa).
 
 | Etapa | Funcionalidades |

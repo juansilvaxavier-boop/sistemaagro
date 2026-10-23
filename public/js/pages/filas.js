@@ -1,4 +1,4 @@
-import { DataTable, state, titulo, abas, pode, fmt, esc, btnAcao } from '../core.js';
+import { DataTable, state, titulo, abas, pode, fmt, esc, btnAcao, ROTULOS } from '../core.js';
 import { abrirPedido } from './pedido-detalhe.js';
 
 const C = {
@@ -42,6 +42,44 @@ const COLUNAS = {
   transito: ['numero', 'nota', 'cliente', 'cidade', 'uf', 'transportadora', 'volumes', 'rastreio', 'embarque', 'prevista', 'entrega'],
   devolucao: ['numero', 'nota', 'cliente', 'valor', 'vendedor', 'desde'],
 };
+const UFS = 'AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' ');
+
+// Datas próprias de cada etapa, além da data do pedido e da entrada na fila.
+const DATAS_ETAPA = {
+  producao: [['data_chegada_producao', 'Chegada na produção'], ['prazo_producao', 'Prazo de produção']],
+  faturamento: [['prazo_producao', 'Prazo de produção']],
+  expedicao: [['prazo_producao', 'Prazo de produção'], ['data_embarque', 'Embarque'], ['data_entrega_prevista', 'Entrega prevista']],
+  transito: [['data_embarque', 'Embarque'], ['data_entrega_prevista', 'Entrega prevista'], ['data_entrega', 'Entregue em']],
+  devolucao: [['data_nota', 'Emissão da nota']],
+};
+
+/** Campos do painel de filtros da fila (só mostra o que faz sentido para quem vê). */
+function camposFiltro(etapa, { progressao = false } = {}) {
+  const op = state.opcoes;
+  const supervisores = op.usuarios.filter((u) => u.perfil === 'supervisor').map((u) => [u.id, u.nome]);
+  const logistica = ['faturamento', 'expedicao', 'transito', 'devolucao'].includes(etapa) || progressao;
+  return [
+    { k: 'data', l: 'Data do pedido', tipo: 'periodo' },
+    { k: 'etapa_desde', l: progressao ? 'Na etapa atual desde' : 'Entrou nesta fila', tipo: 'periodo', atalhos: false },
+    ...(progressao ? [] : (DATAS_ETAPA[etapa] || []).map(([k, l]) => ({ k, l, tipo: 'periodo', atalhos: false }))),
+    ...(progressao ? [{ k: 'etapa', l: 'Etapa', tipo: 'select', options: Object.entries(state.me.etapas).map(([k, v]) => [k, v.label]) }] : []),
+    { k: 'valor', l: 'Valor do pedido (R$)', tipo: 'faixa', moeda: true },
+    ...(progressao ? [] : [{ k: 'dias_etapa', l: 'Dias na fila', tipo: 'faixa' }]),
+    { k: 'cliente', l: 'Cliente', tipo: 'texto', placeholder: 'Nome do cliente' },
+    { k: 'documento', l: 'CPF/CNPJ', tipo: 'texto', placeholder: 'Só números ou parte' },
+    ...(op.vendedores.length > 1 ? [{ k: 'vendedor_id', l: 'Vendedor', tipo: 'select', options: op.vendedores.map((v) => [v.id, v.nome]) }] : []),
+    ...(supervisores.length && op.vendedores.length > 1 ? [{ k: 'supervisor_id', l: 'Supervisor', tipo: 'select', options: supervisores }] : []),
+    ...(op.equipes.length > 1 && op.vendedores.length > 1 ? [{ k: 'equipe_id', l: 'Equipe', tipo: 'select', options: op.equipes.map((e) => [e.id, e.nome]) }] : []),
+    { k: 'forma_id', l: 'Forma de pagamento', tipo: 'select', options: op.formas.map((f) => [f.id, f.nome]) },
+    { k: 'uf', l: 'UF de entrega', tipo: 'select', options: UFS.map((u) => [u, u]) },
+    { k: 'cidade', l: 'Cidade', tipo: 'texto', placeholder: 'Cidade de entrega' },
+    { k: 'tipo_entrega', l: 'Tipo de entrega', tipo: 'select', options: Object.entries(ROTULOS.tipo_entrega) },
+    ...(logistica ? [{ k: 'transportadora_id', l: 'Transportadora', tipo: 'select', options: op.transportadoras.map((t) => [t.id, t.nome]) },
+      { k: 'nota', l: 'Nº da nota', tipo: 'texto', placeholder: 'Número da NF-e' }] : []),
+    { k: 'blacklist', l: 'Blacklist', tipo: 'select', options: [['alerta', 'Com alerta'], ['bloqueio', 'Bloqueado']] },
+  ];
+}
+
 const PROGRESSAO = ['numero', 'data', 'documento', 'cliente', 'valor', 'vendedor', 'supervisor', 'etapa', 'desde', 'nota', 'origem'];
 
 export default async function (conteudo, { params: [etapa] }) {
@@ -65,10 +103,12 @@ export default async function (conteudo, { params: [etapa] }) {
   } : {};
   tabelas.push(new DataTable(pagina.querySelector('#t-pedidos'), {
     url: `/api/pedidos/fila/${etapa}`, columns: cols, rowClick: abrir, title: `Fila ${info.label}`, sort: 'etapa_desde', dir: 'asc', ...comEtiqueta,
+    painel: camposFiltro(etapa), chave: `fila-${etapa}`,
   }));
   if (etapa === 'transito') {
     tabelas.push(new DataTable(pagina.querySelector('#t-entregues'), {
       url: '/api/pedidos/fila/transito?aba=entregues', columns: cols, rowClick: abrir, title: 'Pedidos entregues', sort: 'data_entrega', dir: 'desc', ...comEtiqueta,
+      painel: camposFiltro('transito'), chave: 'fila-entregues',
     }));
   }
   const etapas = Object.entries(state.me.etapas).map(([k, v]) => [k, v.label]);
@@ -76,6 +116,7 @@ export default async function (conteudo, { params: [etapa] }) {
     url: '/api/pedidos/progressao',
     columns: PROGRESSAO.map((k) => (k === 'etapa' ? { ...C.etapa, filter: { options: etapas } } : C[k])),
     rowClick: abrir, title: 'Progressão dos Pedidos', sort: 'numero', dir: 'desc',
+    painel: camposFiltro(etapa, { progressao: true }), chave: 'progressao',
   }));
 
   const onAtualizar = () => { if (document.body.contains(pagina)) tabelas.forEach((t) => t.reload()); else window.removeEventListener('pedido-atualizado', onAtualizar); };

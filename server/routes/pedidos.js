@@ -26,6 +26,8 @@ const LISTA_SQL = `
     CAST(julianday('now','localtime') - julianday(p.etapa_desde) AS INTEGER) AS dias_etapa,
     p.prazo_producao, p.data_chegada_producao, p.data_embarque, p.data_entrega_prevista, p.data_entrega,
     t.nome AS transportadora, nf.numero AS nota, p.tipo_entrega, p.volumes, p.codigo_rastreio, p.codigo_origem,
+    p.vendedor_id, p.supervisor_id, p.analista_id, v.equipe_id, p.forma_id, p.transportadora_id, f.tipo AS forma_tipo,
+    nf.data_emissao AS data_nota,
     (SELECT tipo FROM blacklist b WHERE b.cliente_id = c.id AND b.ativo = 1 ORDER BY CASE tipo WHEN 'bloqueio' THEN 0 ELSE 1 END LIMIT 1) AS blacklist,
     (SELECT COUNT(*) FROM mensagens m WHERE m.pedido_id = p.id) AS mensagens
   FROM pedidos p
@@ -40,6 +42,9 @@ const LISTA_SQL = `
   LEFT JOIN transportadoras t ON t.id = p.transportadora_id
   LEFT JOIN notas_fiscais nf ON nf.pedido_id = p.id AND nf.status <> 'cancelada'`;
 
+// Colunas de identificação filtradas pelo valor exato (não por "contém").
+const FILTROS_EXATOS = ['vendedor_id', 'supervisor_id', 'analista_id', 'equipe_id', 'forma_id', 'transportadora_id', 'forma_tipo', 'tipo_entrega', 'uf', 'blacklist'];
+
 // Fila de uma etapa
 r.get('/fila/:etapa', async (req, res) => {
   const etapa = W.ETAPAS[req.params.etapa];
@@ -49,14 +54,14 @@ r.get('/fila/:etapa', async (req, res) => {
   const etapas = req.params.etapa === 'transito' && req.query.aba === 'entregues' ? ['entregue'] : [req.params.etapa];
   await responderLista(req, res, {
     sql: `${LISTA_SQL} WHERE ${e.sql} AND p.etapa IN (${etapas.map(() => '?').join(',')})`,
-    params: [...e.params, ...etapas], sort: 'etapa_desde', dir: 'asc',
+    params: [...e.params, ...etapas], sort: 'etapa_desde', dir: 'asc', exact: FILTROS_EXATOS,
   });
 });
 
 // Progressão dos pedidos (histórico geral)
 r.get('/progressao', A.exige('fila'), async (req, res) => {
   const e = escopo(req);
-  await responderLista(req, res, { sql: `${LISTA_SQL} WHERE ${e.sql}`, params: e.params, sort: 'numero', exact: ['etapa'] });
+  await responderLista(req, res, { sql: `${LISTA_SQL} WHERE ${e.sql}`, params: e.params, sort: 'numero', exact: ['etapa', ...FILTROS_EXATOS] });
 });
 
 // Contagem por etapa (badges do menu)

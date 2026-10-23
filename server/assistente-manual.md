@@ -27,6 +27,8 @@ O pedido passa por filas, uma por etapa:
 9. **Trânsito** (#/fila/transito): confirma a entrega.
 10. **Devolução** (#/fila/devolucao): trata as devoluções de mercadoria.
 
+Toda fila tem o botão **Filtros** acima da tabela. Ele abre um painel com período (data do pedido, entrada na fila e as datas da etapa, como prazo de produção, embarque e entrega), com atalhos Hoje, 7 dias, 30 dias, Este mês, Mês passado e Este ano. Também filtra por faixa de valor, dias na fila, cliente, CPF/CNPJ, vendedor, supervisor, equipe, forma de pagamento, UF, cidade, tipo de entrega, transportadora, nota e blacklist. Os filtros ativos aparecem como etiquetas que podem ser removidas uma a uma, ficam guardados enquanto a sessão estiver aberta e valem também para Exportar para Excel e Imprimir.
+
 As ações que exigem observação (devolver, cancelar, reprovar) pedem um motivo, que fica no histórico do pedido. Clicar num pedido de qualquer fila abre o detalhe com itens, histórico, comentários, arquivos e links de pagamento. Um pedido devolvido volta para a fila anterior com a observação visível.
 
 ## Propostas comerciais

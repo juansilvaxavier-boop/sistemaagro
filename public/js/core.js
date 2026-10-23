@@ -306,6 +306,12 @@ export class DataTable {
     this.c = typeof container === 'string' ? document.querySelector(container) : container;
     this.o = { pageSize: 20, ...opts };
     this.filtros = { ...(opts.filtrosIniciais || {}) };
+    // Painel de filtros (opts.painel): parâmetros extras como de_/ate_/em_/f_, lembrados por tela nesta sessão.
+    this.extras = {};
+    if (opts.painel && opts.chave) {
+      try { this.extras = JSON.parse(sessionStorage.getItem(`agt-filtros-${opts.chave}`) || '{}'); } catch { this.extras = {}; }
+    }
+    this.painelAberto = Object.keys(this.extras).length > 0;
     this.sort = opts.sort || null;
     this.dir = opts.dir || null;
     this.page = 1;
@@ -319,6 +325,7 @@ export class DataTable {
     const base = typeof this.o.url === 'function' ? this.o.url() : this.o.url;
     const p = { ...(this.o.params ? this.o.params() : {}), page: this.page, pageSize: this.pageSize, sort: this.sort, dir: this.dir, ...extra };
     for (const [k, v] of Object.entries(this.filtros)) if (v !== '' && v != null) p['f_' + k] = v;
+    for (const [k, v] of Object.entries(this.extras)) if (v !== '' && v != null && p[k] == null) p[k] = v;
     return base + (base.includes('?') ? '&' + qs(p).slice(1) : qs(p));
   }
 
@@ -333,7 +340,10 @@ export class DataTable {
       return `<th><input class="form-control form-control-sm" data-f="${c.k}" value="${v}" placeholder="Filtrar"></th>`;
     };
     this.c.innerHTML = `<div class="card">
+      ${this.o.painel ? `<div class="dt-painel ${this.painelAberto ? 'aberto' : ''}">${this.htmlPainel()}</div>` : ''}
       <div class="dt-toolbar">
+        ${this.o.painel ? `<button class="btn btn-sm btn-outline-secondary" data-a="painel" aria-expanded="${this.painelAberto}"><i class="bi bi-sliders"></i> Filtros${this.qtdExtras() ? ` <span class="dt-qtd">${this.qtdExtras()}</span>` : ''}</button>
+          <div class="dt-chips">${this.htmlChips()}</div>` : ''}
         ${this.o.toolbar || ''}
         <div class="ms-auto d-flex gap-1">
           <button class="btn btn-sm btn-outline-secondary" data-a="limpar" title="Limpar Filtros"><i class="bi bi-funnel"></i> <span class="dt-rot">Limpar Filtros</span></button>
@@ -363,11 +373,119 @@ export class DataTable {
       this.sort = k;
       this.load();
     }));
-    this.c.querySelector('[data-a=limpar]').addEventListener('click', () => { this.filtros = {}; this.page = 1; this.render(); this.load(); });
+    this.c.querySelector('[data-a=limpar]').addEventListener('click', () => { this.filtros = {}; this.definirExtras({}); });
+    if (this.o.painel) this.ligarPainel();
     this.c.querySelector('[data-a=excel]').addEventListener('click', () => this.exportar());
     this.c.querySelector('[data-a=imprimir]').addEventListener('click', () => this.imprimir());
     this.c.querySelector('[data-a=pagesize]').addEventListener('change', (e) => { this.pageSize = Number(e.target.value); this.page = 1; this.load(); });
     this.o.onRender?.(this.c);
+  }
+
+  // ---------- Painel de filtros ----------
+  // painel: [{ k, l, tipo: 'periodo'|'faixa'|'select'|'texto', options?, atalhos? }]
+  //   periodo/faixa → de_<k> e ate_<k>; select → em_<k> (vários) ou f_<k>; texto → f_<k>
+  qtdExtras() {
+    return this.o.painel.filter((c) => (c.tipo === 'periodo' || c.tipo === 'faixa'
+      ? this.extras[`de_${c.k}`] || this.extras[`ate_${c.k}`]
+      : this.extras[`${c.tipo === 'select' ? 'em' : 'f'}_${c.k}`])).length;
+  }
+
+  htmlPainel() {
+    const x = this.extras;
+    const campo = (c) => {
+      if (c.tipo === 'periodo') {
+        return `<div class="dt-campo dt-campo-periodo"><label class="form-label">${esc(c.l)}</label>
+          <div class="d-flex gap-1 align-items-center"><input type="date" class="form-control form-control-sm" data-x="de_${c.k}" value="${esc(x[`de_${c.k}`] || '')}" aria-label="${esc(c.l)} de">
+          <span class="text-muted small">até</span><input type="date" class="form-control form-control-sm" data-x="ate_${c.k}" value="${esc(x[`ate_${c.k}`] || '')}" aria-label="${esc(c.l)} até"></div>
+          ${c.atalhos !== false ? `<div class="dt-atalhos">${ATALHOS_PERIODO.map(([id, l]) => `<button type="button" class="btn btn-sm" data-atalho="${id}" data-campo="${c.k}">${l}</button>`).join('')}</div>` : ''}</div>`;
+      }
+      if (c.tipo === 'faixa') {
+        return `<div class="dt-campo"><label class="form-label">${esc(c.l)}</label>
+          <div class="d-flex gap-1 align-items-center"><input type="number" step="any" class="form-control form-control-sm" data-x="de_${c.k}" value="${esc(x[`de_${c.k}`] || '')}" placeholder="mín." aria-label="${esc(c.l)} mínimo">
+          <span class="text-muted small">a</span><input type="number" step="any" class="form-control form-control-sm" data-x="ate_${c.k}" value="${esc(x[`ate_${c.k}`] || '')}" placeholder="máx." aria-label="${esc(c.l)} máximo"></div></div>`;
+      }
+      if (c.tipo === 'select') {
+        const marcados = String(x[`em_${c.k}`] || '').split(',').filter(Boolean);
+        return `<div class="dt-campo"><label class="form-label">${esc(c.l)}</label>
+          <div class="dropdown dt-multi"><button type="button" class="form-select form-select-sm text-start text-truncate" data-bs-toggle="dropdown" data-bs-auto-close="outside">${marcados.length ? esc(marcados.map((v) => c.options.find(([ov]) => String(ov) === v)?.[1] || v).join(', ')) : 'Todos'}</button>
+          <div class="dropdown-menu dt-multi-menu">${c.options.map(([ov, ol]) => `<label class="dropdown-item"><input type="checkbox" class="form-check-input m-0" data-em="${c.k}" value="${esc(ov)}" ${marcados.includes(String(ov)) ? 'checked' : ''}> ${esc(ol)}</label>`).join('') || '<span class="dropdown-item-text text-muted">Sem opções</span>'}</div></div></div>`;
+      }
+      return `<div class="dt-campo"><label class="form-label">${esc(c.l)}</label><input class="form-control form-control-sm" data-x="f_${c.k}" value="${esc(x[`f_${c.k}`] || '')}" placeholder="${esc(c.placeholder || 'Contém...')}"></div>`;
+    };
+    return `<div class="dt-painel-grade">${this.o.painel.map(campo).join('')}</div>
+      <div class="dt-painel-acoes"><button type="button" class="btn btn-sm btn-outline-secondary" data-a="painel-limpar"><i class="bi bi-x-lg"></i> Limpar</button>
+        <button type="button" class="btn btn-sm btn-success" data-a="painel-aplicar"><i class="bi bi-check2"></i> Aplicar filtros</button></div>`;
+  }
+
+  htmlChips() {
+    const x = this.extras;
+    const out = [];
+    for (const c of this.o.painel) {
+      let txt = '';
+      const fmtV = (v) => (c.tipo === 'periodo' ? fmt.date(v) : c.tipo === 'faixa' && c.moeda ? fmt.money(v) : v);
+      if (c.tipo === 'periodo' || c.tipo === 'faixa') {
+        const de = x[`de_${c.k}`];
+        const ate = x[`ate_${c.k}`];
+        if (de && ate) txt = `${fmtV(de)} a ${fmtV(ate)}`;
+        else if (de) txt = `a partir de ${fmtV(de)}`;
+        else if (ate) txt = `até ${fmtV(ate)}`;
+      } else if (c.tipo === 'select') {
+        const v = String(x[`em_${c.k}`] || '').split(',').filter(Boolean);
+        if (v.length) txt = v.length > 2 ? `${v.length} selecionados` : v.map((i) => c.options.find(([ov]) => String(ov) === i)?.[1] || i).join(', ');
+      } else if (x[`f_${c.k}`]) txt = `"${x[`f_${c.k}`]}"`;
+      if (txt) out.push(`<span class="dt-chip">${esc(c.l)}: <b>${esc(txt)}</b><button type="button" data-tirar="${c.k}" aria-label="Remover filtro ${esc(c.l)}"><i class="bi bi-x"></i></button></span>`);
+    }
+    return out.join('');
+  }
+
+  definirExtras(novo) {
+    this.extras = Object.fromEntries(Object.entries(novo).filter(([, v]) => v !== '' && v != null));
+    if (this.o.chave) {
+      try { sessionStorage.setItem(`agt-filtros-${this.o.chave}`, JSON.stringify(this.extras)); } catch { /* sem armazenamento */ }
+    }
+    this.page = 1;
+    this.render();
+    this.load();
+  }
+
+  lerPainel() {
+    const novo = {};
+    this.c.querySelectorAll('.dt-painel [data-x]').forEach((el) => { if (el.value) novo[el.dataset.x] = el.value; });
+    for (const c of this.o.painel.filter((p) => p.tipo === 'select')) {
+      const v = [...this.c.querySelectorAll(`.dt-painel [data-em="${c.k}"]:checked`)].map((el) => el.value);
+      if (v.length) novo[`em_${c.k}`] = v.join(',');
+    }
+    return novo;
+  }
+
+  ligarPainel() {
+    const painel = this.c.querySelector('.dt-painel');
+    this.c.querySelector('[data-a=painel]').addEventListener('click', (e) => {
+      this.painelAberto = !this.painelAberto;
+      painel.classList.toggle('aberto', this.painelAberto);
+      e.currentTarget.setAttribute('aria-expanded', this.painelAberto);
+      if (this.painelAberto) painel.querySelector('input')?.focus();
+    });
+    this.c.querySelector('[data-a=painel-aplicar]').addEventListener('click', () => this.definirExtras(this.lerPainel()));
+    this.c.querySelector('[data-a=painel-limpar]').addEventListener('click', () => this.definirExtras({}));
+    painel.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); this.definirExtras(this.lerPainel()); } });
+    painel.querySelectorAll('[data-em]').forEach((cb) => cb.addEventListener('change', () => {
+      const menu = cb.closest('.dt-multi');
+      const marcados = [...menu.querySelectorAll('[data-em]:checked')].map((el) => el.parentElement.textContent.trim());
+      menu.querySelector('[data-bs-toggle]').textContent = marcados.length ? marcados.join(', ') : 'Todos';
+    }));
+    painel.querySelectorAll('[data-atalho]').forEach((b) => b.addEventListener('click', () => {
+      const [de, ate] = periodoAtalho(b.dataset.atalho);
+      painel.querySelector(`[data-x="de_${b.dataset.campo}"]`).value = de;
+      painel.querySelector(`[data-x="ate_${b.dataset.campo}"]`).value = ate;
+      this.definirExtras(this.lerPainel());
+    }));
+    this.c.querySelectorAll('[data-tirar]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.tirar;
+      const novo = { ...this.extras };
+      for (const pre of ['de_', 'ate_', 'em_', 'f_']) delete novo[pre + k];
+      this.definirExtras(novo);
+    }));
   }
 
   async load() {
@@ -432,7 +550,8 @@ export class DataTable {
     const d = await tentar(() => get(this.url({ all: 1 })));
     if (!d) return;
     const cols = this.o.columns.filter((c) => c.export !== false);
-    const filtrosTxt = Object.entries(this.filtros).filter(([, v]) => v).map(([k, v]) => `${cols.find((c) => c.k === k)?.l || k}: ${v}`).join(' · ');
+    const chips = this.o.painel ? [...this.c.querySelectorAll('.dt-chip')].map((el) => el.textContent.trim()) : [];
+    const filtrosTxt = [...chips, ...Object.entries(this.filtros).filter(([, v]) => v).map(([k, v]) => `${cols.find((c) => c.k === k)?.l || k}: ${v}`)].join(' · ');
     const w = window.open('', '_blank');
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(this.o.title || 'Lista')}</title>
       <style>body{font:11px Arial,sans-serif;margin:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:3px 5px;text-align:left}th{background:#e8f5e9}.num{text-align:right}h1{font-size:16px;margin:0}small{color:#666}</style>
@@ -441,6 +560,21 @@ export class DataTable {
       ${d.rows.map((r) => `<tr>${cols.map((c) => `<td class="${c.t === 'money' || c.t === 'num' ? 'num' : ''}">${c.t === 'etapa' ? esc(state.me.etapas[r[c.k]]?.label || r[c.k]) : c.t === 'status' ? esc(ROTULOS.status[r[c.k]]?.[0] || r[c.k] || '') : c.t === 'bool' ? (r[c.k] ? 'Sim' : 'Não') : c.render && !c.t ? esc(String(c.render(r[c.k], r)).replace(/<[^>]+>/g, '')) : renderCell({ ...c, render: undefined }, r[c.k], r)}</td>`).join('')}</tr>`).join('')}
       </tbody></table><script>window.onload=()=>{window.print()}<\/script></body></html>`);
     w.document.close();
+  }
+}
+
+const ATALHOS_PERIODO = [['hoje', 'Hoje'], ['7d', '7 dias'], ['30d', '30 dias'], ['mes', 'Este mês'], ['mes_ant', 'Mês passado'], ['ano', 'Este ano']];
+function periodoAtalho(id) {
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const h = new Date();
+  const dia = (n) => new Date(h.getFullYear(), h.getMonth(), h.getDate() + n);
+  switch (id) {
+    case 'hoje': return [iso(h), iso(h)];
+    case '7d': return [iso(dia(-6)), iso(h)];
+    case '30d': return [iso(dia(-29)), iso(h)];
+    case 'mes': return [iso(new Date(h.getFullYear(), h.getMonth(), 1)), iso(h)];
+    case 'mes_ant': return [iso(new Date(h.getFullYear(), h.getMonth() - 1, 1)), iso(new Date(h.getFullYear(), h.getMonth(), 0))];
+    default: return [iso(new Date(h.getFullYear(), 0, 1)), iso(h)];
   }
 }
 

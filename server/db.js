@@ -240,6 +240,26 @@ async function paginate(q, { sql, params = [], columns, sort = 'id', dir = 'desc
       wp.push(`%${v}%`);
     }
   }
+  // Faixas (de_<coluna> / ate_<coluna>): datas comparadas pelo dia, números pelo valor.
+  // Listas (em_<coluna>=a,b,c): valor exato entre os informados.
+  for (const [k, raw] of Object.entries(q)) {
+    const m = k.match(/^(de|ate|em)_(.+)$/);
+    if (!m || !columns.includes(m[2]) || raw === '' || raw == null) continue;
+    const [, op, col] = m;
+    const v = String(raw).trim();
+    if (op === 'em') {
+      const lista = v.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 100);
+      if (!lista.length) continue;
+      where.push(`CAST(t."${col}" AS TEXT) IN (${lista.map(() => '?').join(',')})`);
+      wp.push(...lista);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      where.push(`LEFT(CAST(t."${col}" AS TEXT), 10) ${op === 'de' ? '>=' : '<='} ?`);
+      wp.push(v);
+    } else if (Number.isFinite(Number(v.replace(',', '.')))) {
+      where.push(`CAST(t."${col}" AS double precision) ${op === 'de' ? '>=' : '<='} CAST(? AS double precision)`);
+      wp.push(Number(v.replace(',', '.')));
+    }
+  }
   const base = `SELECT * FROM (${sql}) t ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
   const sortCol = columns.includes(q.sort) ? q.sort : sort;
   const sortDir = (q.dir || dir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
