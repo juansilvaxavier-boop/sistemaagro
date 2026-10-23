@@ -1,0 +1,27 @@
+{
+  "name": "agroterra-sistema",
+  "version": "1.0.0",
+  "description": "ERP web de venda, crédito, cobrança e logística para distribuição de fertilizantes e insumos agrícolas",
+  "main": "server/index.js",
+  "private": true,
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings --watch server/index.js",
+    "seed": "node --no-warnings server/seed.js --reset",
+    "test": "node --no-warnings --test test/*.test.js"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.2",
+    "chart.js": "^4.6.1",
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "multer": "^2.5.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}

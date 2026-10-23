@@ -1,0 +1,515 @@
+// Utilitários de interface: API, formatação, modais, notificações e a tabela padrão das telas de lista.
+
+export const state = { me: null, opcoes: null };
+
+// ---------- API ----------
+export class ApiError extends Error {
+  constructor(msg, status) { super(msg); this.status = status; }
+}
+
+export async function api(url, { method = 'GET', body, raw } = {}) {
+  const opts = { method, headers: { 'X-Requested-With': 'agroterra' }, credentials: 'same-origin' };
+  if (body instanceof FormData) opts.body = body;
+  else if (body !== undefined) { opts.body = JSON.stringify(body); opts.headers['Content-Type'] = 'application/json'; }
+  const res = await fetch(url, opts);
+  if (raw) {
+    if (!res.ok) throw new ApiError((await res.json().catch(() => ({}))).erro || res.statusText, res.status);
+    return res;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && !url.startsWith('/api/auth/login')) {
+    window.dispatchEvent(new CustomEvent('sessao-expirada'));
+  }
+  if (!res.ok) throw new ApiError(data.erro || `Erro ${res.status}`, res.status);
+  return data;
+}
+export const get = (u) => api(u);
+export const post = (u, body) => api(u, { method: 'POST', body: body ?? {} });
+export const put = (u, body) => api(u, { method: 'PUT', body: body ?? {} });
+export const del = (u) => api(u, { method: 'DELETE' });
+
+export function qs(obj) {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(obj || {})) if (v !== undefined && v !== null && v !== '') p.set(k, v);
+  const s = p.toString();
+  return s ? '?' + s : '';
+}
+
+export async function baixar(url, nomePadrao = 'arquivo') {
+  const res = await api(url, { raw: true });
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"/);
+  const nome = m ? decodeURIComponent(m[1] || m[2]) : nomePadrao;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nome;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// ---------- Formatação ----------
+export const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const num = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
+export const fmt = {
+  money: (v) => (v == null || v === '' ? '' : brl.format(Number(v))),
+  num: (v) => (v == null || v === '' ? '' : num.format(Number(v))),
+  pct: (v) => (v == null || v === '' ? '' : num.format(Number(v)) + '%'),
+  date: (v) => {
+    if (!v) return '';
+    const [d] = String(v).split(/[ T]/);
+    const [y, m, dd] = d.split('-');
+    return dd ? `${dd}/${m}/${y}` : v;
+  },
+  datetime: (v) => (v ? `${fmt.date(v)} ${String(v).slice(11, 16)}` : ''),
+  bool: (v) => (v ? '<i class="bi bi-check-lg text-success"></i>' : '<span class="text-muted">—</span>'),
+  doc: (v) => {
+    const d = String(v || '').replace(/\D/g, '');
+    if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    return v || '';
+  },
+  periodo: (v) => (v ? v.split('-').reverse().join('/') : ''),
+};
+
+export const ROTULOS = {
+  status: {
+    a_pagar: ['A pagar', 'primary'], vencida: ['Vencida', 'danger'], liquidada: ['Liquidada', 'success'], negociada: ['Negociada', 'info'],
+    acordo_judicial: ['Acordo judicial', 'warning'], cancelada: ['Cancelada', 'secondary'], devolvida: ['Devolvida', 'dark'],
+    autorizada: ['Autorizada', 'success'], devolvida_parcial: ['Devolvida parcial', 'warning'],
+    aberta: ['Aberta', 'primary'], revisada: ['Revisada', 'info'], paga: ['Paga', 'success'],
+    inclusao_solicitada: ['Pedido de inclusão', 'warning'], inclusao_aceita: ['Inclusão aceita', 'danger'], inclusao_rejeitada: ['Inclusão rejeitada', 'secondary'],
+    baixa_solicitada: ['Pedido de baixa', 'info'], baixa_aceita: ['Baixa aceita', 'success'], baixa_rejeitada: ['Baixa rejeitada', 'dark'],
+    pendente: ['Pendente', 'warning'], pago: ['Pago', 'success'], expirado: ['Expirado', 'secondary'],
+    alerta: ['Alerta', 'warning'], bloqueio: ['Bloqueio', 'danger'],
+    prospeccao: ['Prospecção', 'secondary'], qualificacao: ['Qualificação', 'info'], proposta: ['Proposta', 'primary'], negociacao: ['Negociação', 'warning'], ganha: ['Ganha', 'success'], perdida: ['Perdida', 'danger'],
+  },
+  tipo_entrega: { transportadora: 'Transportadora', posta_restante: 'Posta restante', veiculo_proprio: 'Veículo próprio', retirada: 'Retirada no local' },
+  tipo_baixa: { PIX: 'PIX', boleto: 'Boleto', TED: 'TED', dinheiro: 'Dinheiro', cheque: 'Cheque', cartao: 'Cartão', outros: 'Outros' },
+  tipo_acao: { ligacao: 'Ligação', whatsapp: 'WhatsApp', email: 'E-mail', sms: 'SMS', visita: 'Visita', carta: 'Carta', promessa: 'Promessa', acordo: 'Acordo', reuniao: 'Reunião', pos_venda: 'Pós-venda', reclamacao: 'Reclamação' },
+  resultado: { contato_efetivo: 'Contato efetivo', sem_contato: 'Sem contato', promessa: 'Promessa de pagamento', recusa: 'Recusa', numero_invalido: 'Número inválido', acordo: 'Acordo' },
+};
+/** Troca códigos internos (ligacao, contato_efetivo...) pelos rótulos em português. */
+export function humanizar(texto) {
+  const mapa = { ...ROTULOS.tipo_acao, ...ROTULOS.resultado };
+  return String(texto ?? '').replace(/\b[a-z]+(?:_[a-z]+)*\b/g, (w) => mapa[w] || w);
+}
+export function badge(valor, mapa = ROTULOS.status) {
+  if (valor == null || valor === '') return '';
+  const [l, c] = mapa[valor] || [valor, 'secondary'];
+  return `<span class="badge text-bg-${c} badge-etapa">${esc(l)}</span>`;
+}
+const CORES_ETAPA = { venda: 'secondary', supervisao: 'info', analise: 'primary', diretoria: 'warning', cobranca: 'danger', producao: 'dark', faturamento: 'primary', expedicao: 'info', transito: 'info', entregue: 'success', devolucao: 'danger', cancelado: 'secondary' };
+export function badgeEtapa(etapa) {
+  const e = state.me?.etapas?.[etapa];
+  return `<span class="badge text-bg-${CORES_ETAPA[etapa] || 'secondary'} badge-etapa">${esc(e?.label || etapa)}</span>`;
+}
+export function renderCell(col, v, row) {
+  if (col.render) return col.render(v, row);
+  switch (col.t) {
+    case 'money': return fmt.money(v);
+    case 'num': return fmt.num(v);
+    case 'pct': return fmt.pct(v);
+    case 'date': return fmt.date(v);
+    case 'datetime': return fmt.datetime(v);
+    case 'bool': return fmt.bool(v);
+    case 'doc': return fmt.doc(v);
+    case 'status': return badge(v);
+    case 'etapa': return badgeEtapa(v);
+    default: return esc(v);
+  }
+}
+
+// ---------- Notificações ----------
+export function toast(msg, tipo = 'success', titulo) {
+  const el = document.createElement('div');
+  el.className = `toast align-items-center text-bg-${tipo} border-0`;
+  el.innerHTML = `<div class="d-flex"><div class="toast-body">${titulo ? `<strong>${esc(titulo)}</strong><br>` : ''}${esc(msg)}</div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+  document.getElementById('toasts').appendChild(el);
+  const t = new bootstrap.Toast(el, { delay: tipo === 'danger' ? 7000 : 4000 });
+  el.addEventListener('hidden.bs.toast', () => el.remove());
+  t.show();
+}
+export const erro = (e) => toast(e?.message || String(e), 'danger');
+
+/** Executa uma ação assíncrona mostrando erro em toast; retorna o resultado ou undefined. */
+export async function tentar(fn, msgOk) {
+  try {
+    const r = await fn();
+    if (msgOk) toast(msgOk);
+    return r ?? true;
+  } catch (e) {
+    erro(e);
+    return undefined;
+  }
+}
+
+// ---------- Modais ----------
+export function modal({ title, body = '', size = 'lg', buttons = [], onShow, onClose, static: estatico }) {
+  const el = document.createElement('div');
+  el.className = 'modal fade';
+  el.tabIndex = -1;
+  el.innerHTML = `<div class="modal-dialog modal-${size} modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header py-2"><h5 class="modal-title">${title}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"></div>
+    <div class="modal-footer py-2"></div></div></div>`;
+  const corpo = el.querySelector('.modal-body');
+  if (typeof body === 'string') corpo.innerHTML = body;
+  else corpo.appendChild(body);
+  const rodape = el.querySelector('.modal-footer');
+  const botoes = [...buttons, { label: 'Fechar', cls: 'btn-outline-secondary', close: true }];
+  for (const b of botoes) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `btn btn-sm ${b.cls || 'btn-success'}`;
+    btn.innerHTML = b.label;
+    if (b.id) btn.id = b.id;
+    btn.addEventListener('click', async () => {
+      if (b.close) return inst.hide();
+      btn.disabled = true;
+      try {
+        const r = await b.onClick?.(api_);
+        if (r !== false) inst.hide();
+      } catch (e) {
+        erro(e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    rodape.appendChild(btn);
+  }
+  if (!botoes.length) rodape.remove();
+  document.body.appendChild(el);
+  const inst = new bootstrap.Modal(el, { backdrop: estatico ? 'static' : true });
+  const api_ = { el, body: corpo, close: () => inst.hide(), footer: rodape };
+  el.addEventListener('shown.bs.modal', () => {
+    onShow?.(api_);
+    el.querySelector('input:not([type=hidden]):not([readonly]),select,textarea')?.focus();
+  });
+  el.addEventListener('hidden.bs.modal', () => { onClose?.(); el.remove(); });
+  inst.show();
+  return api_;
+}
+
+export function confirmar(msg, { titulo = 'Confirmar', ok = 'Confirmar', cls = 'btn-success' } = {}) {
+  return new Promise((resolve) => {
+    let resp = false;
+    modal({ title: titulo, size: 'md', body: `<p class="mb-0">${msg}</p>`, buttons: [{ label: ok, cls, onClick: () => { resp = true; } }], onClose: () => resolve(resp) });
+  });
+}
+
+/** Pede um texto (motivo, observação). Resolve null se cancelado. */
+export function pedirTexto(msg, { titulo = 'Informe', obrigatorio = true, valor = '', ok = 'Confirmar', min = 0 } = {}) {
+  return new Promise((resolve) => {
+    let resp = null;
+    modal({
+      title: titulo, size: 'md',
+      body: `<label class="form-label">${msg}</label><textarea class="form-control" rows="3">${esc(valor)}</textarea>`,
+      buttons: [{ label: ok, onClick: ({ body }) => {
+        const v = body.querySelector('textarea').value.trim();
+        if (obrigatorio && v.length < Math.max(min, 1)) { toast(min ? `Mínimo de ${min} caracteres.` : 'Campo obrigatório.', 'warning'); return false; }
+        resp = v;
+      } }],
+      onClose: () => resolve(resp),
+    });
+  });
+}
+
+// ---------- Formulários ----------
+export function lerForm(form) {
+  const o = {};
+  for (const el of form.querySelectorAll('[name]')) {
+    if (el.disabled && !el.dataset.sempre) continue;
+    const k = el.name;
+    if (el.type === 'checkbox') o[k] = el.checked ? 1 : 0;
+    else if (el.type === 'radio') { if (el.checked) o[k] = el.value; }
+    else if (el.type === 'number') o[k] = el.value === '' ? null : Number(el.value);
+    else if (el.multiple) o[k] = [...el.selectedOptions].map((x) => Number(x.value) || x.value);
+    else o[k] = el.value === '' ? null : el.value;
+  }
+  return o;
+}
+export function preencherForm(form, dados) {
+  for (const el of form.querySelectorAll('[name]')) {
+    const v = dados?.[el.name];
+    if (v === undefined) continue;
+    if (el.type === 'checkbox') el.checked = !!v;
+    else if (el.type === 'radio') el.checked = String(el.value) === String(v);
+    else if (el.multiple) [...el.options].forEach((o) => { o.selected = (v || []).map(String).includes(o.value); });
+    else if (el.type === 'date' && v) el.value = String(v).slice(0, 10);
+    else el.value = v ?? '';
+  }
+}
+
+/** Campo de formulário Bootstrap. */
+export function campo(name, label, { type = 'text', col = 'col-md-4', options, required, attrs = '', value = '', help } = {}) {
+  let input;
+  const req = required ? 'required' : '';
+  if (type === 'select') {
+    input = `<select name="${name}" class="form-select form-select-sm" ${req} ${attrs}>${options.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(value) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  } else if (type === 'textarea') {
+    input = `<textarea name="${name}" class="form-control form-control-sm" rows="3" ${req} ${attrs}>${esc(value)}</textarea>`;
+  } else if (type === 'checkbox') {
+    return `<div class="${col} d-flex align-items-end"><div class="form-check mb-1"><input type="checkbox" class="form-check-input" name="${name}" id="f-${name}-${Math.random().toString(36).slice(2, 7)}" ${value ? 'checked' : ''} ${attrs}><label class="form-check-label small">${label}</label></div></div>`;
+  } else {
+    input = `<input type="${type}" name="${name}" class="form-control form-control-sm" value="${esc(value)}" ${req} ${attrs}>`;
+  }
+  return `<div class="${col}"><label class="form-label">${label}${required ? ' *' : ''}</label>${input}${help ? `<div class="form-text">${help}</div>` : ''}</div>`;
+}
+export const opcoes = (lista, vazio = 'Selecione...', label = 'nome') => [['', vazio], ...(lista || []).map((x) => [x.id, x[label]])];
+
+/** Abas Bootstrap. abas = [{id, label, html}] */
+export function abas(lista, prefixo = 'aba') {
+  const id = prefixo + Math.random().toString(36).slice(2, 7);
+  return `<ul class="nav nav-tabs mb-3" role="tablist">${lista.map((a, i) =>
+    `<li class="nav-item"><button class="nav-link ${i ? '' : 'active'}" data-bs-toggle="tab" data-bs-target="#${id}-${a.id}" type="button">${a.label}</button></li>`).join('')}</ul>
+    <div class="tab-content">${lista.map((a, i) => `<div class="tab-pane fade ${i ? '' : 'show active'}" id="${id}-${a.id}" data-aba="${a.id}">${a.html}</div>`).join('')}</div>`;
+}
+
+export function debounce(fn, ms = 350) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+export const pode = (perm) => {
+  const l = state.me?.permissoes || [];
+  return l.includes('*') || l.includes(perm) || l.some((p) => perm.startsWith(p + '.') || p.startsWith(perm + '.'));
+};
+
+export function h(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+// ---------- Tabela padrão ----------
+/**
+ * Lista com filtro por coluna, ordenação, paginação, Limpar Filtros, Exportar para Excel e Imprimir.
+ * columns: [{k, l, t?, filter?: false | {options:[[v,l]]}, render?, cls?}]
+ */
+export class DataTable {
+  constructor(container, opts) {
+    this.c = typeof container === 'string' ? document.querySelector(container) : container;
+    this.o = { pageSize: 20, ...opts };
+    this.filtros = { ...(opts.filtrosIniciais || {}) };
+    this.sort = opts.sort || null;
+    this.dir = opts.dir || null;
+    this.page = 1;
+    this.pageSize = this.o.pageSize;
+    this.rows = [];
+    this.render();
+    this.load();
+  }
+
+  url(extra = {}) {
+    const base = typeof this.o.url === 'function' ? this.o.url() : this.o.url;
+    const p = { ...(this.o.params ? this.o.params() : {}), page: this.page, pageSize: this.pageSize, sort: this.sort, dir: this.dir, ...extra };
+    for (const [k, v] of Object.entries(this.filtros)) if (v !== '' && v != null) p['f_' + k] = v;
+    return base + (base.includes('?') ? '&' + qs(p).slice(1) : qs(p));
+  }
+
+  render() {
+    const cols = this.o.columns;
+    const filtro = (c) => {
+      if (c.filter === false) return '<th></th>';
+      const v = esc(this.filtros[c.k] ?? '');
+      if (c.filter?.options) {
+        return `<th><select class="form-select form-select-sm" data-f="${c.k}"><option value="">Todos</option>${c.filter.options.map(([ov, ol]) => `<option value="${esc(ov)}" ${String(ov) === String(this.filtros[c.k] ?? '') ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select></th>`;
+      }
+      return `<th><input class="form-control form-control-sm" data-f="${c.k}" value="${v}" placeholder="Filtrar"></th>`;
+    };
+    this.c.innerHTML = `<div class="card">
+      <div class="dt-toolbar">
+        ${this.o.toolbar || ''}
+        <div class="ms-auto d-flex gap-1">
+          <button class="btn btn-sm btn-outline-secondary" data-a="limpar"><i class="bi bi-funnel"></i> Limpar Filtros</button>
+          <button class="btn btn-sm btn-outline-success" data-a="excel"><i class="bi bi-file-earmark-excel"></i> Exportar para Excel</button>
+          <button class="btn btn-sm btn-outline-secondary" data-a="imprimir"><i class="bi bi-printer"></i> Imprimir</button>
+        </div>
+      </div>
+      <div class="dt-wrap"><table class="table table-sm table-hover dt">
+        <thead><tr>${this.o.actions ? '<th class="sem-ordem acoes"></th>' : ''}${cols.map((c) => `<th data-s="${c.k}" class="${c.t === 'money' || c.t === 'num' ? 'num' : ''}">${esc(c.l)} <i class="bi"></i></th>`).join('')}</tr>
+          <tr class="filtros">${this.o.actions ? '<th></th>' : ''}${cols.map(filtro).join('')}</tr></thead>
+        <tbody><tr><td colspan="${cols.length + 1}" class="vazio"><div class="spinner-border spinner-border-sm"></div> Carregando...</td></tr></tbody>
+      </table></div>
+      <div class="dt-footer">
+        <div class="info text-muted"></div>
+        <div class="d-flex align-items-center gap-2">
+          <select class="form-select form-select-sm" data-a="pagesize" style="width:auto">${[10, 20, 50, 100].map((n) => `<option ${n === this.pageSize ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <nav><ul class="pagination pagination-sm mb-0"></ul></nav>
+        </div>
+      </div></div>`;
+    const deb = debounce(() => { this.page = 1; this.load(); });
+    this.c.querySelectorAll('[data-f]').forEach((el) => {
+      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => { this.filtros[el.dataset.f] = el.value; deb(); });
+    });
+    this.c.querySelectorAll('th[data-s]').forEach((th) => th.addEventListener('click', () => {
+      const k = th.dataset.s;
+      this.dir = this.sort === k && this.dir === 'asc' ? 'desc' : 'asc';
+      this.sort = k;
+      this.load();
+    }));
+    this.c.querySelector('[data-a=limpar]').addEventListener('click', () => { this.filtros = {}; this.page = 1; this.render(); this.load(); });
+    this.c.querySelector('[data-a=excel]').addEventListener('click', () => this.exportar());
+    this.c.querySelector('[data-a=imprimir]').addEventListener('click', () => this.imprimir());
+    this.c.querySelector('[data-a=pagesize]').addEventListener('change', (e) => { this.pageSize = Number(e.target.value); this.page = 1; this.load(); });
+    this.o.onRender?.(this.c);
+  }
+
+  async load() {
+    const meu = (this._req = (this._req || 0) + 1);
+    try {
+      const d = await get(this.url());
+      if (meu !== this._req) return;
+      this.rows = d.rows;
+      this.total = d.total;
+      this.desenhar();
+      this.o.onLoad?.(d, this);
+    } catch (e) {
+      this.c.querySelector('tbody').innerHTML = `<tr><td colspan="99" class="vazio text-danger">${esc(e.message)}</td></tr>`;
+    }
+  }
+  reload() { return this.load(); }
+
+  desenhar() {
+    const cols = this.o.columns;
+    const tb = this.c.querySelector('tbody');
+    this.c.querySelectorAll('th[data-s] i').forEach((i) => { i.className = 'bi'; });
+    if (this.sort) {
+      const i = this.c.querySelector(`th[data-s="${this.sort}"] i`);
+      if (i) i.className = `bi bi-caret-${this.dir === 'asc' ? 'up' : 'down'}-fill`;
+    }
+    if (!this.rows.length) {
+      tb.innerHTML = `<tr><td colspan="${cols.length + 1}" class="vazio"><i class="bi bi-inbox fs-3 d-block"></i>Nenhum registro encontrado.</td></tr>`;
+    } else {
+      tb.innerHTML = this.rows.map((r, idx) => `<tr data-i="${idx}" class="${this.o.rowClick ? 'clicavel' : ''} ${this.o.rowClass ? this.o.rowClass(r) : ''}">
+        ${this.o.actions ? `<td class="acoes text-nowrap">${this.o.actions(r)}</td>` : ''}
+        ${cols.map((c) => `<td class="${c.t === 'money' || c.t === 'num' ? 'num' : ''} ${c.cls || ''}">${renderCell(c, r[c.k], r)}</td>`).join('')}</tr>`).join('');
+    }
+    tb.querySelectorAll('tr[data-i]').forEach((tr) => {
+      const row = this.rows[tr.dataset.i];
+      if (this.o.rowClick) tr.addEventListener('click', (e) => { if (!e.target.closest('button,a,input')) this.o.rowClick(row, this); });
+      tr.querySelectorAll('[data-acao]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); this.o.onAction?.[b.dataset.acao]?.(row, this, b); }));
+    });
+    const paginas = Math.max(1, Math.ceil(this.total / this.pageSize));
+    const ini = this.total ? (this.page - 1) * this.pageSize + 1 : 0;
+    this.c.querySelector('.info').textContent = `Mostrando ${ini}–${Math.min(this.page * this.pageSize, this.total)} de ${this.total.toLocaleString('pt-BR')} registros`;
+    const ul = this.c.querySelector('.pagination');
+    const item = (p, l, dis, at) => `<li class="page-item ${dis ? 'disabled' : ''} ${at ? 'active' : ''}"><a class="page-link" href="#" data-p="${p}">${l}</a></li>`;
+    const ps = [];
+    for (let p = Math.max(1, this.page - 2); p <= Math.min(paginas, this.page + 2); p++) ps.push(item(p, p, false, p === this.page));
+    ul.innerHTML = item(1, '«', this.page === 1) + item(this.page - 1, '‹', this.page === 1) + ps.join('') + item(this.page + 1, '›', this.page === paginas) + item(paginas, '»', this.page === paginas);
+    ul.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const p = Number(a.dataset.p);
+      if (p >= 1 && p <= paginas && p !== this.page) { this.page = p; this.load(); }
+    }));
+  }
+
+  colunasExport() {
+    return this.o.columns.filter((c) => c.export !== false).map((c) => ({ k: c.k, l: c.l, t: c.t === 'money' ? 'money' : c.t === 'date' ? 'date' : c.t === 'datetime' ? 'datetime' : c.t === 'bool' ? 'bool' : undefined }));
+  }
+
+  async exportar() {
+    await tentar(() => baixar(this.url({ export: 'xlsx', page: undefined, pageSize: undefined, cols: JSON.stringify(this.colunasExport()), title: this.o.title || 'Lista' }), 'lista.xlsx'));
+  }
+
+  async imprimir() {
+    const d = await tentar(() => get(this.url({ all: 1 })));
+    if (!d) return;
+    const cols = this.o.columns.filter((c) => c.export !== false);
+    const filtrosTxt = Object.entries(this.filtros).filter(([, v]) => v).map(([k, v]) => `${cols.find((c) => c.k === k)?.l || k}: ${v}`).join(' · ');
+    const w = window.open('', '_blank');
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(this.o.title || 'Lista')}</title>
+      <style>body{font:11px Arial,sans-serif;margin:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:3px 5px;text-align:left}th{background:#e8f5e9}.num{text-align:right}h1{font-size:16px;margin:0}small{color:#666}</style>
+      </head><body><h1>${esc(this.o.title || 'Lista')}</h1><small>${esc(state.me?.empresa?.nome || '')} · ${new Date().toLocaleString('pt-BR')} · ${d.rows.length} registros${filtrosTxt ? ' · ' + esc(filtrosTxt) : ''}</small>
+      <table><thead><tr>${cols.map((c) => `<th>${esc(c.l)}</th>`).join('')}</tr></thead><tbody>
+      ${d.rows.map((r) => `<tr>${cols.map((c) => `<td class="${c.t === 'money' || c.t === 'num' ? 'num' : ''}">${c.t === 'etapa' ? esc(state.me.etapas[r[c.k]]?.label || r[c.k]) : c.t === 'status' ? esc(ROTULOS.status[r[c.k]]?.[0] || r[c.k] || '') : c.t === 'bool' ? (r[c.k] ? 'Sim' : 'Não') : c.render && !c.t ? esc(String(c.render(r[c.k], r)).replace(/<[^>]+>/g, '')) : renderCell({ ...c, render: undefined }, r[c.k], r)}</td>`).join('')}</tr>`).join('')}
+      </tbody></table><script>window.onload=()=>{window.print()}<\/script></body></html>`);
+    w.document.close();
+  }
+}
+
+/** Botão de ação pequeno para a coluna de ações da tabela. */
+export const btnAcao = (acao, icone, titulo, cls = 'outline-secondary') =>
+  `<button class="btn btn-${cls} btn-sm py-0 px-1" data-acao="${acao}" title="${esc(titulo)}"><i class="bi ${icone}"></i></button>`;
+
+/** Tabela simples (somente leitura) a partir de um array. */
+export function tabelaSimples(colunas, linhas, { vazio = 'Nenhum registro.', cls = '' } = {}) {
+  if (!linhas?.length) return `<div class="vazio py-3">${vazio}</div>`;
+  return `<div class="table-responsive"><table class="table table-sm table-striped ${cls} mb-0"><thead><tr>${colunas.map((c) => `<th class="${c.t === 'money' || c.t === 'num' ? 'num' : ''}">${esc(c.l)}</th>`).join('')}</tr></thead>
+    <tbody>${linhas.map((r) => `<tr>${colunas.map((c) => `<td class="${c.t === 'money' || c.t === 'num' ? 'num' : ''} ${c.cls || ''}">${renderCell(c, r[c.k], r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+/** Campo de busca de cliente com autocompletar. onSelect(cliente) */
+export function buscaCliente(input, onSelect) {
+  const lista = document.createElement('div');
+  lista.className = 'list-group position-absolute w-100 shadow-sm';
+  lista.style.zIndex = 2000;
+  input.parentElement.style.position = 'relative';
+  input.parentElement.appendChild(lista);
+  const buscar = debounce(async () => {
+    const q = input.value.trim();
+    if (q.length < 2) { lista.innerHTML = ''; return; }
+    const rows = await get('/api/clientes/busca' + qs({ q })).catch(() => []);
+    lista.innerHTML = rows.map((c) => `<button type="button" class="list-group-item list-group-item-action py-1 small" data-id="${c.id}">${esc(c.nome)} <span class="text-muted">${fmt.doc(c.documento)}</span></button>`).join('')
+      || '<div class="list-group-item small text-muted">Nenhum cliente encontrado</div>';
+    lista.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      const c = rows.find((x) => x.id === Number(b.dataset.id));
+      input.value = c.nome;
+      lista.innerHTML = '';
+      onSelect(c);
+    }));
+  }, 250);
+  input.addEventListener('input', buscar);
+  input.addEventListener('blur', () => setTimeout(() => { lista.innerHTML = ''; }, 200));
+}
+
+export function titulo(conteudo, texto, icone, extra = '') {
+  conteudo.innerHTML = `<div class="page-title"><h2><i class="bi ${icone} text-agro"></i> ${texto}</h2><div class="ms-auto d-flex gap-2 flex-wrap">${extra}</div></div><div id="pagina"></div>`;
+  return conteudo.querySelector('#pagina');
+}
+
+/**
+ * Editor de lista (linhas repetidas) usado nas abas dos cadastros.
+ * campos: [{k, l, type?: 'text'|'number'|'date'|'checkbox'|'select', options?, w?}]
+ */
+export class EditorLista {
+  constructor(container, campos, itens = [], { novo = {}, rotuloAdd = 'Adicionar' } = {}) {
+    this.c = container;
+    this.campos = campos;
+    this.novo = novo;
+    this.c.innerHTML = `<div class="table-responsive"><table class="table table-sm align-middle mb-2"><thead><tr>${campos.map((f) => `<th style="${f.w ? 'width:' + f.w : ''}">${esc(f.l)}</th>`).join('')}<th></th></tr></thead><tbody></tbody></table></div>
+      <button type="button" class="btn btn-sm btn-outline-success" data-add><i class="bi bi-plus-lg"></i> ${esc(rotuloAdd)}</button>`;
+    this.tb = this.c.querySelector('tbody');
+    itens.forEach((i) => this.add(i));
+    this.c.querySelector('[data-add]').addEventListener('click', () => this.add({ ...this.novo }));
+  }
+  add(item) {
+    const tr = document.createElement('tr');
+    if (item.id) tr.dataset.id = item.id;
+    tr.innerHTML = this.campos.map((f) => {
+      const v = item[f.k] ?? '';
+      if (f.type === 'checkbox') return `<td class="text-center"><input type="checkbox" class="form-check-input" data-k="${f.k}" ${v ? 'checked' : ''}></td>`;
+      if (f.type === 'select') return `<td><select class="form-select form-select-sm" data-k="${f.k}">${f.options.map(([ov, ol]) => `<option value="${esc(ov)}" ${String(ov) === String(v) ? 'selected' : ''}>${esc(ol)}</option>`).join('')}</select></td>`;
+      return `<td><input type="${f.type || 'text'}" class="form-control form-control-sm" data-k="${f.k}" value="${esc(f.type === 'date' ? String(v).slice(0, 10) : v)}" ${f.type === 'number' ? 'step="any"' : ''} ${f.attrs || ''}></td>`;
+    }).join('') + '<td><button type="button" class="btn btn-sm btn-outline-danger py-0" data-rem>&times;</button></td>';
+    tr.querySelector('[data-rem]').addEventListener('click', () => tr.remove());
+    this.tb.appendChild(tr);
+  }
+  valores() {
+    return [...this.tb.querySelectorAll('tr')].map((tr) => {
+      const o = tr.dataset.id ? { id: Number(tr.dataset.id) } : {};
+      tr.querySelectorAll('[data-k]').forEach((el) => {
+        const f = this.campos.find((c) => c.k === el.dataset.k);
+        if (el.type === 'checkbox') o[el.dataset.k] = el.checked ? 1 : 0;
+        else if (f.type === 'number') o[el.dataset.k] = el.value === '' ? null : Number(el.value);
+        else o[el.dataset.k] = el.value === '' ? null : el.value;
+      });
+      return o;
+    });
+  }
+}
