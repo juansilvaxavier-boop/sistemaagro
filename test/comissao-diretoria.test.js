@@ -14,7 +14,7 @@ async function pedidoNaDiretoria() {
   const cond = op.condicoes.find((c) => c.forma_id === forma.id && c.parcelas === 3);
   const precos = await ana.get(`/api/cadastros/produtos/${op.produtos[0].id}/precos`);
   const { id } = await ana.post('/api/pedidos', {
-    cliente_id: cliente.id, forma_id: forma.id, condicao_id: cond.id, tipo_entrega: 'transportadora',
+    cliente_id: cliente.id, forma_id: forma.id, condicao_id: cond.id, tipo_entrega: 'transportadora', cultura: 'Café', area_ha: 50, origem_venda: 'Indicação de cliente',
     itens: [{ produto_id: op.produtos[0].id, embalagem_id: precos.embalagens[0].id, quantidade: 100 }],
   });
   await ana.post(`/api/pedidos/${id}/acao`, { acao: 'enviar' });
@@ -31,7 +31,7 @@ test('diretoria vê o pedido completo e altera a comissão por % ou valor', asyn
   const dir = await sessao('diretoria');
   const d = await dir.get(`/api/pedidos/${id}`);
   assert.ok(d.credito && 'limite_credito' in d.credito && 'vencido' in d.credito, 'situação de crédito do cliente');
-  assert.equal(d.comissoes_padrao.length, 2, 'padrão do cadastro: vendedor e supervisor');
+  assert.deepEqual(d.comissoes_padrao.map((c) => [c.papel, c.percentual]), [['vendedor', 25], ['supervisor', 3], ['gerente', 3]], 'regra: vendedor 25%, supervisor 3%, gerente 3%');
   assert.equal(d.comissoes_definidas, null);
   assert.equal(d.credito.limite_credito >= 0, true);
   assert.equal((await ana.get(`/api/pedidos/${id}`)).credito, undefined, 'vendedor não recebe a análise de crédito');
@@ -57,7 +57,7 @@ test('diretoria vê o pedido completo e altera a comissão por % ou valor', asyn
 
   // A aprovação mantém o que a diretoria definiu.
   await dir.post(`/api/pedidos/${id}/acao`, { acao: 'aprovar' });
-  const finais = await db.all('SELECT papel, percentual, valor FROM pedido_comissoes WHERE pedido_id = ? ORDER BY papel DESC', id);
+  const finais = await db.all(`SELECT papel, percentual, valor FROM pedido_comissoes WHERE pedido_id = ? AND papel IN ('vendedor','supervisor') ORDER BY papel DESC`, id);
   assert.deepEqual(finais.map((c) => c.percentual), [2.5, Math.round((100 / total) * 100 * 10000) / 10000]);
 });
 

@@ -63,6 +63,8 @@ const MENU = [
       { href: '#/cadastros/usuarios', l: 'Usuários e Permissões', i: 'bi-person-lock', p: 'cadastros.usuario' },
       { href: '#/cadastros/equipes', l: 'Equipes', i: 'bi-people-fill', p: 'cadastros.usuario' },
       { href: '#/cadastros/empresas', l: 'Empresas', i: 'bi-building', p: 'cadastros.empresa' },
+      { href: '#/cadastros/listas', l: 'Listas de opções', i: 'bi-list-ul', p: 'cadastros.listas' },
+      { href: '#/cadastros/comissao', l: 'Regras de comissão', i: 'bi-percent', p: 'config.comissao' },
     ],
   },
   {
@@ -124,6 +126,8 @@ const SUBTITULOS = {
   '#/cadastros/usuarios': 'Acesso ao sistema: perfil, permissões e dados que cada pessoa pode ver.',
   '#/cadastros/equipes': 'Equipes de venda e seus supervisores.',
   '#/cadastros/empresas': 'Empresas do grupo, CNPJ e endereço do remetente.',
+  '#/cadastros/listas': 'Opções dos campos de escolha: cargos, departamentos, culturas e origens da venda.',
+  '#/cadastros/comissao': 'Percentuais de gerente, supervisor e vendedor e a política comercial do pedido.',
   '#/rh': 'Visão geral do quadro: alertas, aniversariantes e custos.',
   '#/rh/colaboradores': 'Admissão, ficha completa e desligamento dos colaboradores.',
   '#/rh/ferias': 'Programação de férias dentro das regras da CLT.',

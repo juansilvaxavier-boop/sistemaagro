@@ -12,7 +12,7 @@ async function criarPedido(vend, extra = {}) {
   const cond = op.condicoes.find((c) => c.forma_id === forma.id && c.parcelas === 3);
   const precos = await vend.get(`/api/cadastros/produtos/${op.produtos[0].id}/precos`);
   return vend.post('/api/pedidos', {
-    cliente_id: cliente.id, forma_id: forma.id, condicao_id: cond.id, tipo_entrega: 'transportadora',
+    cliente_id: cliente.id, forma_id: forma.id, condicao_id: cond.id, tipo_entrega: 'transportadora', cultura: 'Café', area_ha: 50, origem_venda: 'Indicação de cliente',
     itens: [{ produto_id: op.produtos[0].id, embalagem_id: precos.embalagens[0].id, quantidade: 100 }],
     ...extra,
   });
@@ -50,7 +50,7 @@ test('pedido percorre todas as etapas até a entrega', async () => {
 
   assert.equal((await diretoria.post(`/api/pedidos/${id}/acao`, { acao: 'aprovar' })).destino, 'producao');
   const comissoes = await db.all('SELECT * FROM pedido_comissoes WHERE pedido_id = ?', id);
-  assert.equal(comissoes.length, 2, 'vendedor e supervisor recebem comissão padrão');
+  assert.deepEqual(comissoes.map((c) => c.papel).sort(), ['gerente', 'supervisor', 'vendedor'], 'vendedor, supervisor e gerente recebem pela regra');
 
   // Produção exige lote
   r = await producao.req('POST', `/api/pedidos/${id}/acao`, { acao: 'concluir' });
@@ -67,7 +67,7 @@ test('pedido percorre todas as etapas até a entrega', async () => {
   p = await db.get('SELECT * FROM pedidos WHERE id = ?', id);
   assert.equal(parcelas.length, 3);
   assert.equal(Math.round(parcelas.reduce((a, x) => a + x.valor, 0) * 100), Math.round(p.valor_total * 100));
-  assert.equal((await db.get('SELECT COUNT(*) AS n FROM comissoes WHERE pedido_id = ?', id)).n, 2);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM comissoes WHERE pedido_id = ?', id)).n, 3);
 
   r = await expedicao.req('POST', `/api/pedidos/${id}/acao`, { acao: 'embarcar' });
   assert.equal(r.status, 400);
@@ -80,7 +80,7 @@ test('pedido percorre todas as etapas até a entrega', async () => {
   assert.deepEqual(hist, ['venda', 'supervisao', 'analise', 'diretoria', 'producao', 'faturamento', 'expedicao', 'transito', 'entregue']);
 });
 
-test('vendedor sem equipe pula supervisão e pagamento à vista passa pela cobrança', async () => {
+test('equipe sem supervisor pula supervisão e pagamento à vista passa pela cobrança', async () => {
   const helena = await sessao('helena');
   const op = await helena.get('/api/cadastros/opcoes');
   const forma = op.formas.find((f) => f.tipo === 'a_vista');

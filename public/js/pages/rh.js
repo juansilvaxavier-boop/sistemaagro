@@ -62,44 +62,9 @@ function colaboradores(conteudo) {
   conteudo.querySelector('#btn-novo')?.addEventListener('click', () => editarColaborador(null, (id) => { t.reload(); abrirFicha(id, () => t.reload()); }));
 }
 
-function formColaborador() {
-  return abas([
-    { id: 'pessoal', label: 'Dados pessoais', html: `<div class="row g-2">
-      ${campo('nome', 'Nome completo', { col: 'col-md-6', required: true })}${campo('cpf', 'CPF', { col: 'col-md-3' })}${campo('rg', 'RG', { col: 'col-md-3' })}
-      ${campo('data_nascimento', 'Nascimento', { type: 'date', col: 'col-md-3' })}${campo('sexo', 'Sexo', { type: 'select', col: 'col-md-2', options: [['', '—'], ['F', 'Feminino'], ['M', 'Masculino'], ['O', 'Outro']] })}
-      ${campo('estado_civil', 'Estado civil', { type: 'select', col: 'col-md-3', options: [['', '—'], ...['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Viúvo(a)'].map((x) => [x, x])] })}
-      ${campo('escolaridade', 'Escolaridade', { type: 'select', col: 'col-md-4', options: [['', '—'], ...['Fundamental', 'Médio', 'Técnico', 'Superior', 'Pós-graduação'].map((x) => [x, x])] })}
-      ${campo('telefone', 'Telefone', { col: 'col-md-3' })}${campo('email', 'E-mail', { type: 'email', col: 'col-md-5' })}
-      ${campo('contato_emergencia', 'Contato de emergência', { col: 'col-md-4' })}${campo('telefone_emergencia', 'Telefone de emergência', { col: 'col-md-3' })}
-      ${campo('cep', 'CEP', { col: 'col-md-2' })}${campo('logradouro', 'Endereço', { col: 'col-md-5' })}${campo('numero', 'Nº', { col: 'col-md-1' })}${campo('bairro', 'Bairro', { col: 'col-md-4' })}
-      ${campo('cidade', 'Cidade', { col: 'col-md-4' })}${campo('uf', 'UF', { col: 'col-md-1' })}</div>` },
-    { id: 'contrato', label: 'Contrato', html: `<div class="row g-2">
-      ${campo('cargo', 'Cargo', { col: 'col-md-4' })}${campo('departamento', 'Departamento', { col: 'col-md-4', attrs: 'list="lista-deptos"' })}
-      <datalist id="lista-deptos">${O.departamentos.map((x) => `<option value="${esc(x)}">`).join('')}</datalist>
-      ${campo('gestor_id', 'Gestor direto', { type: 'select', col: 'col-md-4', options: opcoes(O.colaboradores, '—') })}
-      ${campo('tipo_contrato', 'Tipo de contrato', { type: 'select', col: 'col-md-3', options: opts(O.contratos) })}${campo('data_admissao', 'Admissão', { type: 'date', col: 'col-md-3' })}
-      ${campo('experiencia_dias', 'Experiência (dias)', { type: 'number', col: 'col-md-2', attrs: 'min="0" max="90"' })}${campo('jornada', 'Jornada', { col: 'col-md-4', attrs: 'placeholder="44 h semanais"' })}
-      ${pode('rh.gerir') ? campo('salario', 'Salário base (R$)', { type: 'number', col: 'col-md-3', attrs: 'min="0" step="0.01"' }) : ''}
-      ${campo('pis', 'PIS/NIS', { col: 'col-md-3' })}${campo('ctps', 'CTPS (nº/série)', { col: 'col-md-3' })}${campo('cnh', 'CNH', { col: 'col-md-3' })}
-      ${pode('rh.gerir') ? `${campo('banco', 'Banco', { col: 'col-md-3' })}${campo('agencia', 'Agência', { col: 'col-md-2' })}${campo('conta', 'Conta', { col: 'col-md-3' })}${campo('chave_pix', 'Chave PIX', { col: 'col-md-4' })}` : ''}
-      ${campo('observacao', 'Observação', { type: 'textarea', col: 'col-12' })}</div>` },
-  ], 'colab');
-}
-
 async function editarColaborador(id, aoSalvar) {
-  const c = id ? (await get(`/api/rh/colaboradores/${id}`)).colaborador : { tipo_contrato: 'clt', experiencia_dias: 90, data_admissao: hoje(), jornada: '44 h semanais' };
-  const m = modal({
-    title: id ? `Editar · ${esc(c.nome)}` : 'Admitir colaborador', size: 'xl',
-    body: `<form>${formColaborador()}</form>${id ? '<div class="form-text mt-2">Mudanças de cargo, departamento ou salário entram sozinhas no histórico do contrato.</div>' : ''}`,
-    buttons: [{ label: '<i class="bi bi-save"></i> Salvar', onClick: async ({ body }) => {
-      const d = lerForm(body.querySelector('form'));
-      const r = id ? await put(`/api/rh/colaboradores/${id}`, d) : await post('/api/rh/colaboradores', d);
-      toast(id ? 'Ficha atualizada.' : 'Colaborador admitido.');
-      await carregarOpcoes();
-      aoSalvar?.(id || r.id);
-    } }],
-  });
-  preencherForm(m.body.querySelector('form'), c);
+  const { abrirFormColaborador } = await import('../colaborador-form.js');
+  return abrirFormColaborador(id, { modo: 'rh', aoSalvar: async (novo) => { await carregarOpcoes(); aoSalvar?.(novo); } });
 }
 
 export async function abrirFicha(id, aoMudar) {

@@ -53,19 +53,21 @@ async function seed() {
     const u = (nome, login, perfil, extra = {}) => db.insert('usuarios', { nome, login, perfil, senha_hash: login === 'admin' ? A.hashSenha('admin123') : senha, email: `${login}@agroterra.com.br`, ...extra });
     const admin = await u('Administrador', 'admin', 'admin');
     const diretor = await u('Juan Xavier', 'diretoria', 'diretoria');
-    const sup1 = await u('Carlos Mendes', 'carlos', 'supervisor', { comissao_pct: 1 });
-    const sup2 = await u('Fernanda Lima', 'fernanda', 'supervisor', { comissao_pct: 1 });
+    const sup1 = await u('Carlos Mendes', 'carlos', 'supervisor');
+    const sup2 = await u('Fernanda Lima', 'fernanda', 'supervisor');
+    await u('Marcos Andrade', 'gerente', 'gerente');
     const eq1 = await db.insert('equipes', { nome: 'Equipe Cerrado', supervisor_id: sup1 });
     const eq2 = await db.insert('equipes', { nome: 'Equipe Sul de Minas', supervisor_id: sup2 });
+    const eq3 = await db.insert('equipes', { nome: 'Vendas diretas', supervisor_id: null });
     await db.run('UPDATE usuarios SET equipe_id = ? WHERE id = ?', eq1, sup1);
     await db.run('UPDATE usuarios SET equipe_id = ? WHERE id = ?', eq2, sup2);
     const vendedores = [
-      await u('Ana Souza', 'ana', 'vendedor', { equipe_id: eq1, comissao_pct: 3 }),
-      await u('Bruno Rocha', 'bruno', 'vendedor', { equipe_id: eq1, comissao_pct: 3 }),
-      await u('Diego Martins', 'diego', 'vendedor', { equipe_id: eq1, comissao_pct: 2.5 }),
-      await u('Elisa Campos', 'elisa', 'vendedor', { equipe_id: eq2, comissao_pct: 3 }),
-      await u('Gabriel Alves', 'gabriel', 'vendedor', { equipe_id: eq2, comissao_pct: 3 }),
-      await u('Helena Prado', 'helena', 'vendedor', { comissao_pct: 3.5 }), // sem equipe: pedidos pulam a supervisão
+      await u('Ana Souza', 'ana', 'vendedor', { equipe_id: eq1 }),
+      await u('Bruno Rocha', 'bruno', 'vendedor', { equipe_id: eq1 }),
+      await u('Diego Martins', 'diego', 'vendedor', { equipe_id: eq1 }),
+      await u('Elisa Campos', 'elisa', 'vendedor', { equipe_id: eq2 }),
+      await u('Gabriel Alves', 'gabriel', 'vendedor', { equipe_id: eq2 }),
+      await u('Helena Prado', 'helena', 'vendedor', { equipe_id: eq3 }), // equipe sem supervisor: pedidos pulam a supervisão
     ];
     const analista = await u('Igor Teixeira', 'analise', 'analista');
     const producao = await u('João Ferreira', 'producao', 'producao');
@@ -498,18 +500,20 @@ async function seed() {
     }
 
     // ---------- RH e DP ----------
-    const DEPTO = { admin: 'Administrativo', diretoria: 'Diretoria', supervisor: 'Comercial', vendedor: 'Comercial', analista: 'Crédito', producao: 'Produção',
+    const DEPTO = { admin: 'TI', diretoria: 'Diretoria', supervisor: 'Comercial', gerente: 'Comercial', vendedor: 'Comercial', analista: 'Crédito', producao: 'Produção',
       faturamento: 'Faturamento', expedicao: 'Logística', financeiro: 'Financeiro', rh: 'RH' };
-    const CARGO = { admin: 'Analista de sistemas', diretoria: 'Diretor geral', supervisor: 'Supervisor de vendas', vendedor: 'Consultor de vendas', analista: 'Analista de crédito',
-      producao: 'Encarregado de produção', faturamento: 'Assistente de faturamento', expedicao: 'Encarregado de expedição', financeiro: 'Analista financeiro', rh: 'Analista de RH/DP' };
-    const SAL = { admin: 6200, diretoria: 18000, supervisor: 7200, vendedor: 3400, analista: 4600, producao: 3900, faturamento: 3100, expedicao: 3300, financeiro: 5200, rh: 4800 };
+    const CARGO = { admin: 'Analista de sistemas', diretoria: 'Diretor geral', supervisor: 'Supervisor de vendas', gerente: 'Gerente comercial', vendedor: 'Vendedor externo', analista: 'Analista de crédito',
+      producao: 'Encarregado de produção', faturamento: 'Assistente de faturamento', expedicao: 'Encarregado de expedição', financeiro: 'Analista financeiro', rh: 'Analista de RH' };
+    const SAL = { admin: 6200, diretoria: 18000, supervisor: 7200, gerente: 11000, vendedor: 3400, analista: 4600, producao: 3900, faturamento: 3100, expedicao: 3300, financeiro: 5200, rh: 4800 };
     const colabDe = {};
-    for (const x of await db.all('SELECT id, nome, perfil, email FROM usuarios ORDER BY id')) {
+    for (const x of await db.all('SELECT id, nome, perfil, email, equipe_id FROM usuarios ORDER BY id')) {
       const adm = S.addDias(hojeIso, -int(120, 2400));
       const cid = await db.insert('colaboradores', {
         nome: x.nome, cpf: cpf(), cargo: CARGO[x.perfil], setor: DEPTO[x.perfil], departamento: DEPTO[x.perfil], email: x.email, telefone: `34${int(988000000, 999999999)}`,
         data_admissao: adm, data_nascimento: S.addDias(hojeIso, -int(22, 55) * 365 - int(0, 364)), empresa_id: emp1, tipo_contrato: 'clt', jornada: '44 h semanais',
         salario: SAL[x.perfil], cidade: 'Patrocínio', uf: 'MG', pis: String(int(10000000000, 19999999999)), sexo: pick(['F', 'M']), estado_civil: pick(['Solteiro(a)', 'Casado(a)']),
+        carga_horaria: 44, escala: '5x2', bate_ponto: ['diretoria', 'vendedor', 'gerente'].includes(x.perfil) ? 0 : 1, equipe_id: x.equipe_id,
+        funcao_comercial: ['vendedor', 'supervisor', 'gerente'].includes(x.perfil) ? x.perfil : null, celular: `34${int(988000000, 999999999)}`,
       });
       await db.run('UPDATE usuarios SET colaborador_id = ? WHERE id = ?', cid, x.id);
       colabDe[x.perfil] ||= [];
@@ -527,7 +531,7 @@ async function seed() {
       const cid = await db.insert('colaboradores', {
         nome, cpf: cpf(), cargo: i < 4 ? 'Operador de produção' : 'Auxiliar de expedição', setor: i < 4 ? 'Produção' : 'Logística', departamento: i < 4 ? 'Produção' : 'Logística',
         data_admissao: adm, data_nascimento: `${1975 + int(0, 25)}-${hojeIso.slice(5, 7)}-${String(int(1, 28)).padStart(2, '0')}`, empresa_id: emp1, tipo_contrato: 'clt',
-        jornada: '44 h semanais (6x1)', salario: 2350 + int(0, 6) * 50, gestor_id: colabDe.producao[0], cidade: 'Patrocínio', uf: 'MG', experiencia_dias: 90,
+        jornada: '44 h semanais (6x1)', carga_horaria: 44, escala: '6x1', bate_ponto: 1, salario: 2350 + int(0, 6) * 50, gestor_id: colabDe.producao[0], cidade: 'Patrocínio', uf: 'MG', experiencia_dias: 90,
       });
       operadores.push(cid);
       await db.insert('rh_historico', { colaborador_id: cid, data: adm, tipo: 'admissao', cargo: 'Operador de produção', salario: 2350, descricao: 'Admissão' });

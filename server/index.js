@@ -51,6 +51,7 @@ function criarApp() {
   api.use('/propostas', require('./routes/propostas'));
   api.use('/rh', require('./routes/rh'));
   api.use('/assistente', require('./routes/assistente'));
+  api.use('/consulta', require('./routes/consulta'));
   api.use('/admin', require('./routes/admin'));
   app.use('/api', api);
   app.use('/api', (req, res) => res.status(404).json({ erro: 'Rota não encontrada.' }));
@@ -60,6 +61,7 @@ function criarApp() {
   app.use('/vendor/bootstrap-icons', express.static(path.join(nm, 'bootstrap-icons', 'font')));
   app.use('/vendor/chart.js', express.static(path.join(nm, 'chart.js', 'dist')));
   app.use('/vendor/fonte', express.static(path.join(nm, '@fontsource-variable', 'plus-jakarta-sans')));
+  app.use('/vendor/mapa-brasil', express.static(path.join(nm, '@svg-maps', 'brazil')));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
   // eslint-disable-next-line no-unused-vars

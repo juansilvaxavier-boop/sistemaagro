@@ -18,12 +18,14 @@
     "@anthropic-ai/sdk": "^1.2.0",
     "@electric-sql/pglite": "^0.5.11",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
+    "@svg-maps/brazil": "^2.0.0",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.2",
     "chart.js": "^4.6.1",
     "exceljs": "^4.4.0",
     "express": "^5.3.0",
     "multer": "^2.5.0",
+    "municipios-brasil": "^0.2.1",
     "pg": "^8.23.1"
   },
   "overrides": {

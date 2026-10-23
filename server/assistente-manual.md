@@ -4,7 +4,7 @@
 O Agroterra Sistema é o ERP da empresa. Ele cobre vendas, financeiro, estoque, CRM, cobrança, RH e DP, e chamados internos. O menu fica à esquerda e cada pessoa só vê os itens que o seu perfil ou as suas permissões liberam. A busca global abre com Ctrl+K (ou ⌘K): ela procura telas, pedidos e clientes. O sino do topo mostra as mensagens dos setores. O chat interno fica na caixinha do canto inferior direito.
 
 ## Painel inicial
-O Painel (#/dashboard) mostra os indicadores do setor da pessoa. No topo fica o filtro de **Período**: Este mês (padrão), Mês passado, 30 dias, 90 dias, Este ano ou Personalizado (de/até). Em **Mais filtros** dá para recortar por vendedor, equipe, forma de pagamento e UF de entrega. O período vale para vendas, faturamento, recebimentos, comissões e decisões; filas e saldos (a receber, vencido, pedidos em andamento) mostram a situação de hoje, respeitando os recortes. O filtro fica guardado durante a sessão, inclusive ao trocar de painel.
+O Painel (#/dashboard) mostra os indicadores do setor da pessoa. No topo fica o filtro de **Período**: Este mês (padrão), Mês passado, 30 dias, 90 dias, Este ano ou Personalizado (de/até). Abaixo dos gráficos fica o mapa **Vendas pelo Brasil** (estados ou cidades, por valor ou nº de pedidos). Em **Mais filtros** dá para recortar por vendedor, equipe, forma de pagamento e UF de entrega. O período vale para vendas, faturamento, recebimentos, comissões e decisões; filas e saldos (a receber, vencido, pedidos em andamento) mostram a situação de hoje, respeitando os recortes. O filtro fica guardado durante a sessão, inclusive ao trocar de painel.
 
 ## Perfis e o que cada um vê
 - **Vendedor**: cria pedidos e propostas, cuida dos próprios clientes no CRM. Vê só os dados que ele mesmo gerou: os seus pedidos, os seus clientes, as suas parcelas e as suas comissões.
@@ -31,6 +31,10 @@ O pedido passa por filas, uma por etapa:
 10. **Devolução** (#/fila/devolucao): trata as devoluções de mercadoria.
 
 Toda fila tem o botão **Filtros** acima da tabela. Ele abre um painel com período (data do pedido, entrada na fila e as datas da etapa, como prazo de produção, embarque e entrega), com atalhos Hoje, 7 dias, 30 dias, Este mês, Mês passado e Este ano. Também filtra por faixa de valor, dias na fila, cliente, CPF/CNPJ, vendedor, supervisor, equipe, forma de pagamento, UF, cidade, tipo de entrega, transportadora, nota e blacklist. Os filtros ativos aparecem como etiquetas que podem ser removidas uma a uma, ficam guardados enquanto a sessão estiver aberta e valem também para Exportar para Excel e Imprimir.
+
+Ao lançar o pedido, informe também a **cultura do cliente**, a **área em hectares** e **de onde veio a venda** (tráfego pago, prospecção ativa, prospecção automática, indicação, recompra da carteira etc.). Sem eles o pedido não pode ser enviado. Ao escolher o cliente, o sistema já sugere esses dados a partir do cadastro e do último pedido, e a área informada fica guardada no cadastro do cliente.
+
+**Política comercial e comissão:** pedido com algum item abaixo do preço de tabela (além do desconto máximo permitido) fica marcado como "Fora da política". A regra padrão é: gerente comercial 3% sobre toda venda, supervisor 3% sobre a equipe e vendedor 25% quando o pedido está dentro da política. Fora da política, a Diretoria define a comissão do vendedor. As regras ficam em Cadastros → Regras de comissão.
 
 As ações que exigem observação (devolver, cancelar, reprovar) pedem um motivo, que fica no histórico do pedido. Clicar num pedido de qualquer fila abre o detalhe com itens, histórico, comentários, arquivos e links de pagamento. Um pedido devolvido volta para a fila anterior com a observação visível.
 
@@ -76,6 +80,12 @@ Ficam em Início → Chamados Internos (#/chamados). Qualquer setor pode abrir u
 Ficam em #/relatorios: vendas, financeiro (contas a receber, a pagar e fluxo de caixa) e estoque. Os relatórios respeitam a abrangência de cada usuário e podem ser exportados.
 
 ## Cadastros
+**CEP e CNPJ automáticos:** em qualquer cadastro, digitar o CEP preenche rua, bairro, cidade e UF; digitar um CNPJ completo busca na Receita a razão social, o nome fantasia, o telefone e o endereço (só nos campos vazios).
+
+**Colaboradores** (Cadastros → Colaboradores ou RH → Colaboradores): dados pessoais (CPF, RG com órgão e UF, nascimento, estado civil, escolaridade, nome da mãe, PIS, CTPS, CNH), contato e endereço, vínculo (CLT, PJ, PF/autônomo, estágio, temporário, jovem aprendiz, sócio, terceirizado), cargo e departamento escolhidos em lista, equipe, gestor, carga horária, escala, se bate ponto, salário e dados bancários (só para quem gere o RH) e documentos. Cargo de vendedor exige a equipe; PJ exige CNPJ e razão social. Para vendedor, anexe o contrato assinado na aba Documentos.
+
+**Listas de opções** (Cadastros → Listas de opções): cargos (com departamento e função comercial), departamentos, culturas e origens da venda. Renomear atualiza os cadastros que usam a opção; desativar tira da lista sem apagar o histórico.
+
 Produtos, formas de pagamento, transportadoras, fornecedores, colaboradores, usuários e permissões, equipes e empresas ficam no grupo Cadastros. As permissões podem ser liberadas individualmente para cada usuário, além das que vêm do perfil.
 
 ## Segurança e conta
@@ -94,3 +104,5 @@ Produtos, formas de pagamento, transportadoras, fornecedores, colaboradores, usu
 - **"Onde vejo minhas comissões?"**: no painel inicial e em Relatórios. O Financeiro revisa as comissões em Revisar Comissões.
 - **"Como peço férias?"**: Meu RH → Nova solicitação → Férias.
 - **"Como falo com outro setor?"**: pelo chat (canto inferior direito), pelas mensagens do pedido ou abrindo um chamado interno.
+- **"Como mando um print no chat?"**: abra a conversa e cole com Ctrl+V na caixa de mensagem, arraste o arquivo para a conversa ou clique no clipe. Dá para enviar até 5 arquivos (imagens, PDF, planilhas, documentos) de até 4 MB; imagens grandes são reduzidas sozinhas.
+- **"Onde vejo as vendas por cidade?"**: no Painel, no card "Vendas pelo Brasil": Estados mostra o mapa colorido por estado e Cidades mostra bolhas por cidade, com ranking ao lado. Segue o período e os filtros do painel.

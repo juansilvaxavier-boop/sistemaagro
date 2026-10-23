@@ -7,6 +7,69 @@ let aberta = null; // usuário da conversa aberta
 let mensagens = [];
 let contatos = [];
 let timer;
+let pendentes = []; // arquivos escolhidos/colados ainda não enviados
+
+const MAX_BYTES = 4 * 1024 * 1024;
+const tamanho = (n) => (n > 1048576 ? `${(n / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const ICONES = { pdf: 'bi-file-earmark-pdf', doc: 'bi-file-earmark-word', docx: 'bi-file-earmark-word', xls: 'bi-file-earmark-excel', xlsx: 'bi-file-earmark-excel',
+  csv: 'bi-file-earmark-spreadsheet', ppt: 'bi-file-earmark-ppt', pptx: 'bi-file-earmark-ppt', zip: 'bi-file-earmark-zip', mp4: 'bi-file-earmark-play', mp3: 'bi-file-earmark-music' };
+const icone = (nome) => ICONES[String(nome).split('.').pop().toLowerCase()] || 'bi-file-earmark';
+const ehImagem = (mime) => /^image\/(png|jpeg|gif|webp)$/.test(mime || '');
+
+/** Reduz imagens grandes (prints e fotos) para caber no envio e carregar rápido. */
+async function prepararImagem(arquivo) {
+  if (!/^image\/(png|jpeg|webp)$/.test(arquivo.type)) return { arquivo };
+  const img = await createImageBitmap(arquivo).catch(() => null);
+  if (!img) return { arquivo };
+  const max = 1920;
+  const escala = Math.min(1, max / Math.max(img.width, img.height));
+  if (escala === 1 && arquivo.size <= 1.5 * 1024 * 1024) return { arquivo, largura: img.width, altura: img.height };
+  const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * escala), height: Math.round(img.height * escala) });
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.86));
+  if (!blob || blob.size >= arquivo.size) return { arquivo, largura: img.width, altura: img.height };
+  const nome = arquivo.name.replace(/\.(png|webp|jpe?g)$/i, '') + '.jpg';
+  return { arquivo: new File([blob], nome, { type: 'image/jpeg' }), largura: canvas.width, altura: canvas.height };
+}
+
+async function adicionarArquivos(lista) {
+  for (const original of lista) {
+    if (pendentes.length >= 5) { toast('Envie no máximo 5 arquivos por vez.', 'warning'); break; }
+    const nomeado = original.name ? original : new File([original], `print-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`, { type: original.type });
+    const p = await prepararImagem(nomeado);
+    if (p.arquivo.size > MAX_BYTES) { toast(`${p.arquivo.name} passa de 4 MB.`, 'warning'); continue; }
+    p.url = ehImagem(p.arquivo.type) ? URL.createObjectURL(p.arquivo) : null;
+    pendentes.push(p);
+  }
+  desenharPendentes();
+}
+
+function desenharPendentes() {
+  const box = $('#chat-pendentes');
+  box.classList.toggle('d-none', !pendentes.length);
+  box.innerHTML = pendentes.map((p, i) => `<div class="chat-pendente">${p.url ? `<img src="${p.url}" alt="">` : `<i class="bi ${icone(p.arquivo.name)}"></i>`}
+    <span class="text-truncate">${esc(p.arquivo.name)}<small>${tamanho(p.arquivo.size)}</small></span>
+    <button type="button" data-tirar="${i}" aria-label="Remover ${esc(p.arquivo.name)}"><i class="bi bi-x"></i></button></div>`).join('');
+  box.querySelectorAll('[data-tirar]').forEach((b) => b.addEventListener('click', () => {
+    const [p] = pendentes.splice(Number(b.dataset.tirar), 1);
+    if (p?.url) URL.revokeObjectURL(p.url);
+    desenharPendentes();
+  }));
+}
+function limparPendentes() {
+  pendentes.forEach((p) => p.url && URL.revokeObjectURL(p.url));
+  pendentes = [];
+  desenharPendentes();
+}
+
+function htmlAnexos(anexos = []) {
+  if (!anexos.length) return '';
+  return `<div class="chat-anexos">${anexos.map((a) => (ehImagem(a.mime)
+    ? `<a href="/api/chat/anexos/${a.id}" target="_blank" rel="noopener" class="chat-img" title="${esc(a.nome)}"><img src="/api/chat/anexos/${a.id}" alt="${esc(a.nome)}" loading="lazy"
+        ${a.largura && a.altura ? `width="${a.largura}" height="${a.altura}"` : ''}></a>`
+    : `<a href="/api/chat/anexos/${a.id}${/pdf|mp4|audio/.test(a.mime || '') ? '' : '?baixar=1'}" target="_blank" rel="noopener" class="chat-arq"><i class="bi ${icone(a.nome)}"></i>
+        <span class="text-truncate">${esc(a.nome)}<small>${tamanho(a.tamanho || 0)}</small></span><i class="bi bi-download ms-auto"></i></a>`)).join('')}</div>`;
+}
 
 export function alternar(forcar) {
   const painel = $('#chat');
@@ -30,6 +93,7 @@ export async function atualizarBadge() {
 
 async function listarContatos(filtro = '') {
   aberta = null;
+  limparPendentes();
   $('#chat-voltar').classList.add('d-none');
   $('#chat-form').classList.add('d-none');
   $('#chat-titulo').innerHTML = '<strong>Chat</strong> <small class="text-body-secondary">· converse com a equipe</small>';
@@ -88,7 +152,7 @@ function desenharConversa() {
     const sep = d !== dia ? `<div class="dia-chat">${fmt.date(d)}</div>` : '';
     dia = d;
     const minha = m.de_id === eu;
-    return `${sep}<div class="bolha ${minha ? 'minha' : 'dele'}">${esc(m.texto)}<span class="hora">${m.created_at.slice(11, 16)}${minha ? ` <i class="bi ${m.lida_em ? 'bi-check2-all' : 'bi-check2'}" title="${m.lida_em ? 'Lida' : 'Enviada'}"></i>` : ''}</span></div>`;
+    return `${sep}<div class="bolha ${minha ? 'minha' : 'dele'} ${m.anexos?.length ? 'com-anexo' : ''}">${htmlAnexos(m.anexos)}${m.texto ? esc(m.texto) : ''}<span class="hora">${m.created_at.slice(11, 16)}${minha ? ` <i class="bi ${m.lida_em ? 'bi-check2-all' : 'bi-check2'}" title="${m.lida_em ? 'Lida' : 'Enviada'}"></i>` : ''}</span></div>`;
   }).join('')}</div>` : `<div class="vazio"><i class="bi bi-chat-heart"></i>Comece a conversa com ${esc(aberta.nome.split(' ')[0])}.</div>`;
   corpo.scrollTop = corpo.scrollHeight;
 }
@@ -100,7 +164,7 @@ export function receber(m) {
     desenharConversa();
     get(`/api/chat/${m.de_id}?depois=${m.id}`).catch(() => {}); // marca como lida
   } else {
-    toast(m.texto.slice(0, 120), 'primary', m.de_nome);
+    toast((m.texto || (m.anexos?.length ? `📎 ${m.anexos.length} anexo(s)` : '')).slice(0, 120), 'primary', m.de_nome);
     if (!$('#chat').hidden && !aberta) listarContatos($('#chat-filtro')?.value || '');
   }
   atualizarBadge();
@@ -122,16 +186,53 @@ texto.addEventListener('keydown', (e) => {
 $('#chat-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const t = texto.value.trim();
-  if (!t || !aberta) return;
+  if ((!t && !pendentes.length) || !aberta) return;
+  const enviando = pendentes;
   texto.value = '';
   texto.style.height = 'auto';
+  const botao = $('#chat-form button:not([type=button])');
+  botao.disabled = true;
   try {
-    const m = await post(`/api/chat/${aberta.id}`, { texto: t });
+    let m;
+    if (enviando.length) {
+      const total = enviando.reduce((a, p) => a + p.arquivo.size, 0);
+      if (total > MAX_BYTES) throw new Error('Os anexos somam mais de 4 MB. Envie em partes.');
+      const fd = new FormData();
+      enviando.forEach((p) => fd.append('arquivos', p.arquivo, p.arquivo.name));
+      fd.append('texto', t);
+      fd.append('medidas', JSON.stringify(enviando.map((p) => ({ largura: p.largura, altura: p.altura }))));
+      const r = await fetch(`/api/chat/${aberta.id}/anexos`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With': 'agroterra' } });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.erro || 'Falha ao enviar o anexo.');
+      m = d;
+      limparPendentes();
+    } else {
+      m = await post(`/api/chat/${aberta.id}`, { texto: t });
+    }
     mensagens.push(m);
     desenharConversa();
   } catch (err) {
     texto.value = t;
     erro(err);
+  } finally {
+    botao.disabled = false;
   }
+});
+$('#chat-anexar').addEventListener('click', () => $('#chat-arquivo').click());
+$('#chat-arquivo').addEventListener('change', (e) => { adicionarArquivos([...e.target.files]); e.target.value = ''; });
+// Colar print (Ctrl+V) direto na caixa de mensagem.
+texto.addEventListener('paste', (e) => {
+  const arquivos = [...(e.clipboardData?.items || [])].filter((i) => i.kind === 'file').map((i) => i.getAsFile()).filter(Boolean);
+  if (arquivos.length) { e.preventDefault(); adicionarArquivos(arquivos); }
+});
+// Arrastar arquivos para a conversa.
+const painelChat = $('#chat');
+painelChat.addEventListener('dragover', (e) => { if (aberta && e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); painelChat.classList.add('soltando'); } });
+painelChat.addEventListener('dragleave', (e) => { if (!painelChat.contains(e.relatedTarget)) painelChat.classList.remove('soltando'); });
+painelChat.addEventListener('drop', (e) => {
+  painelChat.classList.remove('soltando');
+  if (!aberta || !e.dataTransfer?.files?.length) return;
+  e.preventDefault();
+  adicionarArquivos([...e.dataTransfer.files]);
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#chat').hidden && !document.querySelector('.modal.show')) alternar(false); });

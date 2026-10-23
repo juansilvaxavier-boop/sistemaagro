@@ -102,6 +102,8 @@ function resumo(d) {
     </div></div></div>
     <div class="col-md-6"><div class="card h-100"><div class="card-header py-1">Pagamento e entrega</div><div class="card-body small">
       <div><b>Forma:</b> ${esc(p.forma?.nome || '-')} · <b>Condição:</b> ${esc(p.condicao?.descricao || '-')}</div>
+      ${p.cultura || p.origem_venda ? `<div><b>Cultura:</b> ${esc(p.cultura || '-')}${p.area_ha ? ` · ${fmt.num(p.area_ha)} ha` : ''} · <b>Origem:</b> ${esc(p.origem_venda || '-')}</div>` : ''}
+      ${p.dentro_politica === 0 ? `<div><span class="badge text-bg-warning">Fora da política</span> <small class="text-muted">${esc(p.motivo_politica || '')}</small></div>` : ''}
       <div><b>Vendedor:</b> ${esc(p.vendedor)} ${p.supervisor ? '· <b>Supervisor:</b> ' + esc(p.supervisor) : ''} ${p.analista ? '· <b>Analista:</b> ' + esc(p.analista) : ''}</div>
       <div><b>Entrega:</b> ${esc(ROTULOS.tipo_entrega[p.tipo_entrega] || p.tipo_entrega)} ${p.transportadora ? '· ' + esc(p.transportadora) : ''}
         ${p.frete_valor != null ? `· Frete ${fmt.money(p.frete_valor)} (${p.frete_prazo_dias || '-'} dias, cot. ${esc(p.frete_codigo_cotacao || '-')})` : ''} ${p.frete_ignorado ? `<span class="badge text-bg-secondary">Cotação ignorada: ${esc(p.frete_motivo_ignorar)}</span>` : ''}</div>
@@ -225,7 +227,7 @@ function formFrete(d, editavel) {
 
 // ---------- Diretoria ----------
 const pct = (v) => `${Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
-const PAPEIS = { vendedor: 'Vendedor', supervisor: 'Supervisor', indicacao: 'Indicação', outro: 'Outro' };
+const PAPEIS = { vendedor: 'Vendedor', supervisor: 'Supervisor', gerente: 'Gerente', indicacao: 'Indicação', outro: 'Outro' };
 
 function painelDiretoria(d) {
   const p = d.pedido;
@@ -249,6 +251,7 @@ function painelDiretoria(d) {
       ${d.credito ? ind('Em aberto · vencido', `${fmt.money(cr.em_aberto)}`, `${fmt.money(cr.vencido)} vencido${cr.maior_atraso ? ` · até ${cr.maior_atraso} dias` : ''}`, cr.vencido > 0 ? 'perigo' : '') : ''}
       ${ind('Serasa', ultSerasa ? `Score ${esc(ultSerasa.score ?? '-')}` : 'Sem consulta', ultSerasa ? `${esc(ultSerasa.resultado || '')} · ${fmt.date(ultSerasa.created_at)}` : 'Consulte na aba Serasa', ultSerasa && ultSerasa.score < 500 ? 'alerta' : '')}
     </div>
+    ${p.dentro_politica === 0 ? `<div class="alert alert-warning py-2"><i class="bi bi-exclamation-diamond"></i> <b>Pedido fora da política comercial</b> — ${esc(p.motivo_politica || 'item abaixo da tabela')}. A comissão do vendedor foi sugerida pela regra de fora da política: confirme ou ajuste abaixo.</div>` : ''}
     ${estouro ? `<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle"></i> A exposição do cliente (${fmt.money(exposicao)}) passa do limite de crédito (${fmt.money(cr.limite_credito)}).</div>` : ''}
 
     <div class="card mb-3"><div class="card-header"><i class="bi bi-percent"></i> Comissão do pedido
@@ -271,6 +274,8 @@ function painelDiretoria(d) {
       <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-clipboard-check"></i> Condições e análise</div><div class="card-body small">
         <dl class="dir-dl">
           <dt>Pagamento</dt><dd>${esc(p.forma?.nome || '-')} · ${esc(p.condicao?.descricao || '-')}</dd>
+          <dt>Cultura</dt><dd>${esc(p.cultura || '—')}${p.area_ha ? ` · ${fmt.num(p.area_ha)} ha` : ''}</dd>
+          <dt>Origem da venda</dt><dd>${esc(p.origem_venda || '—')}</dd>
           <dt>Equipe</dt><dd>${esc(p.vendedor || '-')}${p.supervisor ? ` · Sup. ${esc(p.supervisor)}` : ''}${p.analista ? ` · Análise ${esc(p.analista)}` : ''}</dd>
           <dt>Entrega</dt><dd>${esc(ROTULOS.tipo_entrega[p.tipo_entrega] || p.tipo_entrega || '-')}${p.transportadora ? ` · ${esc(p.transportadora)}` : ''}${p.frete_valor != null ? ` · Frete ${fmt.money(p.frete_valor)} (${p.frete_prazo_dias || '-'} dias)` : ''}${p.frete_ignorado ? ` · cotação ignorada: ${esc(p.frete_motivo_ignorar || '')}` : ''}</dd>
           <dt>Local</dt><dd>${end ? `${esc(end.cidade || '')}/${esc(end.uf || '')}` : '—'}</dd>
@@ -301,7 +306,7 @@ function editorComissoes(d) {
   const p = d.pedido;
   const definidas = d.comissoes.length || d.comissoes_definidas;
   const linhas = definidas ? d.comissoes : d.comissoes_padrao;
-  const usuarios = state.opcoes.usuarios.filter((u) => ['vendedor', 'supervisor', 'diretoria', 'admin'].includes(u.perfil) || linhas.some((c) => c.usuario_id === u.id));
+  const usuarios = state.opcoes.usuarios.filter((u) => ['vendedor', 'supervisor', 'gerente', 'diretoria', 'admin'].includes(u.perfil) || linhas.some((c) => c.usuario_id === u.id));
   const padrao = Object.fromEntries(d.comissoes_padrao.map((c) => [`${c.usuario_id}:${c.papel}`, c.percentual]));
   const linha = (c) => `<tr>
     <td><select class="form-select form-select-sm" name="usuario_id" aria-label="Colaborador">${usuarios.map((u) => `<option value="${u.id}" ${u.id === c.usuario_id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></td>

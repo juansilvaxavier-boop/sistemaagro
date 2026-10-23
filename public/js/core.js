@@ -186,6 +186,7 @@ export function modal({ title, body = '', size = 'lg', buttons = [], onShow, onC
   }
   if (!botoes.length) rodape.remove();
   document.body.appendChild(el);
+  autoPreencher(corpo);
   const inst = new bootstrap.Modal(el, { backdrop: estatico ? 'static' : true });
   const api_ = { el, body: corpo, close: () => inst.hide(), footer: rodape };
   el.addEventListener('shown.bs.modal', () => {
@@ -195,6 +196,85 @@ export function modal({ title, body = '', size = 'lg', buttons = [], onShow, onC
   el.addEventListener('hidden.bs.modal', () => { onClose?.(); el.remove(); });
   inst.show();
   return api_;
+}
+
+// ---------- Preenchimento automático (CEP e CNPJ) ----------
+const soDigitos = (v) => String(v || '').replace(/\D/g, '');
+const campoDe = (escopo, nome) => escopo.querySelector(`[name="${nome}"], [data-k="${nome}"]`);
+
+async function buscarCep(cep) {
+  try { return await get(`/api/consulta/cep/${cep}`); } catch (e) {
+    if (e.status === 404) return null;
+    // Servidor sem acesso ao serviço: tenta direto do navegador (ViaCEP permite).
+    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then((x) => x.json()).catch(() => null);
+    return r && !r.erro ? { cep, logradouro: r.logradouro, bairro: r.bairro, cidade: r.localidade, uf: r.uf, complemento: r.complemento } : null;
+  }
+}
+
+function definir(el, valor, { soVazio = false } = {}) {
+  if (!el || valor == null || valor === '' || (soVazio && el.value)) return false;
+  if (el.tagName === 'SELECT' && ![...el.options].some((o) => o.value === String(valor))) el.add(new Option(valor, valor));
+  el.value = valor;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
+/**
+ * Liga CEP e CNPJ dentro de um formulário: CEP completo preenche logradouro, bairro, cidade e UF;
+ * CNPJ válido preenche razão social, fantasia, contato e endereço (só nos campos vazios).
+ * Campos por name ou data-k (linhas de endereço). Emite "cnpj-encontrado" com os dados.
+ */
+export function autoPreencher(raiz) {
+  if (raiz.dataset.autoPreencher) return;
+  raiz.dataset.autoPreencher = '1';
+  raiz.addEventListener('input', async (e) => {
+    const el = e.target;
+    const nome = el.name || el.dataset?.k;
+    if (nome !== 'cep' || !e.isTrusted) return;
+    const d = soDigitos(el.value).slice(0, 8);
+    if (el.value !== (d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d)) el.value = d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+    if (d.length !== 8 || el.dataset.ultimo === d) return;
+    el.dataset.ultimo = d;
+    const escopo = el.closest('tr') || el.closest('form') || raiz;
+    el.classList.add('buscando');
+    const r = await buscarCep(d).catch(() => null);
+    el.classList.remove('buscando');
+    if (!r) { el.classList.add('is-invalid'); toast('CEP não encontrado. Confira o número ou preencha o endereço.', 'warning'); return; }
+    el.classList.remove('is-invalid');
+    definir(campoDe(escopo, 'logradouro') || campoDe(escopo, 'endereco'), r.logradouro);
+    definir(campoDe(escopo, 'bairro'), r.bairro);
+    definir(campoDe(escopo, 'cidade'), r.cidade);
+    definir(campoDe(escopo, 'uf'), r.uf);
+    definir(campoDe(escopo, 'complemento'), r.complemento, { soVazio: true });
+    const num = campoDe(escopo, 'numero');
+    if (num && !num.value) num.focus();
+  });
+  raiz.addEventListener('change', async (e) => {
+    const el = e.target;
+    const nome = el.name || el.dataset?.k;
+    if (!['cnpj', 'documento'].includes(nome) || !e.isTrusted) return;
+    const d = soDigitos(el.value);
+    if (d.length !== 14 || el.dataset.ultimo === d) return;
+    el.dataset.ultimo = d;
+    let r;
+    try { r = await get(`/api/consulta/cnpj/${d}`); } catch (err) { if (err.status !== 503) toast(err.message, 'warning'); return; }
+    const escopo = el.closest('form') || raiz;
+    const preenchidos = [
+      definir(campoDe(escopo, 'razao_social') || campoDe(escopo, 'nome'), r.razao_social, { soVazio: true }),
+      definir(campoDe(escopo, 'nome_fantasia'), r.nome_fantasia, { soVazio: true }),
+      definir(campoDe(escopo, 'email'), r.email, { soVazio: true }),
+      definir(campoDe(escopo, 'telefone'), r.telefone, { soVazio: true }),
+      definir(campoDe(escopo, 'tipo_pessoa'), 'J', { soVazio: false }),
+    ];
+    if (campoDe(escopo, 'cep') && !campoDe(escopo, 'cep').value) {
+      for (const k of ['cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf']) preenchidos.push(definir(campoDe(escopo, k), r[k], { soVazio: true }));
+    }
+    raiz.dispatchEvent(new CustomEvent('cnpj-encontrado', { detail: r }));
+    const ok = preenchidos.some(Boolean);
+    const situacao = r.situacao && r.situacao.toUpperCase() !== 'ATIVA' ? ` · situação ${r.situacao}` : '';
+    toast(`${r.razao_social}${situacao}${ok ? ' — dados preenchidos pela Receita.' : ''}`, situacao ? 'warning' : 'success', 'CNPJ consultado');
+  });
 }
 
 export function confirmar(msg, { titulo = 'Confirmar', ok = 'Confirmar', cls = 'btn-success' } = {}) {

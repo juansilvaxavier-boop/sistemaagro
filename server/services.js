@@ -89,6 +89,8 @@ async function recalcularPedido(pedidoId) {
     `UPDATE pedidos SET valor_produtos = ?, valor_desconto = ?, valor_total = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
     r2(soma), desconto, r2(soma - desconto), pedidoId,
   );
+  const pol = await avaliarPolitica(pedidoId);
+  await db.run('UPDATE pedidos SET dentro_politica = ?, motivo_politica = ? WHERE id = ?', pol.dentro ? 1 : 0, pol.motivos.join('; ') || null, pedidoId);
 }
 
 async function registrarHistorico(pedidoId, { origem, destino, acao, observacao, usuarioId }) {
@@ -97,13 +99,54 @@ async function registrarHistorico(pedidoId, { origem, destino, acao, observacao,
   });
 }
 
-/** Comissões padrão do pedido: vendedor e supervisor com o % do cadastro do usuário. */
+/**
+ * Política comercial: o pedido está "de acordo" quando nenhum item (fora brindes) sai abaixo do preço de tabela
+ * além da tolerância configurada. Fora da política, a comissão do vendedor fica para a Diretoria decidir.
+ */
+async function avaliarPolitica(pedidoId) {
+  const C = require('./config');
+  const tol = Number(await C.obter('comissao.tolerancia_desconto_pct')) || 0;
+  const itens = await db.all(
+    `SELECT pr.nome, i.valor_tabela, i.valor_unitario FROM pedido_itens i JOIN produtos pr ON pr.id = i.produto_id
+      WHERE i.pedido_id = ? AND i.brinde = 0 AND i.valor_tabela > 0`, pedidoId,
+  );
+  const motivos = itens
+    .map((i) => ({ ...i, desc: (1 - i.valor_unitario / i.valor_tabela) * 100 }))
+    .filter((i) => i.desc > tol + 0.0001)
+    .map((i) => `${i.nome}: ${i.desc.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% abaixo da tabela`);
+  return { dentro: motivos.length === 0, motivos, tolerancia: tol };
+}
+
+/**
+ * Comissões padrão do pedido, pela regra configurada:
+ * gerente comercial (% sobre toda venda), supervisor (% sobre a equipe) e vendedor (% se dentro da política).
+ * Um % individual no cadastro do usuário (maior que zero) substitui o da regra.
+ */
 async function comissoesPadrao(pedido) {
+  const C = require('./config');
+  const pol = await avaliarPolitica(pedido.id);
+  const individual = async (uid) => db.get('SELECT nome, comissao_pct FROM usuarios WHERE id = ?', uid);
   const out = [];
-  for (const [uid, papel] of [[pedido.vendedor_id, 'vendedor'], [pedido.supervisor_id, 'supervisor']]) {
-    if (!uid) continue;
-    const u = await db.get('SELECT nome, comissao_pct FROM usuarios WHERE id = ?', uid);
-    out.push({ usuario_id: uid, usuario: u?.nome, papel, percentual: u?.comissao_pct || 0 });
+  if (pedido.vendedor_id) {
+    const u = await individual(pedido.vendedor_id);
+    const pct = pol.dentro ? (u?.comissao_pct > 0 ? u.comissao_pct : await C.obter('comissao.vendedor_pct')) : await C.obter('comissao.vendedor_fora_pct');
+    out.push({ usuario_id: pedido.vendedor_id, usuario: u?.nome, papel: 'vendedor', percentual: Number(pct) || 0, fora_politica: !pol.dentro });
+  }
+  if (pedido.supervisor_id) {
+    const u = await individual(pedido.supervisor_id);
+    out.push({ usuario_id: pedido.supervisor_id, usuario: u?.nome, papel: 'supervisor', percentual: Number(await C.obter('comissao.supervisor_pct')) || 0 });
+  }
+  // Gerente: o da equipe do vendedor; sem gerente na equipe, os configurados (ou todos com perfil Gerente).
+  const daEquipe = pedido.vendedor_id && (await db.get(
+    'SELECT e.gerente_id FROM usuarios v JOIN equipes e ON e.id = v.equipe_id WHERE v.id = ? AND e.gerente_id IS NOT NULL', pedido.vendedor_id,
+  ))?.gerente_id;
+  let gerentes = daEquipe ? [daEquipe] : await C.obter('comissao.gerentes');
+  if (!gerentes?.length) gerentes = (await db.all(`SELECT id FROM usuarios WHERE perfil = 'gerente' AND ativo = 1 ORDER BY id`)).map((x) => x.id);
+  const pctGerente = Number(await C.obter('comissao.gerente_pct')) || 0;
+  for (const gid of gerentes) {
+    if (out.some((c) => c.usuario_id === gid)) continue;
+    const u = await db.get('SELECT nome FROM usuarios WHERE id = ? AND ativo = 1', gid);
+    if (u) out.push({ usuario_id: gid, usuario: u.nome, papel: 'gerente', percentual: pctGerente });
   }
   return out;
 }
@@ -363,7 +406,7 @@ module.exports = {
   ErroNegocio, hoje, addDias, diasEntre, r2,
   STATUS_PARCELA_SQL, SALDO_PARCELA_SQL, ABERTA_SQL,
   situacaoBlacklist, exigirClienteLiberado, simularSerasa, consultarSerasa,
-  recalcularPedido, registrarHistorico, garantirComissoes, comissoesPadrao, emitirNota, gerarParcelas,
+  recalcularPedido, registrarHistorico, garantirComissoes, comissoesPadrao, avaliarPolitica, emitirNota, gerarParcelas,
   saldoEstoque, movimentarEstoque, baixarEstoquePedido, estornarEstoquePedido,
   baixarParcela, prorrogarParcela, aplicarPenalidadeComissao, eventoParcela, registrarDevolucao,
 };

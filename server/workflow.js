@@ -103,6 +103,8 @@ async function validarPedidoCompleto(p) {
     throw new S.ErroNegocio(`Valor mínimo para a condição "${cond.descricao}" é R$ ${cond.valor_minimo.toFixed(2)}.`);
   }
   if (!p.endereco_entrega_id && p.tipo_entrega !== 'retirada') throw new S.ErroNegocio('Informe o endereço de entrega.');
+  const faltam = [!p.cultura && 'a cultura do cliente', !(p.area_ha > 0) && 'a área em hectares', !p.origem_venda && 'a origem da venda'].filter(Boolean);
+  if (faltam.length) throw new S.ErroNegocio(`Informe ${faltam.join(', ')} antes de enviar o pedido.`);
 }
 
 async function validarAnalise(p) {

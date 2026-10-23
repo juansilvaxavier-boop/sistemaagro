@@ -27,7 +27,7 @@ const LISTA_SQL = `
     p.prazo_producao, p.data_chegada_producao, p.data_embarque, p.data_entrega_prevista, p.data_entrega,
     t.nome AS transportadora, nf.numero AS nota, p.tipo_entrega, p.volumes, p.codigo_rastreio, p.codigo_origem,
     p.vendedor_id, p.supervisor_id, p.analista_id, v.equipe_id, p.forma_id, p.transportadora_id, f.tipo AS forma_tipo,
-    nf.data_emissao AS data_nota,
+    nf.data_emissao AS data_nota, p.dentro_politica, p.cultura, p.area_ha, p.origem_venda,
     (SELECT tipo FROM blacklist b WHERE b.cliente_id = c.id AND b.ativo = 1 ORDER BY CASE tipo WHEN 'bloqueio' THEN 0 ELSE 1 END LIMIT 1) AS blacklist,
     (SELECT COUNT(*) FROM mensagens m WHERE m.pedido_id = p.id) AS mensagens
   FROM pedidos p
@@ -43,7 +43,7 @@ const LISTA_SQL = `
   LEFT JOIN notas_fiscais nf ON nf.pedido_id = p.id AND nf.status <> 'cancelada'`;
 
 // Colunas de identificação filtradas pelo valor exato (não por "contém").
-const FILTROS_EXATOS = ['vendedor_id', 'supervisor_id', 'analista_id', 'equipe_id', 'forma_id', 'transportadora_id', 'forma_tipo', 'tipo_entrega', 'uf', 'blacklist'];
+const FILTROS_EXATOS = ['vendedor_id', 'supervisor_id', 'analista_id', 'equipe_id', 'forma_id', 'transportadora_id', 'forma_tipo', 'tipo_entrega', 'uf', 'blacklist', 'cultura', 'origem_venda', 'dentro_politica'];
 
 // Fila de uma etapa
 r.get('/fila/:etapa', async (req, res) => {
@@ -151,7 +151,7 @@ r.get('/:id', async (req, res) => {
 });
 
 // ---------- Criação e edição (etapa Vendedor) ----------
-const camposCabecalho = ['cliente_id', 'forma_id', 'condicao_id', 'observacao', 'endereco_entrega_id', 'tipo_entrega', 'vendedor_id'];
+const camposCabecalho = ['cliente_id', 'forma_id', 'condicao_id', 'observacao', 'endereco_entrega_id', 'tipo_entrega', 'vendedor_id', 'cultura', 'area_ha', 'origem_venda'];
 
 async function salvarItens(pedidoId, itens, formaId) {
   await db.run('DELETE FROM pedido_itens WHERE pedido_id = ?', pedidoId);
@@ -179,7 +179,14 @@ async function validarVendedor(req, vendedorId) {
   if (v && !(await db.get(`SELECT 1 AS ok WHERE ? IN (${v})`, Number(vendedorId)))) throw new ErroNegocio('Vendedor fora da sua equipe.', 403);
 }
 
-async function validarCabecalho(b) {
+async function validarCabecalho(b, atual = {}) {
+  const L = require('../listas');
+  if (b.cultura !== undefined) b.cultura = await L.exigir('cultura', b.cultura || null, { atual: atual.cultura, rotulo: 'Cultura' });
+  if (b.origem_venda !== undefined) b.origem_venda = await L.exigir('origem_venda', b.origem_venda || null, { atual: atual.origem_venda, rotulo: 'Origem da venda' });
+  if (b.area_ha !== undefined && b.area_ha !== null && b.area_ha !== '') {
+    b.area_ha = Number(String(b.area_ha).replace(',', '.'));
+    if (!(b.area_ha > 0 && b.area_ha <= 1000000)) throw new ErroNegocio('Área em hectares inválida.');
+  } else if (b.area_ha === '') b.area_ha = null;
   if (b.cliente_id && !await db.get('SELECT id FROM clientes WHERE id = ?', b.cliente_id)) throw new ErroNegocio('Cliente não encontrado.');
   if (b.condicao_id && b.forma_id && !await db.get('SELECT id FROM condicoes_pagamento WHERE id = ? AND forma_id = ?', b.condicao_id, b.forma_id)) {
     throw new ErroNegocio('Condição não pertence à forma de pagamento.');
@@ -204,6 +211,7 @@ r.post('/', A.exige('pedido.criar'), async (req, res) => {
     const pid = await db.insert('pedidos', { ...pick(b, camposCabecalho), numero, empresa_id: req.empresaId, supervisor_id: vend?.supervisor_id, etapa: 'venda' });
     await salvarItens(pid, b.itens || [], b.forma_id);
     await S.recalcularPedido(pid);
+    await aprenderDoPedido(pid);
     await S.registrarHistorico(pid, { origem: null, destino: 'venda', acao: 'Pedido criado', usuarioId: req.user.id });
     if (b.enviar) await W.executar(pid, 'enviar', req.user);
     return pid;
@@ -217,15 +225,26 @@ r.put('/:id', A.exige('pedido.criar'), async (req, res) => {
   const b = { ...req.body, cliente_id: req.body.cliente_id || p.cliente_id };
   if (E.abrangencia(req.user) === 'proprio') delete b.vendedor_id;
   if (b.vendedor_id) await validarVendedor(req, b.vendedor_id);
-  await validarCabecalho(b);
+  await validarCabecalho(b, p);
   await db.tx(async () => {
     await db.update('pedidos', p.id, pick(b, camposCabecalho), camposCabecalho);
+    await aprenderDoPedido(p.id);
     if (Array.isArray(b.itens)) await salvarItens(p.id, b.itens, b.forma_id ?? p.forma_id);
     await S.recalcularPedido(p.id);
     if (b.enviar) await W.executar(p.id, 'enviar', req.user);
   });
   res.json({ ok: true });
 });
+
+/** O pedido alimenta o cadastro do cliente: origem do lead e área da cultura, quando ainda não existem. */
+async function aprenderDoPedido(pedidoId) {
+  const p = await db.get('SELECT cliente_id, cultura, area_ha, origem_venda FROM pedidos WHERE id = ?', pedidoId);
+  if (!p) return;
+  if (p.origem_venda) await db.run(`UPDATE clientes SET origem_lead = ? WHERE id = ? AND (origem_lead IS NULL OR origem_lead = '')`, p.origem_venda, p.cliente_id);
+  if (p.cultura && p.area_ha && !(await db.get('SELECT id FROM cliente_areas WHERE cliente_id = ? AND tipo_cultivo = ?', p.cliente_id, p.cultura))) {
+    await db.insert('cliente_areas', { cliente_id: p.cliente_id, tipo_cultivo: p.cultura, area: p.area_ha, medida: 'ha' });
+  }
+}
 
 function pick(o, campos) {
   return Object.fromEntries(campos.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
@@ -275,7 +294,7 @@ r.put('/:id/comissoes', async (req, res) => {
     const uid = Number(c.usuario_id);
     const u = uid && await db.get('SELECT id, nome, comissao_pct FROM usuarios WHERE id = ? AND ativo = 1', uid);
     if (!u) throw new ErroNegocio('Colaborador inválido na comissão.');
-    const papel = ['vendedor', 'supervisor', 'indicacao', 'outro'].includes(c.papel) ? c.papel : 'outro';
+    const papel = ['vendedor', 'supervisor', 'gerente', 'indicacao', 'outro'].includes(c.papel) ? c.papel : 'outro';
     if (novas.some((x) => x.usuario_id === uid && x.papel === papel)) throw new ErroNegocio(`${u.nome} aparece duas vezes como ${papel}.`);
     let pct;
     if (c.valor != null && c.valor !== '' && (c.percentual == null || c.percentual === '')) {

@@ -78,6 +78,8 @@ r.get('/:id', A.exige('clientes', 'pedido.criar', 'crm', 'cobranca', 'fila'), as
   c.ref_comerciais = await db.all('SELECT * FROM cliente_ref_comerciais WHERE cliente_id = ?', id);
   c.ref_bancarias = await db.all('SELECT * FROM cliente_ref_bancarias WHERE cliente_id = ?', id);
   c.blacklist = await S.situacaoBlacklist(id);
+  // Último pedido (para sugerir cultura, área e origem no próximo).
+  c.ultimo_pedido = await db.get(`SELECT cultura, area_ha, origem_venda, created_at FROM pedidos WHERE cliente_id = ? AND etapa <> 'cancelado' ORDER BY id DESC LIMIT 1`, id);
   // LGPD: registra o acesso ao cadastro e esconde dados pessoais de quem não tem a permissão.
   await registrar('visualizar', 'clientes', id, null, null);
   mascararObjeto(req.user, c);
@@ -86,7 +88,7 @@ r.get('/:id', A.exige('clientes', 'pedido.criar', 'crm', 'cobranca', 'fila'), as
   res.json(c);
 });
 
-const camposCliente = ['tipo_pessoa', 'documento', 'nome', 'nome_fantasia', 'inscricao_estadual', 'inscricao_produtor', 'email', 'data_nascimento', 'vendedor_id', 'limite_credito', 'observacao', 'base_legal', 'consentimento_marketing', 'consentimento_em'];
+const camposCliente = ['tipo_pessoa', 'documento', 'nome', 'nome_fantasia', 'inscricao_estadual', 'inscricao_produtor', 'email', 'data_nascimento', 'vendedor_id', 'limite_credito', 'observacao', 'base_legal', 'consentimento_marketing', 'consentimento_em', 'origem_lead'];
 const filhos = {
   enderecos: ['cliente_enderecos', ['tipo', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'zona_rural', 'posta_restante', 'como_chegar', 'principal']],
   telefones: ['cliente_telefones', ['tipo', 'numero', 'contato', 'whatsapp']],

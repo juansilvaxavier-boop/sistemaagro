@@ -40,46 +40,50 @@ function crud(caminho, { tabela, campos, sql, permLer, permEditar, antesSalvar }
 crud('/empresas', { tabela: 'empresas', campos: ['nome', 'cnpj', 'uf', 'endereco', 'cidade', 'cep', 'telefone'], permLer: 'cadastros.empresa' });
 
 crud('/equipes', {
-  tabela: 'equipes', campos: ['nome', 'supervisor_id'], permLer: ['cadastros.usuario', 'relatorios'], permEditar: 'cadastros.usuario',
-  sql: `SELECT e.id, e.nome, e.supervisor_id, u.nome AS supervisor,
+  tabela: 'equipes', campos: ['nome', 'supervisor_id', 'gerente_id'], permLer: ['cadastros.usuario', 'relatorios'], permEditar: 'cadastros.usuario',
+  sql: `SELECT e.id, e.nome, e.supervisor_id, u.nome AS supervisor, e.gerente_id, (SELECT g.nome FROM usuarios g WHERE g.id = e.gerente_id) AS gerente,
           (SELECT COUNT(*) FROM usuarios x WHERE x.equipe_id = e.id AND x.perfil = 'vendedor') AS vendedores
         FROM equipes e LEFT JOIN usuarios u ON u.id = e.supervisor_id`,
 });
 
 // ---------- Colaboradores ----------
-// O colaborador é a pessoa (funcionário); o usuário é o acesso dele ao sistema.
-const camposColaborador = ['nome', 'cpf', 'cargo', 'setor', 'email', 'telefone', 'data_admissao', 'empresa_id', 'observacao', 'ativo'];
+// O colaborador é a pessoa (funcionário); o usuário é o acesso dele ao sistema. As regras ficam em server/colaborador.js.
+const CB = require('../colaborador');
 r.get('/colaboradores', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) =>
   await responderLista(req, res, {
-    sql: `SELECT c.id, c.nome, c.cpf, c.cargo, c.setor, c.email, c.telefone, c.data_admissao, e.nome AS empresa, c.ativo,
-            u.id AS usuario_id, u.login, u.perfil
-          FROM colaboradores c LEFT JOIN empresas e ON e.id = c.empresa_id LEFT JOIN usuarios u ON u.colaborador_id = c.id`,
-    sort: 'nome', dir: 'asc',
+    sql: `SELECT c.id, c.nome, c.cpf, c.cargo, COALESCE(c.departamento, c.setor) AS setor, c.tipo_contrato, c.email, c.telefone, c.data_admissao, e.nome AS empresa, c.ativo,
+            eq.nome AS equipe, c.funcao_comercial, c.bate_ponto, u.id AS usuario_id, u.login, u.perfil,
+            (SELECT COUNT(*) FROM arquivos a WHERE a.colaborador_id = c.id AND a.categoria = 'Contrato') AS contratos
+          FROM colaboradores c LEFT JOIN empresas e ON e.id = c.empresa_id LEFT JOIN usuarios u ON u.colaborador_id = c.id LEFT JOIN equipes eq ON eq.id = c.equipe_id`,
+    sort: 'nome', dir: 'asc', exact: ['tipo_contrato', 'ativo'],
   }),
 );
 r.get('/colaboradores/:id', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) => {
   const c = await db.get('SELECT * FROM colaboradores WHERE id = ?', Number(req.params.id));
   if (!c) throw new ErroNegocio('Colaborador não encontrado', 404);
+  if (!A.can(req.user, 'rh.gerir') && !A.can(req.user, 'rh.folha')) for (const k of CB.RESTRITOS) delete c[k];
   c.usuario = await db.get('SELECT id, login, perfil, ativo FROM usuarios WHERE colaborador_id = ?', c.id);
+  c.documentos = await db.all(`SELECT id, categoria, descricao, nome_original, tamanho, created_at FROM arquivos WHERE colaborador_id = ? ORDER BY id DESC`, c.id);
+  require('../lgpd').mascararObjeto(req.user, c);
   res.json(c);
 });
-function dadosColaborador(b) {
-  const d = { ...b };
-  if (!String(d.nome || '').trim()) throw new ErroNegocio('Informe o nome do colaborador.');
-  if (d.cpf) {
-    d.cpf = String(d.cpf).replace(/\D/g, '');
-    if (!require('./clientes').validarCpf(d.cpf)) throw new ErroNegocio('CPF inválido.');
-  }
-  return d;
-}
-r.post('/colaboradores', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) =>
-  res.status(201).json({ id: await db.insert('colaboradores', dadosColaborador(req.body), camposColaborador) }));
+r.post('/colaboradores', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) => {
+  const d = await CB.dados(req.body || {}, req.user);
+  d.empresa_id ||= req.empresaId;
+  const id = await db.tx(async () => {
+    const novo = await db.insert('colaboradores', { ativo: 1, ...d }, CB.CAMPOS);
+    if (d.data_admissao) await db.insert('rh_historico', { colaborador_id: novo, data: d.data_admissao, tipo: 'admissao', cargo: d.cargo, departamento: d.departamento, salario: d.salario, descricao: 'Admissão', usuario_id: req.user.id });
+    return novo;
+  });
+  res.status(201).json({ id });
+});
 r.put('/colaboradores/:id', A.exige('cadastros.colaborador', 'cadastros.usuario'), async (req, res) => {
-  const id = Number(req.params.id);
+  const atual = await db.get('SELECT * FROM colaboradores WHERE id = ?', Number(req.params.id));
+  if (!atual) throw new ErroNegocio('Colaborador não encontrado', 404);
+  const d = await CB.dados(req.body || {}, req.user, atual);
   await db.tx(async () => {
-    await db.update('colaboradores', id, dadosColaborador(req.body), camposColaborador);
-    // Colaborador inativado perde o acesso ao sistema.
-    if (req.body.ativo === 0) await db.run('UPDATE usuarios SET ativo = 0 WHERE colaborador_id = ?', id);
+    await db.update('colaboradores', atual.id, d, CB.CAMPOS);
+    await CB.sincronizarUsuario(atual.id);
   });
   res.json({ ok: true });
 });
@@ -123,6 +127,19 @@ async function salvarUsuario(req, id) {
     else if (!require('../escopo').NIVEIS[b.abrangencia]) throw new ErroNegocio('Abrangência inválida.');
   }
   if (!id && !b.colaborador_id) throw new ErroNegocio('Selecione o colaborador. Cadastre-o antes em Colaboradores.');
+  // Vendedor sempre pertence a uma equipe (é ela que define supervisor, gerente e comissões).
+  {
+    const atual = id ? await db.get('SELECT perfil, equipe_id, colaborador_id FROM usuarios WHERE id = ?', id) : {};
+    const perfil = b.perfil ?? atual.perfil;
+    let equipe = b.equipe_id !== undefined ? b.equipe_id : atual.equipe_id;
+    if (!equipe && perfil === 'vendedor') {
+      const cid = b.colaborador_id || atual.colaborador_id;
+      equipe = cid ? (await db.get('SELECT equipe_id FROM colaboradores WHERE id = ?', Number(cid)))?.equipe_id : null;
+      if (equipe) b.equipe_id = equipe;
+    }
+    if (perfil === 'vendedor' && !equipe) throw new ErroNegocio('Vendedor precisa de uma equipe. Escolha a equipe do vendedor.');
+    if (b.comissao_pct === '' || b.comissao_pct === undefined) b.comissao_pct = b.comissao_pct === '' ? null : b.comissao_pct;
+  }
   if (b.colaborador_id) {
     const c = await db.get('SELECT * FROM colaboradores WHERE id = ?', Number(b.colaborador_id));
     if (!c) throw new ErroNegocio('Colaborador não encontrado.');
@@ -301,6 +318,21 @@ crud('/fornecedores', {
         FROM fornecedores f`,
 });
 
+// ---------- Listas de opções (cargo, departamento, cultura, origem da venda) ----------
+const L = require('../listas');
+const CFG = require('../config');
+r.get('/listas', async (req, res) => res.json({ tipos: L.TIPOS, funcoes: L.FUNCOES, listas: await L.todas({ incluirInativos: req.query.todos === '1' && A.can(req.user, 'cadastros.listas') }) }));
+r.post('/listas', A.exige('cadastros.listas'), async (req, res) => res.status(201).json({ id: await L.salvar(null, req.body || {}) }));
+r.put('/listas/:id', A.exige('cadastros.listas'), async (req, res) => res.json({ id: await L.salvar(req.params.id, req.body || {}) }));
+
+// ---------- Configurações (regras de comissão) ----------
+r.get('/config', A.exige('config.comissao'), async (req, res) => res.json(await CFG.todas()));
+r.put('/config', A.exige('config.comissao'), async (req, res) => {
+  const b = req.body || {};
+  await db.tx(async () => { for (const [k, v] of Object.entries(b)) await CFG.definir(k, v, req.user.id); });
+  res.json(await CFG.todas());
+});
+
 // ---------- Listas de apoio (combos) ----------
 r.get('/opcoes', async (req, res) => {
   const u = req.user;
@@ -319,6 +351,8 @@ r.get('/opcoes', async (req, res) => {
         WHERE p.ativo = 1 ORDER BY p.nome, e.quantidade`,
     ),
     usuarios: await db.all('SELECT id, nome, perfil, equipe_id FROM usuarios WHERE ativo = 1 ORDER BY nome'),
+    listas: await L.todas(),
+    colaborador: require('../colaborador').opcoes(),
     vendedores: await db.all(
       `SELECT id, nome, equipe_id FROM usuarios u WHERE ativo = 1 AND perfil IN ('vendedor','supervisor') AND ${require('../escopo').pessoas(u, 'u.id')} ORDER BY nome`,
     ),

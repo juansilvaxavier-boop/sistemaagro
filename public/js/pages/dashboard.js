@@ -1,4 +1,5 @@
 import { get, esc, fmt, state, titulo, qs, periodoAtalho } from '../core.js';
+import { mapaVendas } from '../mapa-brasil.js';
 
 const graficos = [];
 let ultimo;
@@ -144,7 +145,9 @@ function desenhar(el, d) {
     <div class="card-body p-0">${t.linhas.length ? `<table class="table table-sm mb-0"><thead><tr>${t.colunas.map((c, j) => `<th class="${t.tipos[j] === 'moeda' ? 'num' : ''}">${esc(c)}</th>`).join('')}</tr></thead>
     <tbody>${t.linhas.map((l) => `<tr>${l.map((v, j) => `<td class="${t.tipos[j] === 'moeda' ? 'num' : ''}">${t.tipos[j] === 'moeda' ? fmt.money(v) : t.tipos[j] === 'date' ? fmt.date(v) : t.tipos[j] === 'datetime' ? fmt.datetime(v) : esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
       : '<div class="vazio">Sem dados.</div>'}</div></div></div>`).join('');
-  el.innerHTML = `<div class="kpis mb-3">${cards}</div><div class="row g-3 mb-3">${charts}</div><div class="row g-3">${tabelas}</div>`;
+  const comMapa = d.filtro?.recortes && !['producao', 'expedicao', 'rh'].includes(d.perfil);
+  el.innerHTML = `<div class="kpis mb-3">${cards}</div><div class="row g-3 mb-3">${charts}</div>${comMapa ? '<div class="mb-3" id="mapa-vendas"></div>' : ''}<div class="row g-3">${tabelas}</div>`;
+  if (comMapa) mapaVendas(el.querySelector('#mapa-vendas'), paraQuery(lerFiltro()));
   const css = getComputedStyle(document.documentElement);
   const corTexto = css.getPropertyValue('--texto-2').trim();
   const corGrade = css.getPropertyValue('--borda').trim();

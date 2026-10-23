@@ -414,6 +414,7 @@ PAINEIS.rh = async (ctx) => {
   };
 };
 PAINEIS.admin = PAINEIS.diretoria;
+PAINEIS.gerente = PAINEIS.diretoria;
 
 function serieComoGrafico(s, nome) {
   return { labels: s.labels, series: [{ nome, dados: s.dados }] };
@@ -480,6 +481,47 @@ async function cardsModulos(perfil, ctx, user) {
   }
   return out;
 }
+
+// ---------- Mapa de vendas por estado e cidade ----------
+// Mesmo período e recortes do painel; respeita a abrangência de quem vê (vendedor: as próprias vendas).
+r.get('/mapa', async (req, res) => {
+  const G = require('../geo');
+  const ctx = contexto(req);
+  const per = noPeriodo(ctx, 'p.created_at');
+  const metrica = req.query.metrica === 'pedidos' ? 'pedidos' : 'valor';
+  const rows = await db.all(
+    `SELECT COALESCE(en.uf, ep.uf) AS uf, COALESCE(en.cidade, ep.cidade) AS cidade,
+            COUNT(*) AS pedidos, COUNT(DISTINCT p.cliente_id) AS clientes, IFNULL(SUM(p.valor_total),0) AS valor
+       FROM pedidos p
+       LEFT JOIN cliente_enderecos en ON en.id = p.endereco_entrega_id
+       LEFT JOIN cliente_enderecos ep ON ep.id = (SELECT x.id FROM cliente_enderecos x WHERE x.cliente_id = p.cliente_id ORDER BY x.principal DESC, x.id LIMIT 1)
+      WHERE p.empresa_id = ? AND ${E.vendas(req.user, 'p')} AND ${ctx.fx('p')} AND p.etapa NOT IN ('venda','cancelado') AND ${per.sql}
+      GROUP BY 1, 2`, ctx.emp, ...per.params,
+  );
+  const porUf = {};
+  const cidades = new Map();
+  let semLocal = { pedidos: 0, valor: 0 };
+  for (const x of rows) {
+    const uf = String(x.uf || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(uf)) { semLocal.pedidos += x.pedidos; semLocal.valor += x.valor; continue; }
+    const u = (porUf[uf] ||= { uf, pedidos: 0, clientes: 0, valor: 0 });
+    u.pedidos += x.pedidos; u.clientes += x.clientes; u.valor += x.valor;
+    const m = G.municipio(x.cidade, uf);
+    const chave = m ? `${m.ibge}` : `${G.normalizar(x.cidade)}|${uf}`;
+    const c = cidades.get(chave) || { cidade: m?.nome || x.cidade || '(sem cidade)', uf, lat: m?.lat ?? null, lng: m?.lng ?? null, pedidos: 0, clientes: 0, valor: 0 };
+    c.pedidos += x.pedidos; c.clientes += x.clientes; c.valor += x.valor;
+    cidades.set(chave, c);
+  }
+  const r2 = (o) => ({ ...o, valor: S.r2(o.valor) });
+  const lista = [...cidades.values()].map(r2).sort((a, b) => b[metrica] - a[metrica]);
+  res.json({
+    filtro: { de: ctx.de, ate: ctx.ate }, metrica,
+    total: r2(Object.values(porUf).reduce((a, u) => ({ pedidos: a.pedidos + u.pedidos, clientes: a.clientes + u.clientes, valor: a.valor + u.valor }), { pedidos: 0, clientes: 0, valor: 0 })),
+    estados: Object.values(porUf).map(r2).sort((a, b) => b[metrica] - a[metrica]),
+    cidades: lista.slice(0, 400),
+    sem_localizacao: r2(semLocal),
+  });
+});
 
 // Painéis sem relação com pedidos só usam o período.
 const SO_PERIODO = ['rh'];

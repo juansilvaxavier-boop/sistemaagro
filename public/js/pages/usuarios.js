@@ -14,8 +14,11 @@ function colaboradores(conteudo) {
   const t = new DataTable(pagina, {
     url: '/api/cadastros/colaboradores', title: 'Colaboradores', sort: 'nome', dir: 'asc',
     columns: [
-      { k: 'nome', l: 'Nome' }, { k: 'cpf', l: 'CPF', t: 'doc' }, { k: 'cargo', l: 'Cargo' }, { k: 'setor', l: 'Setor' }, { k: 'email', l: 'E-mail' },
-      { k: 'telefone', l: 'Telefone' }, { k: 'empresa', l: 'Empresa' }, { k: 'data_admissao', l: 'Admissão', t: 'date' },
+      { k: 'nome', l: 'Nome' }, { k: 'cpf', l: 'CPF', t: 'doc' }, { k: 'cargo', l: 'Cargo' }, { k: 'setor', l: 'Departamento' },
+      { k: 'tipo_contrato', l: 'Vínculo', filter: { options: Object.entries(state.opcoes.colaborador.vinculos) }, render: (v) => esc(state.opcoes.colaborador.vinculos[v] || v || '') },
+      { k: 'equipe', l: 'Equipe', render: (v, r) => (r.funcao_comercial === 'vendedor' && !v ? '<span class="badge text-bg-danger">sem equipe</span>' : esc(v || '')) },
+      { k: 'contratos', l: 'Contrato', render: (v, r) => (v ? '<i class="bi bi-file-earmark-check text-success" title="Contrato anexado"></i>' : r.funcao_comercial === 'vendedor' ? '<span class="badge text-bg-warning">pendente</span>' : '') },
+      { k: 'email', l: 'E-mail' }, { k: 'telefone', l: 'Telefone' }, { k: 'empresa', l: 'Empresa' }, { k: 'data_admissao', l: 'Admissão', t: 'date' },
       { k: 'login', l: 'Usuário', render: (v, r) => (v ? `<code>${esc(v)}</code> <small class="text-body-secondary">${esc(state.me.perfis[r.perfil] || '')}</small>` : '<span class="text-body-secondary">sem acesso</span>') },
       { k: 'ativo', l: 'Ativo', t: 'bool', filter: { options: [['1', 'Sim'], ['0', 'Não']] } },
     ],
@@ -30,28 +33,8 @@ function colaboradores(conteudo) {
 }
 
 async function abrirColaborador(id, aoSalvar) {
-  const c = id ? await get(`/api/cadastros/colaboradores/${id}`) : { ativo: 1, empresa_id: state.me.empresa.id };
-  const m = modal({
-    title: id ? `Colaborador: ${esc(c.nome)}` : 'Novo colaborador', size: 'lg',
-    body: `<form class="row g-3">
-      ${campo('nome', 'Nome completo', { col: 'col-md-8', required: true })}${campo('cpf', 'CPF', { col: 'col-md-4', attrs: 'inputmode="numeric"' })}
-      ${campo('cargo', 'Cargo', { col: 'col-md-4' })}
-      ${campo('setor', 'Setor', { type: 'select', col: 'col-md-4', options: [['', '—'], ...['Vendas', 'Supervisão', 'Análise de crédito', 'Diretoria', 'Financeiro', 'Cobrança', 'Produção', 'Faturamento', 'Expedição', 'Administração'].map((s) => [s, s])] })}
-      ${campo('data_admissao', 'Admissão', { type: 'date', col: 'col-md-4' })}
-      ${campo('email', 'E-mail', { type: 'email', col: 'col-md-6' })}${campo('telefone', 'Telefone', { col: 'col-md-6' })}
-      ${campo('empresa_id', 'Empresa', { type: 'select', col: 'col-md-6', options: opcoes(state.opcoes.empresas, '—') })}
-      ${campo('ativo', 'Ativo (inativar também bloqueia o usuário)', { type: 'checkbox', col: 'col-md-6' })}
-      ${campo('observacao', 'Observação', { type: 'textarea', col: 'col-12' })}
-      ${c.usuario ? `<div class="col-12"><div class="alert alert-light border mb-0"><i class="bi bi-person-lock"></i> Usuário de acesso: <code>${esc(c.usuario.login)}</code> · ${esc(state.me.perfis[c.usuario.perfil])}</div></div>` : ''}
-    </form>`,
-    buttons: [{ label: '<i class="bi bi-check2"></i> Salvar', onClick: async ({ body }) => {
-      const d = lerForm(body.querySelector('form'));
-      id ? await put(`/api/cadastros/colaboradores/${id}`, d) : await post('/api/cadastros/colaboradores', d);
-      toast('Colaborador salvo.');
-      aoSalvar?.();
-    } }],
-  });
-  preencherForm(m.body.querySelector('form'), c);
+  const { abrirFormColaborador } = await import('../colaborador-form.js');
+  return abrirFormColaborador(id, { modo: 'cadastros', aoSalvar });
 }
 
 // ---------- Usuários ----------
@@ -102,8 +85,8 @@ export async function abrirUsuario(id, aoSalvar, colaborador) {
     ${campo('colaborador_id', 'Colaborador', { type: 'select', col: 'col-md-6', required: true, options: [['', 'Selecione…'], ...livres.map((c) => [c.id, `${c.nome}${c.cargo ? ' · ' + c.cargo : ''}`])] })}
     ${campo('login', 'Login', { col: 'col-md-3', required: true, attrs: 'autocapitalize="none" pattern="[a-z0-9._-]{3,40}"' })}
     ${campo('perfil', 'Perfil de acesso', { type: 'select', col: 'col-md-3', options: Object.entries(perm.perfis) })}
-    ${campo('equipe_id', 'Equipe (vendedores)', { type: 'select', col: 'col-md-4', options: opcoes(state.opcoes.equipes, '—') })}
-    ${campo('comissao_pct', 'Comissão padrão (%)', { type: 'number', col: 'col-md-4', attrs: 'step="0.01" min="0" max="100"' })}
+    ${campo('equipe_id', 'Equipe <span class="text-danger" data-eq-obrig>*</span>', { type: 'select', col: 'col-md-4', options: opcoes(state.opcoes.equipes, '—'), help: 'Obrigatória para vendedor.' })}
+    ${campo('comissao_pct', 'Comissão individual (%)', { type: 'number', col: 'col-md-4', attrs: 'step="0.01" min="0" max="100" placeholder="Usa a regra de comissão"', help: 'Deixe vazio para usar a regra (Cadastros → Regras de comissão).' })}
     ${campo('ativo', 'Usuário ativo', { type: 'checkbox', col: 'col-md-4' })}
     ${campo('abrangencia', 'Dados que pode ver', { type: 'select', col: 'col-md-8', options: [['', 'Padrão do perfil'], ...Object.entries(perm.niveis)],
       help: 'Vendedor: só os próprios pedidos, clientes e parcelas. Supervisor: os da equipe que supervisiona. Demais setores: tudo da empresa.' })}
@@ -128,6 +111,7 @@ export async function abrirUsuario(id, aoSalvar, colaborador) {
       const f = body.querySelector('[data-dados]');
       if (!f.reportValidity()) return false;
       const d = lerForm(f);
+      if (d.perfil === 'vendedor' && !d.equipe_id) { toast('Vendedor precisa de uma equipe.', 'warning'); return false; }
       d.empresas = [...body.querySelectorAll('[data-empresa]:checked')].map((x) => Number(x.dataset.empresa));
       if (!d.empresas.length) { toast('Libere ao menos uma empresa.', 'warning'); return false; }
       d.personalizadas = body.querySelector('#personalizar').checked ? 1 : 0;
@@ -158,6 +142,9 @@ export async function abrirUsuario(id, aoSalvar, colaborador) {
   marcar(u.personalizadas ? u.permissoes : perm.padrao[u.perfil] || []);
   sincronizar();
   perfilSel.addEventListener('change', sincronizar);
+  const eqObrig = () => { const v = perfilSel.value === 'vendedor'; b.querySelector('[data-eq-obrig]').classList.toggle('d-none', !v); b.querySelector('[name=equipe_id]').required = v; };
+  perfilSel.addEventListener('change', eqObrig);
+  eqObrig();
   const abrPadrao = () => { b.querySelector('[data-abr-padrao]').textContent = `Padrão de ${perm.perfis[perfilSel.value]}: ${perm.niveis[perm.abrangencia[perfilSel.value]] || ''}`; };
   perfilSel.addEventListener('change', abrPadrao);
   abrPadrao();
@@ -169,6 +156,9 @@ export async function abrirUsuario(id, aoSalvar, colaborador) {
     const c = livres.find((x) => x.id === Number(e.target.value));
     const l = b.querySelector('[name=login]');
     if (c && !l.value) l.value = sugerirLogin(c.nome);
+    // O cargo do colaborador sugere o perfil de acesso.
+    const perfil = { vendedor: 'vendedor', supervisor: 'supervisor', gerente: 'gerente' }[c?.funcao_comercial];
+    if (perfil && !id) { perfilSel.value = perfil; perfilSel.dispatchEvent(new Event('change')); }
   });
   b.querySelector('[data-desbloquear]')?.addEventListener('click', async () => {
     await post(`/api/cadastros/usuarios/${id}/desbloquear`).catch(erro);

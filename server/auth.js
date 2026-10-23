@@ -11,6 +11,7 @@ const PERFIS = {
   diretoria: 'Diretoria',
   vendedor: 'Vendedor',
   supervisor: 'Supervisor',
+  gerente: 'Gerente comercial',
   analista: 'Análise',
   producao: 'Produção',
   faturamento: 'Faturamento',
@@ -48,7 +49,8 @@ const CATALOGO = [
   ]],
   ['Cadastros', [
     ['cadastros.produto', 'Produtos'], ['cadastros.forma', 'Formas de pagamento'], ['cadastros.transportadora', 'Transportadoras'],
-    ['cadastros.fornecedor', 'Fornecedores'], ['cadastros.colaborador', 'Colaboradores'], ['cadastros.usuario', 'Usuários, equipes e permissões'], ['cadastros.empresa', 'Empresas'],
+    ['cadastros.fornecedor', 'Fornecedores'], ['cadastros.colaborador', 'Colaboradores'], ['cadastros.listas', 'Listas de opções (cargos, departamentos, culturas, origens da venda)'],
+    ['config.comissao', 'Regras de comissão'], ['cadastros.usuario', 'Usuários, equipes e permissões'], ['cadastros.empresa', 'Empresas'],
   ]],
   ['Segurança e LGPD', [
     ['lgpd.dados', 'Ver CPF/CNPJ, telefone e e-mail completos'], ['lgpd.titular', 'Exportar e anonimizar dados de titulares'],
@@ -65,6 +67,10 @@ const PERMISSOES = {
     'dashboard', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
     'blacklist', 'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
+  gerente: [
+    'dashboard', 'dashboard.todos', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
+    'blacklist', 'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
+  ],
   analista: [
     'dashboard', 'chat', 'chamados', 'fila.analise', 'clientes', 'clientes.editar', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
@@ -72,7 +78,7 @@ const PERMISSOES = {
   producao: ['dashboard', 'chat', 'chamados', 'fila.producao', 'arquivos', 'estoque', 'estoque.movimentar', 'relatorios.estoque'],
   faturamento: ['dashboard', 'chat', 'chamados', 'estoque', 'etiquetas', 'fila.faturamento', 'clientes', 'clientes.historico', 'serasa', 'financeiro.notas', 'arquivos', 'relatorios.financeiro', 'lgpd.dados'],
   expedicao: ['dashboard', 'chat', 'chamados', 'fila.expedicao', 'fila.transito', 'cadastros.transportadora', 'arquivos', 'estoque', 'estoque.movimentar', 'etiquetas', 'relatorios.estoque'],
-  rh: ['dashboard', 'chat', 'chamados', 'rh', 'rh.gerir', 'rh.folha', 'cadastros.colaborador', 'lgpd.dados', 'arquivos'],
+  rh: ['dashboard', 'chat', 'chamados', 'rh', 'rh.gerir', 'rh.folha', 'cadastros.colaborador', 'cadastros.listas', 'lgpd.dados', 'arquivos'],
   financeiro: [
     'dashboard', 'chat', 'chamados', 'financeiro.pagar', 'cadastros.fornecedor', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'cobranca', 'financeiro.parcelas', 'financeiro.lancamentos', 'financeiro.comissoes',

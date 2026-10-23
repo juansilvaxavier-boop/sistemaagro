@@ -27,13 +27,10 @@ const upload = multer({
 });
 
 const gere = (u) => A.can(u, 'rh.gerir');
-const CAMPOS = [
-  'nome', 'cpf', 'rg', 'data_nascimento', 'sexo', 'estado_civil', 'escolaridade', 'email', 'telefone', 'cep', 'logradouro', 'numero', 'bairro', 'cidade', 'uf',
-  'cargo', 'setor', 'departamento', 'tipo_contrato', 'jornada', 'salario', 'data_admissao', 'experiencia_dias', 'gestor_id', 'empresa_id', 'pis', 'ctps', 'cnh',
-  'banco', 'agencia', 'conta', 'chave_pix', 'contato_emergencia', 'telefone_emergencia', 'observacao',
-];
+const CB = require('../colaborador');
+const CAMPOS = CB.CAMPOS;
 // Campos que só quem gere o RH vê (remuneração e dados bancários).
-const RESTRITOS = ['salario', 'banco', 'agencia', 'conta', 'chave_pix'];
+const RESTRITOS = CB.RESTRITOS;
 const ocultar = (u, obj) => { if (obj && !gere(u) && !A.can(u, 'rh.folha')) for (const k of RESTRITOS) delete obj[k]; return obj; };
 
 async function colaborador(id) {
@@ -186,28 +183,11 @@ r.get('/colaboradores/:id', A.exige('rh'), async (req, res) => {
   });
 });
 
-function dadosColaborador(b, req) {
-  const d = Object.fromEntries(CAMPOS.filter((k) => b[k] !== undefined).map((k) => [k, b[k] === '' ? null : b[k]]));
-  if (d.nome !== undefined && !String(d.nome || '').trim()) throw new ErroNegocio('Informe o nome.');
-  if (d.cpf) {
-    d.cpf = String(d.cpf).replace(/\D/g, '');
-    if (!require('./clientes').validarCpf(d.cpf)) throw new ErroNegocio('CPF inválido.');
-  }
-  if (d.tipo_contrato && !RH.TIPOS_CONTRATO[d.tipo_contrato]) throw new ErroNegocio('Tipo de contrato inválido.');
-  if (d.salario != null && !(Number(d.salario) >= 0)) throw new ErroNegocio('Salário inválido.');
-  if (d.uf) d.uf = String(d.uf).toUpperCase().slice(0, 2);
-  // Quem não vê os dados mascarados não pode sobrescrevê-los.
-  if (!A.can(req.user, 'lgpd.dados')) { delete d.cpf; delete d.email; delete d.telefone; }
-  d.setor = d.departamento ?? d.setor;
-  return d;
-}
-
 r.post('/colaboradores', A.exige('rh.gerir'), async (req, res) => {
-  const d = dadosColaborador(req.body || {}, req);
-  if (!d.nome) throw new ErroNegocio('Informe o nome.');
+  const d = await CB.dados(req.body || {}, req.user);
   d.empresa_id ||= req.empresaId;
   const id = await db.tx(async () => {
-    const novo = await db.insert('colaboradores', { ...d, ativo: 1 }, [...CAMPOS, 'ativo']);
+    const novo = await db.insert('colaboradores', { ativo: 1, ...d }, CAMPOS);
     if (d.data_admissao) await db.insert('rh_historico', { colaborador_id: novo, data: d.data_admissao, tipo: 'admissao', cargo: d.cargo, departamento: d.departamento, salario: d.salario, descricao: 'Admissão', usuario_id: req.user.id });
     return novo;
   });
@@ -216,9 +196,10 @@ r.post('/colaboradores', A.exige('rh.gerir'), async (req, res) => {
 
 r.put('/colaboradores/:id', A.exige('rh.gerir'), async (req, res) => {
   const c = await colaborador(req.params.id);
-  const d = dadosColaborador(req.body || {}, req);
+  const d = await CB.dados(req.body || {}, req.user, c);
   await db.tx(async () => {
     await db.update('colaboradores', c.id, d, CAMPOS);
+    await CB.sincronizarUsuario(c.id);
     // Mudança de salário, cargo ou departamento entra sozinha no histórico do contrato.
     const mudou = (k) => d[k] !== undefined && String(d[k] ?? '') !== String(c[k] ?? '');
     if (mudou('salario') || mudou('cargo') || mudou('departamento')) {
@@ -301,7 +282,7 @@ r.delete('/colaboradores/:id/:sub/:itemId', A.exige('rh.gerir'), async (req, res
 });
 
 // ---------- Documentos do colaborador ----------
-r.post('/colaboradores/:id/documentos', A.exige('rh.gerir'), upload.single('arquivo'), async (req, res) => {
+r.post('/colaboradores/:id/documentos', A.exige('rh.gerir', 'cadastros.colaborador'), upload.single('arquivo'), async (req, res) => {
   const c = await colaborador(req.params.id);
   if (!req.file) throw new ErroNegocio('Escolha o arquivo.');
   const id = await db.insert('arquivos', {
@@ -315,7 +296,7 @@ r.post('/colaboradores/:id/documentos', A.exige('rh.gerir'), upload.single('arqu
 r.get('/documentos/:id', async (req, res) => {
   const a = await db.get('SELECT * FROM arquivos WHERE id = ? AND colaborador_id IS NOT NULL', Number(req.params.id));
   if (!a) throw new ErroNegocio('Documento não encontrado', 404);
-  if (!A.can(req.user, 'rh') && a.colaborador_id !== req.user.colaborador_id) throw new ErroNegocio('Sem acesso a este documento.', 403);
+  if (!A.can(req.user, 'rh') && !A.can(req.user, 'cadastros.colaborador') && a.colaborador_id !== req.user.colaborador_id) throw new ErroNegocio('Sem acesso a este documento.', 403);
   await registrar('baixar_arquivo', 'arquivos', a.id, null, { nome: a.nome_original });
   const inline = req.query.inline === '1' && /^(image\/|application\/pdf)/.test(a.mime || '');
   res.setHeader('Content-Type', a.mime || 'application/octet-stream');
@@ -534,7 +515,7 @@ r.get('/folha/exportar', exigeFolha, async (req, res) => {
 
 r.get('/opcoes', A.exige('rh'), async (req, res) => {
   res.json({
-    contratos: RH.TIPOS_CONTRATO, ocorrencias: RH.TIPOS_OCORRENCIA, historico: RH.TIPOS_HISTORICO, beneficios: RH.TIPOS_BENEFICIO, exames: RH.TIPOS_EXAME,
+    contratos: CB.VINCULOS, ...CB.opcoes(), listas: await require('../listas').todas(), ocorrencias: RH.TIPOS_OCORRENCIA, historico: RH.TIPOS_HISTORICO, beneficios: RH.TIPOS_BENEFICIO, exames: RH.TIPOS_EXAME,
     solicitacoes: RH.TIPOS_SOLICITACAO, desligamentos: RH.TIPOS_DESLIGAMENTO,
     colaboradores: await db.all(`SELECT id, nome, cargo FROM colaboradores c WHERE COALESCE(c.empresa_id, ?) = ? AND c.ativo = 1 ORDER BY nome`, req.empresaId, req.empresaId),
     departamentos: (await db.all(`SELECT DISTINCT COALESCE(departamento, setor) AS d FROM colaboradores WHERE COALESCE(departamento, setor) IS NOT NULL ORDER BY 1`)).map((x) => x.d),

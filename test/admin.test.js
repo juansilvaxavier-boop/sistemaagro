@@ -26,7 +26,7 @@ test('colaborador → usuário com permissões individuais e primeiro acesso', a
   const { id: colab } = await admin.post('/api/cadastros/colaboradores', { nome: 'Paula Nogueira', cpf: '529.982.247-25', cargo: 'Assistente comercial', setor: 'Vendas', empresa_id: 1 });
   assert.equal((await admin.req('POST', '/api/cadastros/usuarios', { colaborador_id: colab, login: 'paula', senha: '123', perfil: 'vendedor' })).status, 400, 'senha fraca');
   const { id: uid } = await admin.post('/api/cadastros/usuarios', {
-    colaborador_id: colab, login: 'paula', senha: 'Provisoria1', perfil: 'vendedor', empresas: [1],
+    colaborador_id: colab, login: 'paula', senha: 'Provisoria1', perfil: 'vendedor', equipe_id: 1, empresas: [1],
     personalizadas: 1, permissoes: ['dashboard', 'clientes', 'chat'],
   });
   const u = await admin.get(`/api/cadastros/usuarios/${uid}`);

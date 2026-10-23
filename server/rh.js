@@ -4,7 +4,8 @@ const S = require('./services');
 
 const { ErroNegocio, r2 } = S;
 
-const TIPOS_CONTRATO = { clt: 'CLT', pj: 'PJ', estagio: 'Estágio', temporario: 'Temporário', aprendiz: 'Jovem aprendiz', autonomo: 'Autônomo' };
+const TIPOS_CONTRATO = { clt: 'CLT', pj: 'PJ (pessoa jurídica)', autonomo: 'PF / Autônomo (RPA)', estagio: 'Estágio', temporario: 'Temporário',
+  aprendiz: 'Jovem aprendiz', socio: 'Sócio / pró-labore', terceirizado: 'Terceirizado' };
 const TIPOS_OCORRENCIA = {
   falta: 'Falta injustificada', falta_justificada: 'Falta justificada', atestado: 'Atestado médico', atraso: 'Atraso/saída antecipada',
   hora_extra_50: 'Hora extra 50%', hora_extra_100: 'Hora extra 100%', banco_credito: 'Banco de horas: crédito', banco_debito: 'Banco de horas: débito',
@@ -39,7 +40,7 @@ function diasDeDireito(faltas) {
  * Situação: em_aquisicao | a_gozar | vence_logo (menos de 60 dias para o fim do concessivo) | vencida | gozadas.
  */
 async function periodosFerias(colab, hoje = S.hoje()) {
-  if (!colab?.data_admissao || colab.tipo_contrato === 'pj' || colab.tipo_contrato === 'autonomo') return [];
+  if (!colab?.data_admissao || ['pj', 'autonomo', 'socio', 'terceirizado'].includes(colab.tipo_contrato)) return [];
   const limiteFinal = colab.data_desligamento && colab.data_desligamento < hoje ? colab.data_desligamento : hoje;
   const ferias = await db.all(`SELECT * FROM rh_ferias WHERE colaborador_id = ? AND status IN ('solicitada','aprovada')`, colab.id);
   const faltas = await db.all(`SELECT data, COALESCE(dias, 1) AS dias FROM rh_ocorrencias WHERE colaborador_id = ? AND tipo = 'falta'`, colab.id);

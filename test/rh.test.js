@@ -20,11 +20,11 @@ test('ficha do colaborador, férias, ocorrências, folha e Meu RH', async () => 
 
   const admissao = S.addDias(S.hoje(), -800);
   const { id } = await rh.post('/api/rh/colaboradores', {
-    nome: 'Teste da Silva', cpf: '529.982.247-25', cargo: 'Operador', departamento: 'Produção', tipo_contrato: 'clt', salario: 2200, data_admissao: admissao,
+    nome: 'Teste da Silva', cpf: '529.982.247-25', cargo: 'Operador de produção', departamento: 'Produção', tipo_contrato: 'clt', salario: 2200, data_admissao: admissao,
   });
   let f = await rh.get(`/api/rh/colaboradores/${id}`);
   assert.equal(f.historico[0].tipo, 'admissao');
-  await rh.put(`/api/rh/colaboradores/${id}`, { salario: 2420, cargo: 'Operador líder' });
+  await rh.put(`/api/rh/colaboradores/${id}`, { salario: 2420, cargo: 'Encarregado de produção' });
   f = await rh.get(`/api/rh/colaboradores/${id}`);
   assert.equal(f.historico[0].tipo, 'mudanca_cargo', 'mudança de cargo e salário vai para o histórico');
   assert.match(f.historico[0].descricao, /2200 → 2420/);

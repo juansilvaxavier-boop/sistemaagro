@@ -35,6 +35,12 @@ export default async function (conteudo, { params: [id] }) {
       ${campo('endereco_entrega_id', 'Endereço de entrega', { type: 'select', col: ehVendedor ? 'col-md-9' : 'col-md-6', options: [['', 'Selecione o cliente']] })}
       ${campo('observacao', 'Observação', { col: 'col-12', value: ped?.observacao || '' })}
     </div></div></div>
+    <div class="card mb-3"><div class="card-header py-2"><i class="bi bi-flower1"></i> Lavoura e origem da venda <small class="text-muted fw-normal">· obrigatórios para enviar</small></div><div class="card-body"><div class="row g-2">
+      ${campo('cultura', 'Cultura do cliente', { type: 'select', col: 'col-md-4', required: true, options: [['', 'Selecione…'], ...o.listas.cultura.map((x) => [x.valor, x.valor]).concat(ped?.cultura && !o.listas.cultura.some((x) => x.valor === ped.cultura) ? [[ped.cultura, ped.cultura]] : [])], value: ped?.cultura || '' })}
+      ${campo('area_ha', 'Área da cultura (ha)', { type: 'number', col: 'col-md-3', required: true, attrs: 'min="0.01" step="0.01" inputmode="decimal"', value: ped?.area_ha ?? '' })}
+      ${campo('origem_venda', 'De onde veio a venda', { type: 'select', col: 'col-md-5', required: true, options: [['', 'Selecione…'], ...o.listas.origem_venda.map((x) => [x.valor, x.valor]).concat(ped?.origem_venda && !o.listas.origem_venda.some((x) => x.valor === ped.origem_venda) ? [[ped.origem_venda, ped.origem_venda]] : [])], value: ped?.origem_venda || '' })}
+      <div class="col-12 small text-muted" id="sugestao-lavoura"></div>
+    </div></div></div>
     <div class="card mb-3"><div class="card-header py-2 d-flex align-items-center">Itens do pedido
       <button type="button" class="btn btn-sm btn-outline-success ms-auto" id="btn-add-item"><i class="bi bi-plus-lg"></i> Adicionar item</button></div>
       <div class="card-body p-0"><div class="table-responsive"><table class="table table-sm itens-pedido mb-0">
@@ -62,6 +68,24 @@ export default async function (conteudo, { params: [id] }) {
     const sel = $('[name=endereco_entrega_id]');
     sel.innerHTML = cliente.enderecos.map((e) => `<option value="${e.id}">${esc(`${e.logradouro || ''}, ${e.numero || 'S/N'} - ${e.cidade}/${e.uf}${e.zona_rural ? ' (rural)' : ''}`)}</option>`).join('') || '<option value="">Cliente sem endereço</option>';
     if (enderecoId) sel.value = enderecoId;
+    // Sugestões automáticas: cultura e área do cadastro/último pedido; origem "recompra" para quem já comprou.
+    const sug = [];
+    const ult = cliente.ultimo_pedido;
+    const maior = [...(cliente.areas || [])].sort((a, b2) => (b2.area || 0) - (a.area || 0))[0];
+    const cult = $('[name=cultura]');
+    const area = $('[name=area_ha]');
+    const orig = $('[name=origem_venda]');
+    const temOpcao = (sel, v) => v && [...sel.options].some((x) => x.value === v);
+    if (!cult.value && temOpcao(cult, ult?.cultura || maior?.tipo_cultivo)) { cult.value = ult?.cultura || maior.tipo_cultivo; sug.push('cultura'); }
+    if (!area.value) {
+      const a = (cliente.areas || []).find((x) => x.tipo_cultivo === cult.value && x.medida === 'ha')?.area || (ult?.cultura === cult.value ? ult?.area_ha : null);
+      if (a) { area.value = a; sug.push('área'); }
+    }
+    if (!orig.value) {
+      const o2 = ult ? 'Cliente da carteira (recompra)' : cliente.origem_lead;
+      if (temOpcao(orig, o2)) { orig.value = o2; sug.push('origem'); }
+    }
+    $('#sugestao-lavoura').innerHTML = sug.length ? `<i class="bi bi-magic"></i> Preenchido a partir do cadastro e do último pedido do cliente (${sug.join(', ')}). Confira antes de enviar.` : '';
     const bl = cliente.blacklist;
     $('#cli-alerta').innerHTML = bl.bloqueio ? `<span class="text-danger"><i class="bi bi-shield-x"></i> Bloqueado: ${esc(bl.bloqueio.motivo)}</span>`
       : bl.alertas.length ? `<span class="text-warning"><i class="bi bi-shield-exclamation"></i> Alerta: ${esc(bl.alertas[0].motivo)}</span>` : '';
@@ -201,6 +225,9 @@ export default async function (conteudo, { params: [id] }) {
       tipo_entrega: $('[name=tipo_entrega]').value,
       endereco_entrega_id: Number($('[name=endereco_entrega_id]').value) || null,
       observacao: $('[name=observacao]').value || null,
+      cultura: $('[name=cultura]').value || null,
+      area_ha: $('[name=area_ha]').value === '' ? null : Number($('[name=area_ha]').value),
+      origem_venda: $('[name=origem_venda]').value || null,
       vendedor_id: $('[name=vendedor_id]') ? Number($('[name=vendedor_id]').value) || undefined : undefined,
       enviar,
       itens: [...tbody.querySelectorAll('tr')].map((tr) => ({
@@ -213,6 +240,10 @@ export default async function (conteudo, { params: [id] }) {
     };
     if (!dados.cliente_id) return toast('Selecione o cliente.', 'warning');
     if (!dados.itens.length) return toast('Inclua ao menos um item.', 'warning');
+    if (!dados.cultura || !(dados.area_ha > 0) || !dados.origem_venda) {
+      $('[name=cultura]').reportValidity() && $('[name=area_ha]').reportValidity() && $('[name=origem_venda]').reportValidity();
+      return toast('Informe a cultura, a área em hectares e de onde veio a venda.', 'warning');
+    }
     try {
       const r = edicao ? await put(`/api/pedidos/${id}`, dados) : await post('/api/pedidos', dados);
       toast(enviar ? 'Pedido salvo e enviado.' : `Pedido ${r.numero || ped.numero} salvo.`);

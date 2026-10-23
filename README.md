@@ -174,6 +174,16 @@ Telas de apoio: **Histórico de Compra de Cliente** (por CPF/CNPJ) e **Cliente (
 | **Ponto e Ocorrências** | Faltas, atestados, atrasos, horas extras 50%/100%, banco de horas, advertências, suspensões e elogios. |
 | **Folha** | Gera os eventos do mês (horas extras, faltas, comissões, descontos de benefícios e lançamentos), ajuste manual, fechamento da competência (trava as ocorrências) e exportação para a contabilidade. INSS, IRRF e FGTS ficam com a contabilidade. |
 
+### Automação e cadastros
+
+- **CEP e CNPJ:** em qualquer janela de cadastro, o CEP preenche o endereço e o CNPJ busca os dados da Receita (BrasilAPI, com ViaCEP de reserva), via `/api/consulta/cep/:cep` e `/api/consulta/cnpj/:cnpj`.
+- **Listas de opções** (*Cadastros → Listas de opções*): cargos (com departamento e função comercial), departamentos, culturas e origens da venda. Os campos de escolha só aceitam essas opções.
+- **Colaborador completo:** vínculo (CLT, PJ, PF/autônomo, estágio, temporário, aprendiz, sócio, terceirizado), cargo e departamento da lista, equipe (obrigatória para vendedor), carga horária, escala, ponto, documentos pessoais, endereço, dados bancários e contrato assinado. Regras em `server/colaborador.js`.
+- **Regras de comissão** (*Cadastros → Regras de comissão*): gerente 3% sobre toda venda, supervisor 3% e vendedor 25% quando o pedido está dentro da política (nenhum item abaixo da tabela além da tolerância); fora dela a Diretoria define. Perfil *Gerente comercial* e gerente por equipe.
+- **Pedido:** cultura, área (ha) e origem da venda obrigatórias para enviar, sugeridas a partir do cliente; o pedido atualiza a área e a origem no cadastro do cliente.
+- **Chat:** imagens, prints (Ctrl+V), PDFs e documentos, até 5 por mensagem; imagens grandes são reduzidas no navegador.
+- **Mapa de vendas** no Painel: estados (coroplético) e cidades (bolhas), com o período e os recortes do painel. Desenho do mapa: [@svg-maps/brazil](https://github.com/VictorCazanave/svg-maps) (CC BY 4.0); coordenadas das cidades: [municipios-brasil](https://github.com/gusnips/municipios-brasil) (MIT, base IBGE).
+
 ### Assistente de IA
 
 Botão *Assistente* no canto inferior direito. Explica como usar o sistema (a partir de `server/assistente-manual.md`) e consulta,

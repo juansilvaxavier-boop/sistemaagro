@@ -44,6 +44,7 @@ export async function abrirCliente(id, aoSalvar) {
     ${campo('email', 'E-mail', { type: 'email', col: 'col-md-4' })}
     ${state.me.usuario.perfil !== 'vendedor' ? campo('vendedor_id', 'Vendedor responsável', { type: 'select', col: 'col-md-4', options: opcoes(state.opcoes.usuarios.filter((u) => u.perfil === 'vendedor'), '—') }) : ''}
     ${campo('limite_credito', 'Limite de crédito', { type: 'number', col: 'col-md-4', attrs: 'step="0.01"' })}
+    ${campo('origem_lead', 'Como o cliente chegou', { type: 'select', col: 'col-md-4', options: [['', '—'], ...state.opcoes.listas.origem_venda.map((x) => [x.valor, x.valor]).concat(c.origem_lead && !state.opcoes.listas.origem_venda.some((x) => x.valor === c.origem_lead) ? [[c.origem_lead, c.origem_lead]] : [])] })}
     ${campo('observacao', 'Observações', { type: 'textarea', col: 'col-12' })}
     ${campo('base_legal', 'Base legal do tratamento (LGPD)', { type: 'select', col: 'col-md-6', options: [['execucao_contrato', 'Execução de contrato (vendas e entregas)'], ['protecao_credito', 'Proteção do crédito'], ['obrigacao_legal', 'Obrigação legal/fiscal'], ['consentimento', 'Consentimento do titular']] })}
     ${campo('consentimento_marketing', 'Cliente autorizou receber ofertas e comunicações de marketing', { type: 'checkbox', col: 'col-md-6' })}
@@ -100,7 +101,8 @@ export async function abrirCliente(id, aoSalvar) {
     { k: 'numero', l: 'Número' }, { k: 'contato', l: 'Contato' }, { k: 'whatsapp', l: 'WhatsApp', type: 'checkbox' },
   ], c.telefones, { novo: { tipo: 'Celular' }, rotuloAdd: 'Telefone' });
   editores.areas = new EditorLista(b.querySelector('[data-ed=areas]'), [
-    { k: 'tipo_cultivo', l: 'Tipo de cultivo' }, { k: 'qtd_pes', l: 'Quantidade de pés', type: 'number' }, { k: 'area', l: 'Área', type: 'number' },
+    { k: 'tipo_cultivo', l: 'Cultura', type: 'select', options: [['', 'Selecione…'], ...[...new Set([...state.opcoes.listas.cultura.map((x) => x.valor), ...c.areas.map((a) => a.tipo_cultivo).filter(Boolean)])].map((v) => [v, v])] },
+    { k: 'qtd_pes', l: 'Quantidade de pés', type: 'number' }, { k: 'area', l: 'Área', type: 'number' },
     { k: 'medida', l: 'Medida agrária', type: 'select', options: [['ha', 'Hectare'], ['alqueire', 'Alqueire'], ['m2', 'm²'], ['tarefa', 'Tarefa']] },
   ], c.areas, { novo: { medida: 'ha' }, rotuloAdd: 'Área' });
   editores.ref_comerciais = new EditorLista(b.querySelector('[data-ed=ref_comerciais]'), [
@@ -111,6 +113,20 @@ export async function abrirCliente(id, aoSalvar) {
     { k: 'banco', l: 'Banco' }, { k: 'agencia', l: 'Agência', w: '90px' }, { k: 'conta', l: 'Conta', w: '110px' }, { k: 'gerente', l: 'Gerente' }, { k: 'telefone', l: 'Telefone' },
     { k: 'data_checagem', l: 'Checagem', type: 'date' }, { k: 'checada', l: 'Checada', type: 'checkbox' }, { k: 'positivo', l: 'Positivo', type: 'checkbox' }, { k: 'observacao', l: 'Observações' },
   ], c.ref_bancarias, { rotuloAdd: 'Referência' });
+  // CNPJ consultado na Receita: completa o endereço e o telefone se ainda estiverem vazios.
+  b.addEventListener('cnpj-encontrado', ({ detail: r }) => {
+    const linha = [...b.querySelectorAll('[data-ed=enderecos] tbody tr')].find((tr) => !tr.querySelector('[data-k=cep]').value && !tr.querySelector('[data-k=logradouro]').value);
+    if (linha && r.cep) {
+      for (const k of ['cep', 'logradouro', 'numero', 'bairro', 'cidade', 'uf']) {
+        const el = linha.querySelector(`[data-k=${k}]`);
+        if (el && r[k]) el.value = k === 'cep' ? `${r.cep.slice(0, 5)}-${r.cep.slice(5)}` : r[k];
+      }
+      const rural = linha.querySelector('[data-k=zona_rural]');
+      if (rural) rural.checked = false;
+    }
+    const tel = [...b.querySelectorAll('[data-ed=telefones] tbody tr')].find((tr) => !tr.querySelector('[data-k=numero]').value);
+    if (tel && r.telefone) { tel.querySelector('[data-k=numero]').value = r.telefone; tel.querySelector('[data-k=tipo]').value = 'Comercial'; }
+  });
   if (!podeEditar) b.querySelectorAll('input,select,textarea,button[data-add],button[data-rem]').forEach((x) => { x.disabled = true; });
   if (c.dados_mascarados) {
     ['documento', 'email'].forEach((n) => { const x = b.querySelector(`[data-geral] [name=${n}]`); if (x) x.disabled = true; });

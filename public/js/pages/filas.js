@@ -28,13 +28,18 @@ const C = {
   volumes: { k: 'volumes', l: 'Volumes', t: 'num' },
   rastreio: { k: 'codigo_rastreio', l: 'Rastreio' },
   desde: { k: 'etapa_desde', l: 'Na etapa desde', t: 'datetime' },
+  politica: { k: 'dentro_politica', l: 'Política', filter: { options: [['1', 'Dentro'], ['0', 'Fora']] },
+    render: (v) => (v === 0 ? '<span class="badge text-bg-warning" title="Algum item abaixo da tabela: a Diretoria define a comissão">Fora</span>' : v === 1 ? '<span class="badge text-bg-success">Dentro</span>' : '') },
+  cultura: { k: 'cultura', l: 'Cultura' },
+  area: { k: 'area_ha', l: 'Área (ha)', t: 'num' },
+  origemVenda: { k: 'origem_venda', l: 'Origem da venda' },
 };
 
 const COLUNAS = {
   venda: ['numero', 'data', 'documento', 'cliente', 'forma', 'condicao', 'valor', 'vendedor', 'analista', 'dias'],
-  supervisao: ['numero', 'data', 'documento', 'cliente', 'forma', 'condicao', 'valor', 'vendedor', 'equipe', 'analista', 'dias'],
-  analise: ['numero', 'data', 'documento', 'cliente', 'uf', 'forma', 'condicao', 'valor', 'vendedor', 'supervisor', 'analista', 'dias'],
-  diretoria: ['numero', 'data', 'documento', 'cliente', 'uf', 'forma', 'condicao', 'valor', 'vendedor', 'supervisor', 'analista', 'dias'],
+  supervisao: ['numero', 'data', 'documento', 'cliente', 'cultura', 'forma', 'condicao', 'valor', 'politica', 'vendedor', 'equipe', 'analista', 'dias'],
+  analise: ['numero', 'data', 'documento', 'cliente', 'uf', 'cultura', 'area', 'forma', 'condicao', 'valor', 'vendedor', 'supervisor', 'analista', 'dias'],
+  diretoria: ['numero', 'data', 'documento', 'cliente', 'uf', 'cultura', 'forma', 'condicao', 'valor', 'politica', 'vendedor', 'supervisor', 'analista', 'dias'],
   cobranca: ['numero', 'data', 'documento', 'cliente', 'forma', 'condicao', 'valor', 'vendedor', 'dias'],
   producao: ['numero', 'documento', 'cliente', 'uf', 'vendedor', 'chegada', 'prazo', 'dias'],
   faturamento: ['numero', 'data', 'documento', 'cliente', 'cidade', 'uf', 'forma', 'valor', 'vendedor', 'nota', 'dias'],
@@ -77,6 +82,10 @@ function camposFiltro(etapa, { progressao = false } = {}) {
     ...(logistica ? [{ k: 'transportadora_id', l: 'Transportadora', tipo: 'select', options: op.transportadoras.map((t) => [t.id, t.nome]) },
       { k: 'nota', l: 'Nº da nota', tipo: 'texto', placeholder: 'Número da NF-e' }] : []),
     { k: 'blacklist', l: 'Blacklist', tipo: 'select', options: [['alerta', 'Com alerta'], ['bloqueio', 'Bloqueado']] },
+    { k: 'cultura', l: 'Cultura', tipo: 'select', options: op.listas.cultura.map((x) => [x.valor, x.valor]) },
+    { k: 'origem_venda', l: 'Origem da venda', tipo: 'select', options: op.listas.origem_venda.map((x) => [x.valor, x.valor]) },
+    { k: 'area_ha', l: 'Área (ha)', tipo: 'faixa' },
+    { k: 'dentro_politica', l: 'Política comercial', tipo: 'select', options: [['1', 'Dentro da política'], ['0', 'Fora da política']] },
   ];
 }
 
