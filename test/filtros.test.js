@@ -44,3 +44,34 @@ test('filtro não fura a abrangência do vendedor', async () => {
   const r = (await ana.get(`/api/pedidos/progressao?all=1&em_vendedor_id=${outro.vendedor_id}`)).rows;
   assert.equal(r.length, 0);
 });
+
+test('painéis respeitam período e recortes', async () => {
+  const dir = await sessao('diretoria');
+  const valor = (d, inicio) => d.cards.find((c) => c.label.startsWith(inicio))?.valor;
+  const mes = await dir.get('/api/dashboard');
+  assert.ok(mes.filtro.de.endsWith('-01') && mes.filtro.recortes);
+  assert.ok(mes.cards.some((c) => c.label === 'Vendas no mês'));
+
+  // Período longo soma mais que o mês; rótulo muda para "no período"
+  const ano = await dir.get('/api/dashboard?de=2020-01-01&ate=2030-12-31');
+  assert.ok(valor(ano, 'Vendas no período') >= valor(mes, 'Vendas no mês'));
+  assert.equal(ano.filtro.de, '2020-01-01');
+  // Datas invertidas são corrigidas; inválidas caem no padrão
+  assert.equal((await dir.get('/api/dashboard?de=2030-12-31&ate=2020-01-01')).filtro.de, '2020-01-01');
+  assert.equal((await dir.get('/api/dashboard?de=xx')).filtro.de, mes.filtro.de);
+
+  // Recorte por vendedor bate com a soma dos pedidos dele no período
+  const todos = (await dir.get('/api/pedidos/progressao?all=1')).rows;
+  const vid = todos.find((p) => p.vendedor === 'Ana Souza').vendedor_id;
+  const soAna = await dir.get(`/api/dashboard?de=2020-01-01&ate=2030-12-31&vendedores=${vid}`);
+  const esperado = todos.filter((p) => p.vendedor_id === vid && !['venda', 'cancelado'].includes(p.etapa)).reduce((a, p) => a + p.valor, 0);
+  assert.equal(valor(soAna, 'Vendas no período'), Math.round(esperado * 100) / 100);
+  assert.ok(valor(soAna, 'Contas a receber') <= valor(ano, 'Contas a receber'));
+
+  // Todos os painéis aceitam o filtro
+  for (const perfil of mes.perfis_disponiveis) {
+    const d = await dir.get(`/api/dashboard?perfil=${perfil}&de=2026-01-01&ate=2026-06-30&vendedores=${vid}&formas=1&ufs=MG&equipes=1`);
+    assert.equal(d.perfil, perfil);
+  }
+  assert.equal((await dir.get('/api/dashboard?perfil=rh')).filtro.recortes, false);
+});

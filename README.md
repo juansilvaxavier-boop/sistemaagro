@@ -94,6 +94,10 @@ depois da maior nota encontrada. Também pela linha de comando: `node scripts/im
 
 ## Recursos da interface
 
+**Painel com filtro:** período (este mês, mês passado, 30 e 90 dias, este ano ou personalizado) e recortes por vendedor, equipe,
+forma de pagamento e UF de entrega, em todos os painéis. O período vale para os indicadores de movimento; filas e saldos mostram
+a situação atual com os recortes. API: `/api/dashboard?de=&ate=&vendedores=&equipes=&formas=&ufs=`.
+
 Tema claro e escuro, menu recolhível, busca global (**Ctrl+K**) por pedido, cliente ou tela, caixinha fixa no canto inferior
 direito com o **chat interno** (leitura, quem está online, contador de não lidas) e o **assistente de IA**, *Meu perfil* com foto, avisos do navegador para mensagens e pedidos, e instalação como
 aplicativo (PWA) no computador ou no celular.

@@ -3,6 +3,9 @@
 ## Visão geral
 O Agroterra Sistema é o ERP da empresa. Ele cobre vendas, financeiro, estoque, CRM, cobrança, RH e DP, e chamados internos. O menu fica à esquerda e cada pessoa só vê os itens que o seu perfil ou as suas permissões liberam. A busca global abre com Ctrl+K (ou ⌘K): ela procura telas, pedidos e clientes. O sino do topo mostra as mensagens dos setores. O chat interno fica na caixinha do canto inferior direito.
 
+## Painel inicial
+O Painel (#/dashboard) mostra os indicadores do setor da pessoa. No topo fica o filtro de **Período**: Este mês (padrão), Mês passado, 30 dias, 90 dias, Este ano ou Personalizado (de/até). Em **Mais filtros** dá para recortar por vendedor, equipe, forma de pagamento e UF de entrega. O período vale para vendas, faturamento, recebimentos, comissões e decisões; filas e saldos (a receber, vencido, pedidos em andamento) mostram a situação de hoje, respeitando os recortes. O filtro fica guardado durante a sessão, inclusive ao trocar de painel.
+
 ## Perfis e o que cada um vê
 - **Vendedor**: cria pedidos e propostas, cuida dos próprios clientes no CRM. Vê só os dados que ele mesmo gerou: os seus pedidos, os seus clientes, as suas parcelas e as suas comissões.
 - **Supervisor**: aprova os pedidos da equipe na fila do Supervisor. Vê os dados dos vendedores da equipe que supervisiona.

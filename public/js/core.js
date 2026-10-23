@@ -564,7 +564,7 @@ export class DataTable {
 }
 
 const ATALHOS_PERIODO = [['hoje', 'Hoje'], ['7d', '7 dias'], ['30d', '30 dias'], ['mes', 'Este mês'], ['mes_ant', 'Mês passado'], ['ano', 'Este ano']];
-function periodoAtalho(id) {
+export function periodoAtalho(id) {
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const h = new Date();
   const dia = (n) => new Date(h.getFullYear(), h.getMonth(), h.getDate() + n);
@@ -572,6 +572,7 @@ function periodoAtalho(id) {
     case 'hoje': return [iso(h), iso(h)];
     case '7d': return [iso(dia(-6)), iso(h)];
     case '30d': return [iso(dia(-29)), iso(h)];
+    case '90d': return [iso(dia(-89)), iso(h)];
     case 'mes': return [iso(new Date(h.getFullYear(), h.getMonth(), 1)), iso(h)];
     case 'mes_ant': return [iso(new Date(h.getFullYear(), h.getMonth() - 1, 1)), iso(new Date(h.getFullYear(), h.getMonth(), 0))];
     default: return [iso(new Date(h.getFullYear(), 0, 1)), iso(h)];
