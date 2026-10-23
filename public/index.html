@@ -92,22 +92,29 @@
         <img src="/img/icone.svg" alt="" width="30" height="30"><span>Agroterra</span>
         <button class="btn btn-icon ms-auto d-none d-lg-inline-flex" id="btn-compactar" title="Recolher menu" aria-label="Recolher menu"><i class="bi bi-layout-sidebar"></i></button>
       </div>
+      <button class="btn-empresa" id="btn-empresa" type="button" title="Trocar empresa"><span class="emp-ico"><i class="bi bi-building"></i></span>
+        <span class="emp-txt text-truncate" id="empresa-nome"></span><i class="bi bi-chevron-expand"></i></button>
       <button class="busca-menu" id="btn-busca-menu" type="button"><i class="bi bi-search"></i><span>Buscar…</span><kbd>Ctrl K</kbd></button>
       <nav id="menu"></nav>
-      <a href="#/perfil" class="sidebar-user" id="sidebar-user">
-        <span class="avatar" id="user-avatar"></span>
-        <span class="sidebar-user-txt"><span class="fw-semibold d-block text-truncate" id="user-nome"></span><small id="user-perfil"></small></span>
-      </a>
+      <div class="sidebar-rodape">
+        <a href="#/senha" class="rodape-link" title="Alterar minha senha"><i class="bi bi-gear"></i><span>Configurações da conta</span></a>
+        <a href="#/perfil" class="sidebar-user" id="sidebar-user">
+          <span class="avatar" id="user-avatar"></span>
+          <span class="sidebar-user-txt"><span class="fw-semibold d-block text-truncate" id="user-nome"></span><small id="user-perfil"></small></span>
+        </a>
+      </div>
     </aside>
     <div class="backdrop-menu" id="backdrop-menu"></div>
     <div id="main">
       <header id="topbar">
         <button class="btn btn-icon d-lg-none" id="btn-menu" aria-label="Abrir menu"><i class="bi bi-list fs-4"></i></button>
         <nav aria-label="Você está em" id="breadcrumb" class="text-truncate"></nav>
-        <div class="ms-auto d-flex align-items-center gap-1">
+        <div class="topo-centro">
           <button class="btn btn-busca d-none d-md-inline-flex" id="btn-busca" type="button"><i class="bi bi-search"></i><span>Buscar pedido, cliente ou tela</span><kbd>Ctrl K</kbd></button>
+        </div>
+        <div class="d-flex align-items-center gap-1">
+          <button class="btn btn-ia d-none d-xl-inline-flex" id="btn-ia" type="button"><i class="bi bi-stars"></i> Perguntar à IA</button>
           <button class="btn btn-icon d-md-none" id="btn-busca-mob" aria-label="Buscar"><i class="bi bi-search"></i></button>
-          <button class="btn btn-empresa d-none d-md-inline-flex" id="btn-empresa" title="Trocar empresa"><i class="bi bi-building"></i> <span id="empresa-nome" class="text-truncate"></span></button>
           <button class="btn btn-icon position-relative" id="btn-mensagens" title="Mensagens dos setores" aria-label="Mensagens dos setores"><i class="bi bi-bell"></i><span class="badge-ponto d-none" id="badge-msg"></span></button>
           <button class="btn btn-icon" id="btn-tema" title="Alternar tema claro/escuro" aria-label="Alternar tema"><i class="bi bi-moon-stars"></i></button>
           <div class="dropdown">

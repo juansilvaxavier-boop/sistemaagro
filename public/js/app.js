@@ -86,6 +86,58 @@ const MENU = [
   },
 ];
 
+// Descrição curta de cada tela, mostrada abaixo do título.
+const SUBTITULOS = {
+  '#/meu-rh': 'Seus dados de contrato, férias, ponto, benefícios e pedidos ao RH.',
+  '#/chamados': 'Abra e acompanhe chamados entre os setores, com prioridade e prazo.',
+  '#/propostas': 'Monte orçamentos para o cliente e transforme as propostas aceitas em pedidos.',
+  '#/fila/venda': 'Pedidos em digitação e devolvidos para correção antes do envio.',
+  '#/fila/supervisao': 'Pedidos da equipe aguardando a aprovação do supervisor.',
+  '#/fila/analise': 'Análise de crédito com Serasa, blacklist e histórico do cliente.',
+  '#/fila/diretoria': 'Aprovação final dos pedidos antes da produção.',
+  '#/fila/cobranca': 'Pedidos à vista aguardando a confirmação do pagamento.',
+  '#/fila/producao': 'Pedidos aprovados em produção, com lotes e prazos.',
+  '#/fila/faturamento': 'Emissão das notas fiscais dos pedidos produzidos.',
+  '#/fila/expedicao': 'Embarque, transportadora, volumes e etiquetas de envio.',
+  '#/fila/transito': 'Pedidos a caminho do cliente e confirmação de entrega.',
+  '#/fila/devolucao': 'Devoluções de mercadoria e seus ajustes financeiros.',
+  '#/clientes': 'Cadastro de clientes com documentos, endereços, contatos e referências.',
+  '#/historico-compra': 'Pedidos, notas e parcelas de cada cliente.',
+  '#/blacklist': 'Clientes com alerta ou bloqueio para novas vendas.',
+  '#/financeiro/notas': 'Notas fiscais de saída emitidas, canceladas e cartas de correção.',
+  '#/estoque': 'Saldos por produto e embalagem, lotes, movimentações e inventário.',
+  '#/crm': 'Oportunidades, tarefas e interações com os clientes.',
+  '#/cobranca': 'Carteira em atraso, agenda de contatos, ações e acordos.',
+  '#/arquivos': 'Documentos anexados a clientes e pedidos.',
+  '#/mensagens': 'Avisos trocados entre os setores sobre os pedidos.',
+  '#/pagar': 'Contas dos fornecedores com vencimento, baixa e anexos.',
+  '#/financeiro/parcelas': 'Parcelas a receber: baixa, prorrogação, status e negativação.',
+  '#/financeiro/lancamentos': 'Descontos e créditos lançados para os vendedores.',
+  '#/financeiro/comissoes': 'Revisão e liberação das comissões de venda.',
+  '#/financeiro/devolucoes': 'Descontos aplicados por devolução de mercadoria.',
+  '#/financeiro/negativados': 'Clientes negativados e pedidos de inclusão ou baixa.',
+  '#/cadastros/produtos': 'Produtos, embalagens, preços e estoque mínimo.',
+  '#/cadastros/formas': 'Formas e condições de pagamento usadas nos pedidos.',
+  '#/cadastros/transportadoras': 'Transportadoras usadas na expedição.',
+  '#/cadastros/fornecedores': 'Fornecedores com dados bancários e prazo padrão de pagamento.',
+  '#/cadastros/colaboradores': 'Pessoas da empresa e seus vínculos com os usuários.',
+  '#/cadastros/usuarios': 'Acesso ao sistema: perfil, permissões e dados que cada pessoa pode ver.',
+  '#/cadastros/equipes': 'Equipes de venda e seus supervisores.',
+  '#/cadastros/empresas': 'Empresas do grupo, CNPJ e endereço do remetente.',
+  '#/rh': 'Visão geral do quadro: alertas, aniversariantes e custos.',
+  '#/rh/colaboradores': 'Admissão, ficha completa e desligamento dos colaboradores.',
+  '#/rh/ferias': 'Programação de férias dentro das regras da CLT.',
+  '#/rh/ocorrencias': 'Faltas, atestados, atrasos, horas extras e banco de horas.',
+  '#/rh/solicitacoes': 'Pedidos dos colaboradores para o RH aprovar ou recusar.',
+  '#/rh/folha': 'Eventos variáveis do mês para enviar à contabilidade.',
+  '#/relatorios': 'Relatórios de vendas, financeiro e estoque, com exportação.',
+  '#/auditoria': 'Quem fez o quê e quando, com antes e depois de cada alteração.',
+  '#/backups': 'Cópias de segurança do banco de dados.',
+  '#/importacao': 'Carga dos dados do sistema anterior, com conferência e opção de desfazer.',
+  '#/privacidade': 'Termo de uso, política de privacidade e direitos do titular (LGPD).',
+  '#/perfil': 'Sua foto, dados de contato e preferências.',
+};
+
 const ROTAS = [
   [/^#\/dashboard$/, () => import('./pages/dashboard.js')],
   [/^#\/fila\/(\w+)$/, () => import('./pages/filas.js')],
@@ -264,6 +316,7 @@ $('#btn-empresa').addEventListener('click', () => {
 $('#btn-mensagens').addEventListener('click', () => { location.hash = '#/mensagens'; });
 $('#btn-chat').addEventListener('click', () => { assistente.alternar(false); chat.alternar(); });
 $('#btn-assistente').addEventListener('click', () => { chat.alternar(false); assistente.alternar(); });
+$('#btn-ia').addEventListener('click', () => { chat.alternar(false); assistente.alternar(true); });
 assistente.configurar({
   telas: () => MENU.flatMap((g) => g.itens.filter((i) => !i.p || pode(i.p)).map((i) => `${g.grupo} › ${i.l} (${i.href})`)),
 });
@@ -470,13 +523,15 @@ async function rotear() {
   if (!state.me?.empresa) return;
   const hash = (location.hash || '#/dashboard').split('?')[0];
   fecharMenu();
+  // Marca só o item mais específico (#/rh/ferias não acende também #/rh).
   let ativo = null;
   document.querySelectorAll('#menu a').forEach((a) => {
     const h = a.getAttribute('href');
-    const on = hash === h || hash.startsWith(h + '/');
-    a.classList.toggle('ativo', on);
-    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-    if (on) ativo = a;
+    if ((hash === h || hash.startsWith(h + '/')) && h.length > (ativo?.getAttribute('href').length || 0)) ativo = a;
+  });
+  document.querySelectorAll('#menu a').forEach((a) => {
+    a.classList.toggle('ativo', a === ativo);
+    if (a === ativo) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
   const grupo = ativo?.closest('.itens')?.previousElementSibling?.dataset.grupo;
   $('#breadcrumb').innerHTML = ativo ? `${grupo ? `<small>${esc(grupo)} /</small> ` : ''}${esc(ativo.querySelector('span').textContent)}` : '';
@@ -489,6 +544,15 @@ async function rotear() {
     try {
       const mod = await carregar();
       await mod.default(conteudo, { params: m.slice(1), modo, hash });
+      const sub = SUBTITULOS[hash];
+      const h2 = conteudo.querySelector(':scope > .page-title > h2');
+      if (sub && h2 && !h2.parentElement.querySelector('.page-sub')) {
+        const bloco = document.createElement('div');
+        bloco.className = 'min-w-0';
+        h2.replaceWith(bloco);
+        bloco.append(h2);
+        bloco.insertAdjacentHTML('beforeend', `<p class="page-sub">${esc(sub)}</p>`);
+      }
       document.title = `${ativo?.querySelector('span').textContent || 'Agroterra'} · Agroterra Sistema`;
     } catch (e) {
       console.error(e);

@@ -336,9 +336,9 @@ export class DataTable {
       <div class="dt-toolbar">
         ${this.o.toolbar || ''}
         <div class="ms-auto d-flex gap-1">
-          <button class="btn btn-sm btn-outline-secondary" data-a="limpar"><i class="bi bi-funnel"></i> Limpar Filtros</button>
-          <button class="btn btn-sm btn-outline-success" data-a="excel"><i class="bi bi-file-earmark-excel"></i> Exportar para Excel</button>
-          <button class="btn btn-sm btn-outline-secondary" data-a="imprimir"><i class="bi bi-printer"></i> Imprimir</button>
+          <button class="btn btn-sm btn-outline-secondary" data-a="limpar" title="Limpar Filtros"><i class="bi bi-funnel"></i> <span class="dt-rot">Limpar Filtros</span></button>
+          <button class="btn btn-sm btn-outline-success" data-a="excel" title="Exportar para Excel"><i class="bi bi-file-earmark-excel"></i> <span class="dt-rot">Exportar para Excel</span></button>
+          <button class="btn btn-sm btn-outline-secondary" data-a="imprimir" title="Imprimir"><i class="bi bi-printer"></i> <span class="dt-rot">Imprimir</span></button>
         </div>
       </div>
       <div class="dt-wrap"><table class="table table-sm table-hover dt">
