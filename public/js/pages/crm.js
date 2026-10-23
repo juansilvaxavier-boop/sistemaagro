@@ -9,6 +9,10 @@ import { painelArquivos } from './arquivos.js';
 const ESTAGIOS = ['prospeccao', 'qualificacao', 'proposta', 'negociacao', 'ganha', 'perdida'];
 const TIPOS = ['ligacao', 'visita', 'whatsapp', 'email', 'reuniao', 'pos_venda', 'reclamacao'];
 
+// Safra agrícola começa em julho: de jul/2026 a jun/2027 é a safra 26/27.
+const SAFRA_ATUAL = () => { const d = new Date(); const a = d.getFullYear() % 100 - (d.getMonth() < 6 ? 1 : 0); return `${a}/${a + 1}`; };
+const SAFRAS = () => { const [a] = SAFRA_ATUAL().split('/').map(Number); return [-2, -1, 0, 1, 2].map((k) => `${a + k}/${a + k + 1}`).map((x) => [x, x]); };
+
 export default async function (conteudo, { modo, params }) {
   if (modo === 'cliente') return cliente360(conteudo, Number(params[0]));
   const pagina = titulo(conteudo, 'CRM', 'bi-diagram-3', `
@@ -133,7 +137,7 @@ export function novaOportunidade(clienteId, aoSalvar) {
     title: 'Nova oportunidade', size: 'lg',
     body: `<form class="row g-2">${seletorCliente(clienteId)}
       ${campo('titulo', 'Título', { col: 'col-md-8', required: true })}
-      ${campo('safra', 'Safra', { col: 'col-md-4', value: '26/27' })}
+      ${campo('safra', 'Safra', { type: 'select', col: 'col-md-4', options: SAFRAS(), value: SAFRA_ATUAL() })}
       ${campo('valor_estimado', 'Valor estimado', { type: 'number', col: 'col-md-4', attrs: 'step="0.01"' })}
       ${campo('estagio', 'Estágio', { type: 'select', col: 'col-md-4', options: ESTAGIOS.slice(0, 4).map((e) => [e, ROTULOS.status[e][0]]) })}
       ${campo('previsao_fechamento', 'Previsão de fechamento', { type: 'date', col: 'col-md-4' })}

@@ -156,6 +156,9 @@ async function formulario(conteudo, id) {
       ${campo('prazo_entrega', 'Prazo de entrega', { col: 'col-md-3', value: prop?.prazo_entrega || '', attrs: 'placeholder="Ex.: 10 dias após aprovação"' })}
       ${campo('frete_valor', 'Frete (R$)', { type: 'number', col: 'col-md-2', value: prop?.frete_valor ?? '', attrs: 'min="0" step="0.01"' })}
       ${!ehVendedor ? campo('vendedor_id', 'Vendedor', { type: 'select', col: 'col-md-2', options: opcoes(o.vendedores, 'Eu mesmo'), value: prop?.vendedor_id || '' }) : ''}
+      ${campo('cultura', 'Cultura do cliente', { type: 'select', col: 'col-md-4', options: [['', '—'], ...o.listas.cultura.map((x) => [x.valor, x.valor])], value: prop?.cultura || '' })}
+      ${campo('area_ha', 'Área (ha)', { type: 'number', col: 'col-md-2', value: prop?.area_ha ?? '', attrs: 'min="0.01" step="0.01"' })}
+      ${campo('origem_venda', 'De onde veio a venda', { type: 'select', col: 'col-md-6', options: [['', '—'], ...o.listas.origem_venda.map((x) => [x.valor, x.valor])], value: prop?.origem_venda || '' })}
       ${campo('condicoes_comerciais', 'Condições comerciais (saem na proposta impressa)', { type: 'textarea', col: 'col-md-7', value: prop?.condicoes_comerciais || 'Preços válidos para pagamento na condição informada.\nFrete conforme modalidade de entrega.' })}
       ${campo('observacao', 'Observação', { type: 'textarea', col: 'col-md-5', value: prop?.observacao || '' })}
     </div></div></div>
@@ -261,6 +264,7 @@ async function formulario(conteudo, id) {
       cliente_id: Number(v('cliente_id')) || null, forma_id: Number(v('forma_id')) || null, condicao_id: Number(v('condicao_id')) || null,
       validade: v('validade'), tipo_entrega: v('tipo_entrega'), prazo_entrega: v('prazo_entrega'), frete_valor: v('frete_valor') === null ? null : Number(v('frete_valor')),
       condicoes_comerciais: v('condicoes_comerciais'), observacao: v('observacao'),
+      cultura: v('cultura'), area_ha: v('area_ha') === null ? null : Number(v('area_ha')), origem_venda: v('origem_venda'),
       vendedor_id: $('[name=vendedor_id]') ? Number(v('vendedor_id')) || undefined : undefined,
       itens: [...tbody.querySelectorAll('tr')].map((tr) => ({
         produto_id: Number(tr.querySelector('[data-c=produto_id]').value),

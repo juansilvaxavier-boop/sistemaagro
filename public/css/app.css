@@ -616,3 +616,16 @@ code { color: var(--texto-2); background: var(--superficie-3); padding: 1px 6px;
 .mapa-total .sub { font-size: .74rem; color: var(--texto-3); }
 .mapa-ranking td, .mapa-ranking th { font-size: .8rem; }
 @media (max-width: 991.98px) { .mapa-grade { grid-template-columns: 1fr; } }
+
+/* Abas da área (logo abaixo do título) */
+.area-abas { display: flex; gap: 4px; margin: -6px 0 20px; padding: 4px; overflow-x: auto; scrollbar-width: none; background: var(--superficie-3);
+  border: 1px solid var(--borda); border-radius: 12px; width: fit-content; max-width: 100%; }
+.area-abas::-webkit-scrollbar { display: none; }
+.area-abas a { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 9px; color: var(--texto-2); text-decoration: none; font-size: .83rem;
+  font-weight: 500; white-space: nowrap; transition: background-color .12s, color .12s; }
+.area-abas a i { font-size: .95rem; color: var(--texto-3); }
+.area-abas a:hover { color: var(--texto); background: color-mix(in srgb, var(--superficie) 60%, transparent); }
+.area-abas a.ativa { background: var(--superficie); color: var(--texto); font-weight: 600; box-shadow: var(--sombra), 0 0 0 1px var(--borda); }
+.area-abas a.ativa i { color: var(--agro-texto); }
+.area-abas .contador { font-size: .66rem; font-weight: 700; background: var(--agro-acao); color: var(--agro-acao-texto); padding: 0 6px; border-radius: 99px; line-height: 17px; }
+@media (max-width: 575.98px) { .area-abas { width: 100%; margin-top: -4px; } }

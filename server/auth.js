@@ -27,9 +27,9 @@ const CATALOGO = [
   ['Comercial', [['propostas', 'Propostas comerciais']]],
   ['Filas do pedido', [
     ['fila.venda', 'Fila do Vendedor'], ['pedido.criar', 'Criar e editar pedidos'], ['fila.supervisao', 'Fila do Supervisor'],
-    ['fila.analise', 'Fila da Análise'], ['fila.diretoria', 'Fila da Diretoria'], ['fila.cobranca', 'Cobrança (à vista)'],
+    ['fila.analise', 'Fila da Análise'], ['fila.diretoria', 'Fila da Diretoria'], ['fila.cobranca', 'Fila Pagamento à vista'],
     ['fila.producao', 'Fila da Produção'], ['fila.faturamento', 'Fila do Faturamento'], ['fila.expedicao', 'Fila da Expedição'],
-    ['fila.transito', 'Expedição – Trânsito'], ['fila.devolucao', 'Fila de Devolução'],
+    ['fila.transito', 'Fila Em trânsito'], ['fila.devolucao', 'Fila de Devolução'],
   ]],
   ['Clientes', [
     ['clientes', 'Ver clientes'], ['clientes.editar', 'Cadastrar e editar clientes'], ['clientes.historico', 'Histórico de compra'],

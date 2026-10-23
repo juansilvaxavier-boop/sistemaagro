@@ -53,7 +53,7 @@ r.get('/meu', async (req, res) => {
     vinculado: true,
     colaborador: {
       nome: c.nome, cargo: c.cargo, departamento: c.departamento || c.setor, data_admissao: c.data_admissao, tipo_contrato: RH.TIPOS_CONTRATO[c.tipo_contrato] || c.tipo_contrato,
-      jornada: c.jornada, salario: c.salario, gestor: c.gestor_id ? (await db.get('SELECT nome FROM colaboradores WHERE id = ?', c.gestor_id))?.nome : null,
+      jornada: c.jornada, bate_ponto: c.bate_ponto, salario: c.salario, gestor: c.gestor_id ? (await db.get('SELECT nome FROM colaboradores WHERE id = ?', c.gestor_id))?.nome : null,
       email: c.email, telefone: c.telefone, cidade: c.cidade, uf: c.uf,
     },
     periodos: await RH.periodosFerias(c),
@@ -154,7 +154,7 @@ r.get('/colaboradores', A.exige('rh'), async (req, res) => {
             CAST((julianday(COALESCE(c.data_desligamento, date('now','localtime'))) - julianday(c.data_admissao)) / 365.25 AS INTEGER) AS anos_casa,
             g.nome AS gestor, c.telefone, c.email, ${ver ? 'c.salario' : 'NULL::float8 AS salario'},
             CASE WHEN c.data_desligamento IS NOT NULL OR c.ativo = 0 THEN 'desligado' ELSE 'ativo' END AS situacao, c.data_desligamento,
-            u.login, (SELECT COUNT(*) FROM rh_solicitacoes s WHERE s.colaborador_id = c.id AND s.status = 'aberta') AS solicitacoes
+            u.login, u.id AS usuario_id, (SELECT COUNT(*) FROM rh_solicitacoes s WHERE s.colaborador_id = c.id AND s.status = 'aberta') AS solicitacoes
           FROM colaboradores c LEFT JOIN colaboradores g ON g.id = c.gestor_id LEFT JOIN usuarios u ON u.colaborador_id = c.id
           WHERE COALESCE(c.empresa_id, ?) = ?`,
     params: [req.empresaId, req.empresaId], sort: 'nome', dir: 'asc', exact: ['situacao', 'tipo_contrato'],

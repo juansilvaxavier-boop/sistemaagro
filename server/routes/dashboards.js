@@ -484,7 +484,7 @@ async function cardsModulos(perfil, ctx, user) {
 
 // ---------- Mapa de vendas por estado e cidade ----------
 // Mesmo período e recortes do painel; respeita a abrangência de quem vê (vendedor: as próprias vendas).
-r.get('/mapa', async (req, res) => {
+r.get('/mapa', require('../auth').exige('fila.venda', 'relatorios.vendas', 'dashboard.todos', 'financeiro.parcelas'), async (req, res) => {
   const G = require('../geo');
   const ctx = contexto(req);
   const per = noPeriodo(ctx, 'p.created_at');
@@ -538,7 +538,7 @@ r.get('/', async (req, res) => {
   dados.cards.push(...await cardsModulos(pedido, ctx, req.user));
   res.json({
     perfil: pedido, titulo: `Painel ${PERFIS[pedido] || ''}`.trim(),
-    perfis_disponiveis: todos ? Object.keys(PAINEIS).filter((p) => p !== 'admin') : [proprio],
+    perfis_disponiveis: todos ? Object.keys(PAINEIS).filter((p) => p !== 'admin' && (p !== 'gerente' || proprio === 'gerente')) : [proprio],
     filtro: { de: ctx.de, ate: ctx.ate, ...ctx.filtros, recortes: !SO_PERIODO.includes(pedido) },
     ...dados,
   });

@@ -58,6 +58,14 @@ function colaboradores(conteudo) {
       { k: 'situacao', l: 'Situação', filter: { options: [['ativo', 'Ativo'], ['desligado', 'Desligado']] }, render: (v, r) => (v === 'ativo' ? '<span class="badge text-bg-success">Ativo</span>' : `<span class="badge text-bg-secondary">Desligado ${fmt.date(r.data_desligamento)}</span>`) },
     ],
     rowClick: (r) => abrirFicha(r.id, () => t.reload()),
+    // Acesso ao sistema direto da lista (antes ficava só em Cadastros → Colaboradores).
+    ...(pode('cadastros.usuario') ? {
+      actions: (r) => (r.usuario_id ? btnAcao('usuario', 'bi-person-lock', 'Editar usuário de acesso') : r.situacao === 'ativo' ? btnAcao('criar', 'bi-person-plus', 'Criar usuário de acesso', 'outline-success') : ''),
+      onAction: {
+        criar: async (r) => { const { abrirUsuario } = await import('./usuarios.js'); abrirUsuario(null, () => t.reload(), r); },
+        usuario: async (r) => { const { abrirUsuario } = await import('./usuarios.js'); abrirUsuario(r.usuario_id, () => t.reload()); },
+      },
+    } : {}),
   });
   conteudo.querySelector('#btn-novo')?.addEventListener('click', () => editarColaborador(null, (id) => { t.reload(); abrirFicha(id, () => t.reload()); }));
 }
@@ -77,7 +85,7 @@ export async function abrirFicha(id, aoMudar) {
   const lista = [
     { id: 'resumo', label: '<i class="bi bi-person"></i> Resumo', html: `<div class="row g-3 mb-3">
       ${info('Cargo', esc(c.cargo))}${info('Departamento', esc(c.departamento || c.setor))}${info('Contrato', esc(O.contratos[c.tipo_contrato] || c.tipo_contrato))}${info('Admissão', fmt.date(c.data_admissao))}
-      ${info('Jornada', esc(c.jornada))}${c.salario !== undefined ? info('Salário', fmt.money(c.salario)) : ''}${info('CPF', fmt.doc(c.cpf))}${info('Nascimento', fmt.date(c.data_nascimento))}
+      ${info('Jornada', esc(c.jornada))}${info('Ponto', c.bate_ponto === 0 ? 'Não registra ponto' : 'Registra ponto')}${c.salario !== undefined ? info('Salário', fmt.money(c.salario)) : ''}${info('CPF', fmt.doc(c.cpf))}${info('Nascimento', fmt.date(c.data_nascimento))}
       ${info('Telefone', esc(c.telefone))}${info('E-mail', esc(c.email))}${info('Cidade', esc([c.cidade, c.uf].filter(Boolean).join('/')))}${info('Usuário no sistema', d.usuario ? `<code>${esc(d.usuario.login)}</code>${d.usuario.ativo ? '' : ' (inativo)'}` : 'sem acesso')}
       ${info('Banco de horas', `<b class="${d.banco_horas < 0 ? 'text-danger' : ''}">${fmt.num(d.banco_horas)} h</b>`)}
       ${desligado ? info('Desligamento', `${fmt.date(c.data_desligamento)} · ${esc(O.desligamentos[c.tipo_desligamento] || '')}`) : ''}</div>
@@ -308,7 +316,7 @@ async function folha(conteudo) {
     const d = await get(`/api/rh/folha?competencia=${compEl.value}`);
     const aberta = !d.fechada;
     pagina.innerHTML = `<div class="alert alert-light border small"><i class="bi bi-info-circle"></i> Aqui o DP reúne os eventos variáveis do mês (horas extras, faltas, comissões, descontos de benefícios, prêmios)
-      para enviar à contabilidade. O cálculo de INSS, IRRF, FGTS e do líquido fica com a contabilidade. Valores de horas são estimativas pelo divisor 220.</div>
+      para enviar à contabilidade. O cálculo de INSS, IRRF, FGTS e do líquido fica com a contabilidade. Valores de horas são estimativas pelo divisor da carga horária de cada contrato (44 h → 220, 40 h → 200).</div>
       <div class="kpis mb-3">${kpi('Salários base', fmt.money(d.totais.salarios), { icone: 'bi-wallet2' })}${kpi('Proventos variáveis', fmt.money(d.totais.proventos), { icone: 'bi-plus-circle', cor: 'success' })}
         ${kpi('Descontos', fmt.money(d.totais.descontos), { icone: 'bi-dash-circle', cor: 'danger' })}${kpi('Situação', d.fechada ? 'Fechada' : 'Aberta', { icone: d.fechada ? 'bi-lock' : 'bi-unlock', cor: d.fechada ? 'secondary' : 'warning', sub: d.fechada ? `por ${esc(d.fechamento.usuario || '')} em ${fmt.datetime(d.fechamento.fechado_em)}` : 'pode lançar e gerar eventos' })}</div>
       <div class="d-flex gap-2 mb-3 flex-wrap no-print">

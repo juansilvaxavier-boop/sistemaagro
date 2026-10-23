@@ -1,7 +1,7 @@
 # Manual do Agroterra Sistema
 
 ## Visão geral
-O Agroterra Sistema é o ERP da empresa. Ele cobre vendas, financeiro, estoque, CRM, cobrança, RH e DP, e chamados internos. O menu fica à esquerda e cada pessoa só vê os itens que o seu perfil ou as suas permissões liberam. A busca global abre com Ctrl+K (ou ⌘K): ela procura telas, pedidos e clientes. O sino do topo mostra as mensagens dos setores. O chat interno fica na caixinha do canto inferior direito.
+O Agroterra Sistema é o ERP da empresa. Ele cobre vendas, financeiro, estoque, CRM, cobrança, RH e DP, e chamados internos. O menu fica à esquerda, organizado em áreas (Início, Comercial, Financeiro, Operação, Gestão). Cada área agrupa telas relacionadas em abas, mostradas no topo da tela: por exemplo, **Pedidos** reúne todas as filas (Vendedor, Supervisor, Análise, Diretoria, Pagamento à vista, Produção, Faturamento, Expedição, Em trânsito, Devolução) e as mensagens; **Clientes** reúne cadastro, histórico de compra, blacklist e arquivos; **Contas a receber** reúne parcelas, cobrança e negativados; **Comissões** reúne a revisão, os descontos e créditos e as regras. Cada pessoa só vê as áreas e abas que o seu perfil libera, e o menu lembra a última aba usada em cada área. A busca global abre com Ctrl+K (ou ⌘K): ela procura telas, pedidos e clientes. O sino do topo mostra as mensagens dos setores. O chat interno fica na caixinha do canto inferior direito.
 
 ## Painel inicial
 O Painel (#/dashboard) mostra os indicadores do setor da pessoa. No topo fica o filtro de **Período**: Este mês (padrão), Mês passado, 30 dias, 90 dias, Este ano ou Personalizado (de/até). Abaixo dos gráficos fica o mapa **Vendas pelo Brasil** (estados ou cidades, por valor ou nº de pedidos). Em **Mais filtros** dá para recortar por vendedor, equipe, forma de pagamento e UF de entrega. O período vale para vendas, faturamento, recebimentos, comissões e decisões; filas e saldos (a receber, vencido, pedidos em andamento) mostram a situação de hoje, respeitando os recortes. O filtro fica guardado durante a sessão, inclusive ao trocar de painel.
@@ -23,11 +23,11 @@ O pedido passa por filas, uma por etapa:
 2. **Supervisor** (#/fila/supervisao): aprova, devolve ao vendedor ou cancela. Um pedido de vendedor sem supervisor vai direto para a Análise.
 3. **Análise** (#/fila/analise): aprova ou reprova o crédito, ou devolve ao vendedor. Aqui o analista consulta Serasa e blacklist.
 4. **Diretoria** (#/fila/diretoria): faz a aprovação final, devolve à análise ou reprova. As comissões são geradas nesta aprovação.
-5. **Cobrança à vista** (#/fila/cobranca): só para pagamento à vista, que espera a confirmação do pagamento.
+5. **Pagamento à vista** (#/fila/cobranca): só para pagamento à vista, que espera a confirmação do pagamento.
 6. **Produção** (#/fila/producao): conclui a produção informando os lotes.
 7. **Faturamento** (#/fila/faturamento): emite a nota fiscal, o que gera as parcelas a receber.
 8. **Expedição** (#/fila/expedicao): registra o embarque com transportadora, volumes e rastreio, e imprime a etiqueta de envio.
-9. **Trânsito** (#/fila/transito): confirma a entrega.
+9. **Em trânsito** (#/fila/transito): confirma a entrega.
 10. **Devolução** (#/fila/devolucao): trata as devoluções de mercadoria.
 
 Toda fila tem o botão **Filtros** acima da tabela. Ele abre um painel com período (data do pedido, entrada na fila e as datas da etapa, como prazo de produção, embarque e entrega), com atalhos Hoje, 7 dias, 30 dias, Este mês, Mês passado e Este ano. Também filtra por faixa de valor, dias na fila, cliente, CPF/CNPJ, vendedor, supervisor, equipe, forma de pagamento, UF, cidade, tipo de entrega, transportadora, nota e blacklist. Os filtros ativos aparecem como etiquetas que podem ser removidas uma a uma, ficam guardados enquanto a sessão estiver aberta e valem também para Exportar para Excel e Imprimir.

@@ -117,7 +117,7 @@ const competenciaFechada = async (empresaId, comp) => !!(await db.get('SELECT 1 
 /**
  * Gera os eventos automáticos da competência: horas extras, faltas, atrasos e suspensões (pelas ocorrências),
  * comissões e lançamentos dos vendedores, e descontos de benefícios. Os manuais são mantidos.
- * Valores de hora usam o divisor 220 (jornada de 44 h semanais) e são estimativas para a contabilidade conferir.
+ * Valores de hora usam o divisor da carga horária (44 h → 220) e são estimativas para a contabilidade conferir.
  */
 async function gerarEventos(empresaId, comp, usuarioId) {
   if (!/^\d{4}-\d{2}$/.test(comp)) throw new ErroNegocio('Competência inválida (AAAA-MM).');
@@ -138,12 +138,13 @@ async function gerarEventos(empresaId, comp, usuarioId) {
       n++;
     };
     for (const c of colabs) {
-      const hora = c.salario ? c.salario / 220 : 0;
+      // Divisor mensal pela carga horária do contrato (44 h → 220, 40 h → 200...).
+      const hora = c.salario ? c.salario / ((Number(c.carga_horaria) || 44) * 5) : 0;
       const dia = c.salario ? c.salario / 30 : 0;
       const oc = await db.all(`SELECT tipo, COALESCE(SUM(horas),0) AS horas, COALESCE(SUM(COALESCE(dias,1)),0) AS dias, COUNT(*) AS n FROM rh_ocorrencias
         WHERE colaborador_id = ? AND data BETWEEN ? AND ? GROUP BY tipo`, c.id, ini, fim);
       const t = Object.fromEntries(oc.map((x) => [x.tipo, x]));
-      const est = c.salario ? 'Estimativa pelo salário cadastrado (divisor 220)' : 'Sem salário cadastrado: informe o valor';
+      const est = c.salario ? 'Estimativa pelo salário cadastrado (divisor da carga horária)' : 'Sem salário cadastrado: informe o valor';
       if (t.hora_extra_50?.horas) await add(c, 'provento', 'Horas extras 50%', `${t.hora_extra_50.horas} h`, hora * 1.5 * t.hora_extra_50.horas, 'ocorrencia', null, est);
       if (t.hora_extra_100?.horas) await add(c, 'provento', 'Horas extras 100%', `${t.hora_extra_100.horas} h`, hora * 2 * t.hora_extra_100.horas, 'ocorrencia', null, est);
       if (t.falta?.dias) await add(c, 'desconto', 'Faltas injustificadas', `${t.falta.dias} dia(s)`, dia * t.falta.dias, 'ocorrencia', null, 'A contabilidade calcula o DSR perdido');

@@ -72,7 +72,7 @@ r.get('/:id', async (req, res) => {
 });
 
 const CAMPOS = ['cliente_id', 'vendedor_id', 'oportunidade_id', 'forma_id', 'condicao_id', 'validade', 'prazo_entrega', 'tipo_entrega',
-  'frete_valor', 'condicoes_comerciais', 'observacao'];
+  'frete_valor', 'condicoes_comerciais', 'observacao', 'cultura', 'area_ha', 'origem_venda'];
 
 async function precoTabela(produtoId, embalagemId, formaId) {
   return (await db.get('SELECT valor FROM produto_precos WHERE produto_id = ? AND COALESCE(embalagem_id,0) = ? AND forma_id = ?', produtoId, embalagemId || 0, formaId || 0))?.valor
@@ -117,6 +117,10 @@ async function validar(req, b) {
     throw new ErroNegocio('Condição não pertence à forma de pagamento.');
   }
   if (b.validade && !/^\d{4}-\d{2}-\d{2}$/.test(b.validade)) throw new ErroNegocio('Validade inválida.');
+  const L = require('../listas');
+  if (b.cultura) await L.exigir('cultura', b.cultura, { rotulo: 'Cultura' });
+  if (b.origem_venda) await L.exigir('origem_venda', b.origem_venda, { rotulo: 'Origem da venda' });
+  if (b.area_ha != null && b.area_ha !== '' && !(Number(b.area_ha) > 0)) throw new ErroNegocio('Área em hectares inválida.');
 }
 
 r.post('/', async (req, res) => {
@@ -191,6 +195,8 @@ r.post('/:id/converter', A.exige('pedido.criar'), async (req, res) => {
       numero, empresa_id: p.empresa_id, cliente_id: p.cliente_id, vendedor_id: p.vendedor_id, supervisor_id: vend?.supervisor_id,
       forma_id: p.forma_id, condicao_id: p.condicao_id, tipo_entrega: p.tipo_entrega || 'transportadora', endereco_entrega_id: end?.id,
       observacao: obs, etapa: 'venda', proposta_id: p.id,
+      // A lavoura e a origem seguem da proposta; sem origem informada, a venda veio da própria proposta.
+      cultura: p.cultura, area_ha: p.area_ha, origem_venda: p.origem_venda || 'Proposta comercial convertida',
     });
     for (const i of await db.all('SELECT * FROM proposta_itens WHERE proposta_id = ?', p.id)) {
       await db.insert('pedido_itens', {

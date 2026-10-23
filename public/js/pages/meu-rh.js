@@ -24,7 +24,7 @@ export default async function meuRh(conteudo) {
       ${kpi('Solicitações em aberto', d.solicitacoes.filter((s) => s.status === 'aberta').length, { icone: 'bi-inbox', cor: 'warning' })}
     </div>${abas([
       { id: 'dados', label: '<i class="bi bi-person"></i> Meus dados', html: `<div class="row g-3">
-        ${[['Cargo', c.cargo], ['Departamento', c.departamento], ['Contrato', c.tipo_contrato], ['Jornada', c.jornada], ['Gestor', c.gestor], ['Admissão', fmt.date(c.data_admissao)],
+        ${[['Cargo', c.cargo], ['Departamento', c.departamento], ['Contrato', c.tipo_contrato], ['Jornada', c.jornada], ['Ponto', c.bate_ponto === 0 ? 'Não registra' : 'Registra'], ['Gestor', c.gestor], ['Admissão', fmt.date(c.data_admissao)],
           ['Salário base', c.salario != null ? fmt.money(c.salario) : null], ['E-mail', c.email], ['Telefone', c.telefone], ['Cidade', [c.cidade, c.uf].filter(Boolean).join('/')]]
           .map(([l, v]) => `<div class="col-md-3 col-6"><div class="small text-body-secondary">${l}</div><div>${esc(v || '—')}</div></div>`).join('')}</div>
         <div class="form-text mt-3">Algum dado errado? Use <b>Fazer uma solicitação → Alteração de dados cadastrais</b>.</div>` },

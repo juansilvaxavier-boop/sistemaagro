@@ -106,6 +106,12 @@ aplicativo (PWA) no computador ou no celular.
 
 **Acesso:** login, escolha da empresa (multiempresa) e menus liberados conforme o perfil do usuário.
 
+**Menu por áreas:** o menu lateral mostra só as áreas (Início, Comercial, Financeiro, Operação, Gestão). As telas
+relacionadas ficam em abas no topo de cada área — por exemplo, *Pedidos* reúne todas as filas (Vendedor → Devolução)
+com o contador de cada uma, *Clientes* reúne Cadastro, Histórico de compra, Blacklist e Arquivos, e *Comissões* reúne
+Revisar, Descontos e créditos e Regras. A diretoria vê 17 itens no menu (antes eram 50); vendedor e faturamento veem 8.
+A área lembra a última aba usada, e a busca (Ctrl+K) continua encontrando qualquer tela pelo nome.
+
 **Padrão de tela:** toda lista tem filtro por coluna, ordenação, paginação e os botões *Limpar Filtros*,
 *Exportar para Excel* (.xlsx real) e *Imprimir*. Cadastros e ações abrem em janelas com abas.
 
@@ -127,11 +133,11 @@ Cada fila tem as abas **Pedidos** (o que está parado na etapa) e **Progressão 
 | Supervisor | Observação de supervisão, consulta Serasa, checagem de referência comercial, histórico do cliente, coluna Equipe |
 | Análise | Serasa e restrição de crédito (com justificativa para nova consulta em 30 dias), checagem de referências comerciais e bancárias, cotação de frete (ou ignorar com motivo), troca de transportadora, posta restante / veículo próprio / retirada, comentários |
 | Diretoria | Revisão de frete e referência bancária, definição das comissões, Serasa, histórico e comentários |
-| Cobrança (à vista) | Confirmação do pagamento à vista antes da produção |
+| Pagamento à vista | Confirmação do pagamento à vista antes da produção |
 | Produção | Lote, fabricação e validade por item, prazo de produção, data de chegada |
 | Faturamento | Ajuste do endereço de entrega e emissão da NF-e (gera parcelas e comissões) |
 | Expedição | Data de embarque, entrega prevista, transportadora |
-| Expedição – Trânsito | Abas *Pedidos em trânsito* e *Pedidos entregues*, registro da entrega |
+| Em trânsito | Abas *Pedidos em trânsito* e *Pedidos entregues*, registro da entrega |
 | Devolução | Pedidos com devolução total |
 
 Telas de apoio: **Histórico de Compra de Cliente** (por CPF/CNPJ) e **Cliente (Blacklist)** com os tipos

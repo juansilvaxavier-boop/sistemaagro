@@ -3,90 +3,119 @@ import { TEXTO_TERMO } from './privacidade.js';
 import * as chat from './chat.js';
 import * as assistente from './assistente.js';
 
+// Menu em áreas: cada item é uma área; as abas dela aparecem no topo da tela (só as que o usuário pode ver).
+// Itens com uma única aba liberada vão direto para ela, sem barra de abas.
 const MENU = [
   {
     grupo: 'Início', itens: [
       { href: '#/dashboard', l: 'Painel', i: 'bi-grid-1x2', p: 'dashboard' },
-      { href: '#/chamados', l: 'Chamados Internos', i: 'bi-headset', p: 'chamados', etapa: 'chamados' },
+      { href: '#/chamados', l: 'Chamados internos', i: 'bi-headset', p: 'chamados', etapa: 'chamados' },
       { href: '#/meu-rh', l: 'Meu RH', i: 'bi-person-badge' },
     ],
   },
   {
-    grupo: 'Vendas', itens: [
-      { href: '#/propostas', l: 'Propostas Comerciais', i: 'bi-file-earmark-text', p: 'propostas' },
-      { href: '#/fila/venda', l: 'Vendedor', i: 'bi-cart3', p: 'fila.venda', etapa: 'venda' },
-      { href: '#/fila/supervisao', l: 'Supervisor', i: 'bi-person-check', p: 'fila.supervisao', etapa: 'supervisao' },
-      { href: '#/fila/analise', l: 'Análise', i: 'bi-search', p: 'fila.analise', etapa: 'analise' },
-      { href: '#/fila/diretoria', l: 'Diretoria', i: 'bi-award', p: 'fila.diretoria', etapa: 'diretoria' },
-      { href: '#/fila/cobranca', l: 'Cobrança (à vista)', i: 'bi-cash-coin', p: 'fila.cobranca', etapa: 'cobranca' },
-      { href: '#/fila/producao', l: 'Produção', i: 'bi-gear', p: 'fila.producao', etapa: 'producao' },
-      { href: '#/fila/expedicao', l: 'Expedição', i: 'bi-box-seam', p: 'fila.expedicao', etapa: 'expedicao' },
-      { href: '#/fila/transito', l: 'Expedição – Trânsito', i: 'bi-truck', p: 'fila.transito', etapa: 'transito' },
-      { href: '#/fila/devolucao', l: 'Devolução', i: 'bi-arrow-return-left', p: 'fila.devolucao', etapa: 'devolucao' },
-      { href: '#/clientes', l: 'Clientes', i: 'bi-people', p: 'clientes' },
-      { href: '#/historico-compra', l: 'Histórico de Compra', i: 'bi-clock-history', p: 'clientes.historico' },
-      { href: '#/blacklist', l: 'Cliente (Blacklist)', i: 'bi-shield-x', p: 'blacklist' },
-    ],
-  },
-  {
-    grupo: 'Faturamento', itens: [
-      { href: '#/fila/faturamento', l: 'Faturamento', i: 'bi-receipt', p: 'fila.faturamento', etapa: 'faturamento' },
-      { href: '#/financeiro/notas', l: 'Nota Fiscal de Saída', i: 'bi-file-earmark-text', p: 'financeiro.notas' },
-    ],
-  },
-  { grupo: 'Estoque', itens: [{ href: '#/estoque', l: 'Controle de Estoque', i: 'bi-boxes', p: 'estoque' }] },
-  {
-    grupo: 'Relacionamento', itens: [
+    grupo: 'Comercial', itens: [
+      {
+        l: 'Pedidos', i: 'bi-cart3', abas: [
+          { href: '#/fila/venda', l: 'Vendedor', i: 'bi-cart3', p: 'fila.venda', etapa: 'venda' },
+          { href: '#/fila/supervisao', l: 'Supervisor', i: 'bi-person-check', p: 'fila.supervisao', etapa: 'supervisao' },
+          { href: '#/fila/analise', l: 'Análise', i: 'bi-search', p: 'fila.analise', etapa: 'analise' },
+          { href: '#/fila/diretoria', l: 'Diretoria', i: 'bi-award', p: 'fila.diretoria', etapa: 'diretoria' },
+          { href: '#/fila/cobranca', l: 'Pagamento à vista', i: 'bi-cash-coin', p: 'fila.cobranca', etapa: 'cobranca' },
+          { href: '#/fila/producao', l: 'Produção', i: 'bi-gear', p: 'fila.producao', etapa: 'producao' },
+          { href: '#/fila/faturamento', l: 'Faturamento', i: 'bi-receipt', p: 'fila.faturamento', etapa: 'faturamento' },
+          { href: '#/fila/expedicao', l: 'Expedição', i: 'bi-box-seam', p: 'fila.expedicao', etapa: 'expedicao' },
+          { href: '#/fila/transito', l: 'Em trânsito', i: 'bi-truck', p: 'fila.transito', etapa: 'transito' },
+          { href: '#/fila/devolucao', l: 'Devolução', i: 'bi-arrow-return-left', p: 'fila.devolucao', etapa: 'devolucao' },
+          { href: '#/mensagens', l: 'Mensagens', i: 'bi-bell' },
+        ],
+      },
+      { href: '#/propostas', l: 'Propostas', i: 'bi-file-earmark-text', p: 'propostas' },
+      {
+        l: 'Clientes', i: 'bi-people', abas: [
+          { href: '#/clientes', l: 'Cadastro', i: 'bi-people', p: 'clientes' },
+          { href: '#/historico-compra', l: 'Histórico de compra', i: 'bi-clock-history', p: 'clientes.historico' },
+          { href: '#/blacklist', l: 'Blacklist', i: 'bi-shield-x', p: 'blacklist' },
+          { href: '#/arquivos', l: 'Arquivos', i: 'bi-folder2-open', p: 'arquivos' },
+        ],
+      },
       { href: '#/crm', l: 'CRM', i: 'bi-diagram-3', p: 'crm' },
-      { href: '#/cobranca', l: 'Cobrança', i: 'bi-telephone-outbound', p: 'cobranca' },
-      { href: '#/arquivos', l: 'Arquivos e Documentos', i: 'bi-folder2-open', p: 'arquivos' },
-      { href: '#/mensagens', l: 'Mensagens dos setores', i: 'bi-bell' },
     ],
   },
   {
     grupo: 'Financeiro', itens: [
-      { href: '#/pagar', l: 'Contas a Pagar', i: 'bi-credit-card-2-back', p: 'financeiro.pagar' },
-      { href: '#/financeiro/parcelas', l: 'Gestão de Parcelas', i: 'bi-list-check', p: 'financeiro.parcelas' },
-      { href: '#/financeiro/lancamentos', l: 'Descontos/Créditos', i: 'bi-plus-slash-minus', p: 'financeiro.lancamentos' },
-      { href: '#/financeiro/comissoes', l: 'Revisar Comissões', i: 'bi-percent', p: 'financeiro.comissoes' },
-      { href: '#/financeiro/devolucoes', l: 'Desconto Devolução', i: 'bi-arrow-counterclockwise', p: 'financeiro.devolucoes' },
-      { href: '#/financeiro/negativados', l: 'Clientes Negativados', i: 'bi-person-x', p: 'financeiro.negativados' },
+      {
+        l: 'Contas a receber', i: 'bi-wallet2', abas: [
+          { href: '#/financeiro/parcelas', l: 'Parcelas', i: 'bi-list-check', p: 'financeiro.parcelas' },
+          { href: '#/cobranca', l: 'Cobrança', i: 'bi-telephone-outbound', p: 'cobranca' },
+          { href: '#/financeiro/negativados', l: 'Negativados', i: 'bi-person-x', p: 'financeiro.negativados' },
+        ],
+      },
+      { href: '#/pagar', l: 'Contas a pagar', i: 'bi-credit-card-2-back', p: 'financeiro.pagar' },
+      {
+        l: 'Notas fiscais', i: 'bi-receipt', abas: [
+          { href: '#/financeiro/notas', l: 'Notas de saída', i: 'bi-file-earmark-text', p: 'financeiro.notas' },
+          { href: '#/financeiro/devolucoes', l: 'Descontos de devolução', i: 'bi-arrow-counterclockwise', p: 'financeiro.devolucoes' },
+        ],
+      },
+      {
+        l: 'Comissões', i: 'bi-percent', abas: [
+          { href: '#/financeiro/comissoes', l: 'Revisar comissões', i: 'bi-percent', p: 'financeiro.comissoes' },
+          { href: '#/financeiro/lancamentos', l: 'Descontos e créditos', i: 'bi-plus-slash-minus', p: 'financeiro.lancamentos' },
+          { href: '#/cadastros/comissao', l: 'Regras de comissão', i: 'bi-sliders', p: 'config.comissao' },
+        ],
+      },
     ],
   },
+  { grupo: 'Operação', itens: [{ href: '#/estoque', l: 'Estoque', i: 'bi-boxes', p: 'estoque' }] },
   {
-    grupo: 'Cadastros', itens: [
-      { href: '#/cadastros/produtos', l: 'Produtos', i: 'bi-box', p: 'cadastros.produto' },
-      { href: '#/cadastros/formas', l: 'Formas de Pagamento', i: 'bi-credit-card', p: 'cadastros.forma' },
-      { href: '#/cadastros/transportadoras', l: 'Transportadoras', i: 'bi-truck-front', p: 'cadastros.transportadora' },
-      { href: '#/cadastros/fornecedores', l: 'Fornecedores', i: 'bi-shop', p: 'cadastros.fornecedor' },
-      { href: '#/cadastros/colaboradores', l: 'Colaboradores', i: 'bi-person-vcard', p: 'cadastros.colaborador' },
-      { href: '#/cadastros/usuarios', l: 'Usuários e Permissões', i: 'bi-person-lock', p: 'cadastros.usuario' },
-      { href: '#/cadastros/equipes', l: 'Equipes', i: 'bi-people-fill', p: 'cadastros.usuario' },
-      { href: '#/cadastros/empresas', l: 'Empresas', i: 'bi-building', p: 'cadastros.empresa' },
-      { href: '#/cadastros/listas', l: 'Listas de opções', i: 'bi-list-ul', p: 'cadastros.listas' },
-      { href: '#/cadastros/comissao', l: 'Regras de comissão', i: 'bi-percent', p: 'config.comissao' },
-    ],
-  },
-  {
-    grupo: 'RH e DP', itens: [
-      { href: '#/rh', l: 'Painel do RH', i: 'bi-person-workspace', p: 'rh' },
-      { href: '#/rh/colaboradores', l: 'Colaboradores', i: 'bi-person-vcard', p: 'rh' },
-      { href: '#/rh/ferias', l: 'Férias', i: 'bi-sun', p: 'rh' },
-      { href: '#/rh/ocorrencias', l: 'Ponto e Ocorrências', i: 'bi-clock-history', p: 'rh' },
-      { href: '#/rh/solicitacoes', l: 'Solicitações', i: 'bi-inbox', p: 'rh', etapa: 'rh_solicitacoes' },
-      { href: '#/rh/folha', l: 'Folha (eventos do mês)', i: 'bi-cash-stack', p: 'rh.folha' },
-    ],
-  },
-  { grupo: 'Relatórios', itens: [{ href: '#/relatorios', l: 'Relatórios', i: 'bi-bar-chart-line', p: 'relatorios' }] },
-  {
-    grupo: 'Segurança', itens: [
-      { href: '#/auditoria', l: 'Auditoria', i: 'bi-journal-text', p: 'auditoria' },
-      { href: '#/backups', l: 'Backups', i: 'bi-database-check', p: 'backup' },
-      { href: '#/importacao', l: 'Importar dados', i: 'bi-cloud-upload', p: 'importacao' },
-      { href: '#/privacidade', l: 'Privacidade (LGPD)', i: 'bi-shield-lock' },
+    grupo: 'Gestão', itens: [
+      {
+        l: 'RH e DP', i: 'bi-person-workspace', abas: [
+          { href: '#/rh', l: 'Painel', i: 'bi-person-workspace', p: 'rh' },
+          { href: '#/rh/colaboradores', l: 'Colaboradores', i: 'bi-person-vcard', p: 'rh' },
+          { href: '#/rh/ferias', l: 'Férias', i: 'bi-sun', p: 'rh' },
+          { href: '#/rh/ocorrencias', l: 'Ponto e ocorrências', i: 'bi-clock-history', p: 'rh' },
+          { href: '#/rh/solicitacoes', l: 'Solicitações', i: 'bi-inbox', p: 'rh', etapa: 'rh_solicitacoes' },
+          { href: '#/rh/folha', l: 'Folha do mês', i: 'bi-cash-stack', p: 'rh.folha' },
+        ],
+      },
+      { href: '#/relatorios', l: 'Relatórios', i: 'bi-bar-chart-line', p: 'relatorios' },
+      {
+        l: 'Pessoas e acesso', i: 'bi-person-lock', abas: [
+          // Quem tem RH cadastra colaboradores pelo RH; a aba aqui fica para quem só cuida de cadastros.
+          { href: '#/cadastros/colaboradores', l: 'Colaboradores', i: 'bi-person-vcard', p: 'cadastros.colaborador', se: () => !pode('rh') },
+          { href: '#/cadastros/usuarios', l: 'Usuários e permissões', i: 'bi-person-lock', p: 'cadastros.usuario' },
+          { href: '#/cadastros/equipes', l: 'Equipes', i: 'bi-people-fill', p: 'cadastros.usuario' },
+        ],
+      },
+      {
+        l: 'Cadastros', i: 'bi-collection', abas: [
+          { href: '#/cadastros/produtos', l: 'Produtos', i: 'bi-box', p: 'cadastros.produto' },
+          { href: '#/cadastros/formas', l: 'Formas de pagamento', i: 'bi-credit-card', p: 'cadastros.forma' },
+          { href: '#/cadastros/transportadoras', l: 'Transportadoras', i: 'bi-truck-front', p: 'cadastros.transportadora' },
+          { href: '#/cadastros/fornecedores', l: 'Fornecedores', i: 'bi-shop', p: 'cadastros.fornecedor' },
+          { href: '#/cadastros/empresas', l: 'Empresas', i: 'bi-building', p: 'cadastros.empresa' },
+          { href: '#/cadastros/listas', l: 'Listas de opções', i: 'bi-list-ul', p: 'cadastros.listas' },
+        ],
+      },
+      {
+        l: 'Administração', i: 'bi-shield-check', abas: [
+          { href: '#/auditoria', l: 'Auditoria', i: 'bi-journal-text', p: 'auditoria' },
+          { href: '#/backups', l: 'Backups', i: 'bi-database-check', p: 'backup' },
+          { href: '#/importacao', l: 'Importar dados', i: 'bi-cloud-upload', p: 'importacao' },
+        ],
+      },
     ],
   },
 ];
+const liberado = (x) => (!x.p || pode(x.p)) && (!x.se || x.se());
+/** Abas da área que o usuário pode ver. */
+const abasDe = (item) => (item.abas || [item]).filter(liberado);
+/** Todas as telas liberadas (uma por aba), para a busca e o assistente. */
+const telasLiberadas = () => MENU.flatMap((g) => g.itens.flatMap((it) => abasDe(it).map((a) => ({ ...a, grupo: it.abas ? it.l : g.grupo, area: it }))));
+// Telas fora do menu, mas de uma área (o título e a barra de abas da área aparecem nelas).
+const ROTAS_DA_AREA = [[/^#\/pedido\//, 'Pedidos'], [/^#\/crm\/cliente\//, 'CRM'], [/^#\/cobranca\/cliente\//, 'Contas a receber'], [/^#\/relatorios\//, 'Relatórios'], [/^#\/propostas\//, 'Propostas']];
 
 // Descrição curta de cada tela, mostrada abaixo do título.
 const SUBTITULOS = {
@@ -322,7 +351,7 @@ $('#btn-chat').addEventListener('click', () => { assistente.alternar(false); cha
 $('#btn-assistente').addEventListener('click', () => { chat.alternar(false); assistente.alternar(); });
 $('#btn-ia').addEventListener('click', () => { chat.alternar(false); assistente.alternar(true); });
 assistente.configurar({
-  telas: () => MENU.flatMap((g) => g.itens.filter((i) => !i.p || pode(i.p)).map((i) => `${g.grupo} › ${i.l} (${i.href})`)),
+  telas: () => telasLiberadas().map((t) => `${t.grupo} › ${t.l} (${t.href})`),
 });
 const fecharMenu = () => { $('#sidebar').classList.remove('aberto'); $('#backdrop-menu').classList.remove('ativo'); };
 $('#btn-menu').addEventListener('click', () => { $('#sidebar').classList.add('aberto'); $('#backdrop-menu').classList.add('ativo'); });
@@ -366,14 +395,31 @@ async function abrirApp() {
   else rotear();
 }
 
+/** Endereço de uma área: a última aba usada (se ainda liberada) ou a primeira. */
+function hrefArea(item) {
+  const abas = abasDe(item);
+  const ultima = ler(`agt-aba-${item.l}`);
+  return (abas.find((a) => a.href === ultima) || abas[0])?.href;
+}
+// Contador da área: só as filas do setor da pessoa (a Diretoria conta a fila dela, não todas); sem fila do setor, soma as liberadas.
+const etapasDe = (item) => {
+  const todas = abasDe(item).map((a) => a.etapa).filter(Boolean);
+  const perfil = state.me.usuario.perfil;
+  const minhas = todas.filter((e) => state.me.etapas[e]?.perfil === perfil || (perfil === 'admin' && e === 'diretoria') || (perfil === 'gerente' && e === 'supervisao'));
+  return (minhas.length ? minhas : todas).join(',');
+};
+
 function montarMenu() {
   const fechados = new Set(JSON.parse(ler('agt-grupos') || '[]'));
   $('#menu').innerHTML = MENU.map((g) => {
-    const itens = g.itens.filter((i) => !i.p || pode(i.p));
+    const itens = g.itens.filter((it) => abasDe(it).length);
     if (!itens.length) return '';
     const f = fechados.has(g.grupo) ? 'fechado' : '';
     return `<button type="button" class="grupo ${f}" data-grupo="${g.grupo}">${g.grupo}<i class="bi bi-chevron-down"></i></button>
-      <div class="itens ${f}">${itens.map((i) => `<a href="${i.href}" title="${esc(i.l)}"><i class="bi ${i.i}"></i> <span>${i.l}</span>${i.etapa ? `<span class="contador d-none" data-cont="${i.etapa}"></span>` : ''}</a>`).join('')}</div>`;
+      <div class="itens ${f}">${itens.map((it) => {
+        const cont = etapasDe(it);
+        return `<a href="${hrefArea(it)}" data-area="${esc(it.l)}" title="${esc(it.l)}"><i class="bi ${it.i}"></i> <span>${esc(it.l)}</span>${cont ? `<span class="contador d-none" data-cont="${cont}"></span>` : ''}</a>`;
+      }).join('')}</div>`;
   }).join('');
   $('#menu').querySelectorAll('[data-grupo]').forEach((b) => b.addEventListener('click', () => {
     b.classList.toggle('fechado');
@@ -382,17 +428,59 @@ function montarMenu() {
   }));
 }
 
+/** Área e aba da rota atual (a aba mais específica que casa com o endereço). */
+function areaDaRota(hash) {
+  let achada = null;
+  for (const g of MENU) {
+    for (const it of g.itens) {
+      for (const a of abasDe(it)) {
+        if ((hash === a.href || hash.startsWith(a.href + '/')) && a.href.length > (achada?.aba.href.length || 0)) achada = { grupo: g.grupo, item: it, aba: a };
+      }
+    }
+  }
+  if (!achada) {
+    const extra = ROTAS_DA_AREA.find(([re]) => re.test(hash));
+    if (extra) {
+      for (const g of MENU) for (const it of g.itens) if (it.l === extra[1] && abasDe(it).length) achada = { grupo: g.grupo, item: it, aba: null };
+    }
+  }
+  return achada;
+}
+
+let ultimosContadores = {};
+const somaContador = (lista) => String(lista).split(',').reduce((a, k) => a + (ultimosContadores[k] || 0), 0);
+function pintarContadores() {
+  document.querySelectorAll('[data-cont]').forEach((b) => {
+    const n = somaContador(b.dataset.cont);
+    b.textContent = n > 999 ? '999+' : n.toLocaleString('pt-BR');
+    b.classList.toggle('d-none', !n);
+  });
+}
+
+/** Barra de abas da área, logo abaixo do título da tela. */
+function barraDeAbas(conteudo, area) {
+  conteudo.querySelector(':scope > .area-abas')?.remove();
+  const abas = area ? abasDe(area.item) : [];
+  if (abas.length < 2) return;
+  const nav = document.createElement('nav');
+  nav.className = 'area-abas';
+  nav.setAttribute('aria-label', area.item.l);
+  nav.innerHTML = abas.map((a) => `<a href="${a.href}" class="${a === area.aba ? 'ativa' : ''}" ${a === area.aba ? 'aria-current="page"' : ''}>
+    <i class="bi ${a.i}"></i><span>${esc(a.l)}</span>${a.etapa ? `<span class="contador d-none" data-cont="${a.etapa}"></span>` : ''}</a>`).join('');
+  const titulo = conteudo.querySelector(':scope > .page-title');
+  if (titulo) titulo.after(nav); else conteudo.prepend(nav);
+  nav.querySelector('.ativa')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  pintarContadores();
+}
+
 export async function atualizarContadores() {
   if (!state.me?.empresa) return;
   try {
     const c = await get('/api/pedidos/contagem');
     if (pode('chamados')) c.chamados = (await get('/api/chamados/contagem')).para_mim;
     if (pode('rh')) c.rh_solicitacoes = (await get('/api/rh/solicitacoes?f_status=aberta&pageSize=1')).total;
-    document.querySelectorAll('[data-cont]').forEach((b) => {
-      const n = c[b.dataset.cont] || 0;
-      b.textContent = n > 999 ? '999+' : n.toLocaleString('pt-BR');
-      b.classList.toggle('d-none', !n);
-    });
+    ultimosContadores = c;
+    pintarContadores();
     const m = await get('/api/mensagens/nao-lidas');
     $('#badge-msg').classList.toggle('d-none', !m.n);
     if (pode('chat')) chat.atualizarBadge();
@@ -482,7 +570,7 @@ $('#paleta').addEventListener('shown.bs.modal', () => $('#paleta-input').focus()
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && state.me?.empresa) { e.preventDefault(); abrirBusca(); }
 });
-const telas = () => MENU.flatMap((g) => g.itens.filter((i) => !i.p || pode(i.p)).map((i) => ({ ...i, grupo: g.grupo })))
+const telas = () => telasLiberadas()
   .concat([{ href: '#/perfil', l: 'Meu perfil', i: 'bi-person-badge', grupo: 'Conta' }, { href: '#/pedido/novo', l: 'Novo pedido', i: 'bi-cart-plus', grupo: 'Ações', p: 'pedido.criar' }, { href: '#/propostas/nova', l: 'Nova proposta comercial', i: 'bi-file-earmark-plus', grupo: 'Ações', p: 'propostas' }])
   .filter((i) => !i.p || pode(i.p));
 const semAcento = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -527,18 +615,19 @@ async function rotear() {
   if (!state.me?.empresa) return;
   const hash = (location.hash || '#/dashboard').split('?')[0];
   fecharMenu();
-  // Marca só o item mais específico (#/rh/ferias não acende também #/rh).
+  // Marca a área da rota no menu; a aba aparece na barra de abas da tela.
+  const area = areaDaRota(hash);
   let ativo = null;
   document.querySelectorAll('#menu a').forEach((a) => {
-    const h = a.getAttribute('href');
-    if ((hash === h || hash.startsWith(h + '/')) && h.length > (ativo?.getAttribute('href').length || 0)) ativo = a;
+    const on = !!area && a.dataset.area === area.item.l;
+    a.classList.toggle('ativo', on);
+    if (on) { a.setAttribute('aria-current', 'page'); ativo = a; } else a.removeAttribute('aria-current');
   });
-  document.querySelectorAll('#menu a').forEach((a) => {
-    a.classList.toggle('ativo', a === ativo);
-    if (a === ativo) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
-  });
-  const grupo = ativo?.closest('.itens')?.previousElementSibling?.dataset.grupo;
-  $('#breadcrumb').innerHTML = ativo ? `${grupo ? `<small>${esc(grupo)} /</small> ` : ''}${esc(ativo.querySelector('span').textContent)}` : '';
+  if (area?.aba) {
+    guardar(`agt-aba-${area.item.l}`, area.aba.href);
+    if (ativo) ativo.setAttribute('href', area.aba.href);
+  }
+  $('#breadcrumb').innerHTML = area ? `<small>${esc(area.grupo)} /</small> ${esc(area.item.l)}${area.aba && area.item.abas ? ` <small>/ ${esc(area.aba.l)}</small>` : ''}` : '';
   const conteudo = $('#conteudo');
   for (const [re, carregar, modo] of ROTAS) {
     const m = hash.match(re);
@@ -548,6 +637,7 @@ async function rotear() {
     try {
       const mod = await carregar();
       await mod.default(conteudo, { params: m.slice(1), modo, hash });
+      barraDeAbas(conteudo, area);
       const sub = SUBTITULOS[hash];
       const h2 = conteudo.querySelector(':scope > .page-title > h2');
       if (sub && h2 && !h2.parentElement.querySelector('.page-sub')) {
@@ -557,7 +647,7 @@ async function rotear() {
         bloco.append(h2);
         bloco.insertAdjacentHTML('beforeend', `<p class="page-sub">${esc(sub)}</p>`);
       }
-      document.title = `${ativo?.querySelector('span').textContent || 'Agroterra'} · Agroterra Sistema`;
+      document.title = `${area?.aba?.l || area?.item.l || 'Agroterra'} · Agroterra Sistema`;
     } catch (e) {
       console.error(e);
       conteudo.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`;
