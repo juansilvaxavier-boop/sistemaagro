@@ -23,6 +23,7 @@ function criarApp() {
     next();
   });
 
+  app.get('/api/saude', (req, res) => res.json({ ok: true, pedidos: db.get('SELECT COUNT(*) AS n FROM pedidos').n, node: process.version }));
   app.use('/api/auth', require('./routes/auth'));
   const api = express.Router();
   api.use(A.autenticado());
