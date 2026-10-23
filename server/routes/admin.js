@@ -85,7 +85,7 @@ r.post('/lgpd/cliente/:id/anonimizar', A.exige('lgpd.titular'), async (req, res)
 });
 
 // ---------- Backups ----------
-const FORA_DO_BACKUP = new Set(['sessoes', 'backups']);
+const FORA_DO_BACKUP = new Set(['sessoes', 'backups', 'schema_versao']);
 const RETER_AUTOMATICOS = Number(process.env.BACKUP_RETENCAO || 30);
 
 async function gerarBackup(origem, usuarioId) {

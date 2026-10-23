@@ -7,19 +7,48 @@ O centro do sistema é o **pedido de venda**, que passa por uma fila própria em
 
 ## Como rodar
 
-Requisitos: Node.js 22.5 ou superior (usa o SQLite nativo `node:sqlite`, sem dependências nativas).
+Requisitos: Node.js 22.5 ou superior.
 
 ```bash
 npm install
-npm start          # http://localhost:3000 (cria o banco com dados de demonstração na primeira vez)
-npm run seed       # apaga e recria o banco de demonstração
-npm test           # testes de ponta a ponta da API
+npm run demo       # http://localhost:3000 com dados de demonstração (banco local PGlite em data/pglite)
+npm start          # sem dados de demonstração: cria só a empresa e o usuário admin
+npm run seed:demo  # recria o banco local de demonstração
+npm test           # testes de ponta a ponta (PGlite em memória)
+TEST_DATABASE_URL=postgresql://... npm test   # mesmos testes num PostgreSQL de verdade
 ```
 
-Variáveis de ambiente opcionais: `PORT`, `DB_PATH` (padrão `data/agroterra.db`), `UPLOAD_DIR` (padrão `uploads/`),
-`UPLOAD_MAX_MB` (padrão 20), `DIRETORIA_A_PARTIR_DE` (valor mínimo do pedido para passar pela Diretoria; padrão 0 = todos).
+### Banco de dados
 
-### Usuários de demonstração
+- **Produção:** PostgreSQL do Supabase (projeto `agroterra-sistema`, São Paulo), schema próprio `agroterra`, acessado pelo papel
+  `agroterra_app` via pooler (`DATABASE_URL`). O schema é aplicado automaticamente na inicialização quando muda (`server/schema.sql`).
+- **Desenvolvimento e testes:** PGlite (PostgreSQL embutido), sem instalar nada.
+- **Backup:** automático todo dia às 03:00 (Vercel Cron → `/api/cron/backup`, protegido por `CRON_SECRET`), guardando os 30 mais recentes,
+  e manual em *Segurança → Backups*, com download do arquivo `.json.gz`.
+
+### Variáveis de ambiente
+
+| Variável | Para quê |
+|---|---|
+| `DATABASE_URL` | Conexão com o PostgreSQL (sem ela, usa o PGlite local) |
+| `SESSION_SECRET` | Assina as sessões (obrigatória com várias instâncias) |
+| `ADMIN_SENHA_INICIAL` | Senha provisória do usuário `admin` criado no primeiro início |
+| `ADMIN_LOGIN`, `EMPRESA_NOME`, `EMPRESA_CNPJ` | Dados iniciais opcionais |
+| `CRON_SECRET` | Protege a rota do backup agendado |
+| `UPLOAD_MAX_MB` | Tamanho máximo dos anexos (padrão 4) |
+
+### Primeiro acesso em produção
+
+Não há dados nem senhas de demonstração em produção. O sistema cria a empresa e o usuário `admin` com a senha provisória de
+`ADMIN_SENHA_INICIAL`. No primeiro login o administrador troca a senha e aceita o termo de privacidade. Depois:
+
+1. **Cadastros → Empresas:** ajuste nome e CNPJ.
+2. **Cadastros → Colaboradores:** cadastre as pessoas.
+3. **Cadastros → Usuários e Permissões:** crie o acesso de cada colaborador, com perfil e, se quiser, permissões individuais.
+   A senha definida é provisória e a pessoa troca no primeiro acesso.
+4. Cadastre produtos, formas de pagamento, transportadoras e equipes.
+
+### Usuários de demonstração (só com `npm run demo`)
 
 | Login | Perfil | Senha |
 |---|---|---|
@@ -31,6 +60,23 @@ Variáveis de ambiente opcionais: `PORT`, `DB_PATH` (padrão `data/agroterra.db`
 | `carlos`, `fernanda` | Supervisor | `agro123` |
 | `analise` | Análise de crédito | `agro123` |
 | `producao`, `faturamento`, `expedicao`, `financeiro` | Setores | `agro123` |
+
+## Segurança, LGPD e auditoria
+
+- Senha com no mínimo 8 caracteres (letras e números), troca obrigatória da senha provisória e bloqueio por 15 minutos após 5 tentativas erradas.
+- Termo de uso e política de privacidade aceitos no primeiro acesso (*Segurança → Privacidade*).
+- Permissões por usuário: o perfil traz um padrão e o administrador pode personalizar item a item.
+- CPF/CNPJ, telefone e e-mail aparecem mascarados para quem não tem a permissão *Ver dados completos*, e não podem ser sobrescritos por ele.
+- Auditoria (*Segurança → Auditoria*): inclusões, alterações (antes e depois), exclusões, logins, acessos a cadastros de clientes,
+  downloads, exportações e backups, com usuário, data e IP.
+- Direitos do titular: na aba *LGPD* do cliente, exportar todos os dados (JSON) ou anonimizar o cadastro, mantendo os registros fiscais.
+- Painel: cada usuário vê o painel do seu setor (vendedor, as próprias vendas; supervisor, a equipe). Só quem tem *Ver o painel de qualquer setor* troca de painel.
+
+## Recursos da interface
+
+Tema claro e escuro, menu recolhível, busca global (**Ctrl+K**) por pedido, cliente ou tela, chat interno entre usuários com
+indicação de leitura e de quem está online, *Meu perfil* com foto, avisos do navegador para mensagens e pedidos, e instalação como
+aplicativo (PWA) no computador ou no celular.
 
 ## O que o sistema tem
 

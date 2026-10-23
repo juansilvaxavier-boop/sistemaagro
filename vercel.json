@@ -2,7 +2,21 @@
   "buildCommand": "node scripts/build-static.js",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.js": { "includeFiles": "server/schema.sql", "maxDuration": 60 }
+    "api/index.js": {
+      "includeFiles": "server/schema.sql",
+      "maxDuration": 60
+    }
   },
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/backup",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

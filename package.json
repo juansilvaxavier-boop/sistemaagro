@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node --no-warnings server/index.js",
     "dev": "node --no-warnings --watch server/index.js",
-    "seed": "node --no-warnings server/seed.js --reset",
+    "demo": "DEMO=1 node --no-warnings server/index.js",
+    "seed:demo": "node --no-warnings server/seed.js --reset",
     "test": "node --no-warnings --test test/*.test.js"
   },
   "dependencies": {

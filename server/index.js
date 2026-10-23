@@ -22,7 +22,14 @@ function criarApp() {
     next();
   });
 
-  app.get('/api/saude', async (req, res) => res.json({ ok: true, banco: (await db.get('SELECT 1 AS ok')).ok === 1, node: process.version }));
+  app.get('/api/saude', async (req, res) => {
+    try {
+      const r = await db.get('SELECT current_schema() AS schema, (SELECT COUNT(*) FROM usuarios) AS usuarios');
+      res.json({ ok: true, banco: 'conectado', schema: r.schema, usuarios: r.usuarios, node: process.version });
+    } catch (e) {
+      res.status(503).json({ ok: false, banco: 'indisponível', erro: e.code || 'erro', detalhe: String(e.message).slice(0, 160) });
+    }
+  });
   app.get('/api/cron/backup', (req, res, next) => require('./routes/admin').cronBackup(req, res).catch(next));
   app.use('/api/auth', require('./routes/auth'));
   const api = express.Router();

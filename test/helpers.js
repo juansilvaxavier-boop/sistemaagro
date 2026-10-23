@@ -4,8 +4,11 @@ const os = require('node:os');
 const path = require('node:path');
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agroterra-test-'));
+// Por padrão usa o PGlite em memória; com TEST_DATABASE_URL roda contra um PostgreSQL de verdade
+// (mesmo driver e configuração da produção). O schema "agroterra" desse banco é recriado a cada execução.
 process.env.PGLITE_DIR = ':memory:';
-delete process.env.DATABASE_URL;
+if (process.env.TEST_DATABASE_URL) process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+else delete process.env.DATABASE_URL;
 
 const db = require('../server/db');
 const { seed } = require('../server/seed');
@@ -16,6 +19,16 @@ let base;
 
 async function iniciar() {
   if (server) return base;
+  if (process.env.TEST_DATABASE_URL) {
+    const pg = require('pg');
+    const c = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+    await c.connect();
+    await c.query(`DO $$ DECLARE r record; BEGIN
+      FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = current_schema() LOOP
+        EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+      END LOOP; END $$`);
+    await c.end();
+  }
   await db.open();
   await seed();
   server = criarApp().listen(0);

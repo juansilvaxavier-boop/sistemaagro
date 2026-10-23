@@ -24,6 +24,7 @@ async function criarMotor() {
       ssl: /localhost|127\.0\.0\.1/.test(DATABASE_URL) ? false : { rejectUnauthorized: false },
       idleTimeoutMillis: 10000,
     });
+    await aplicarSchema(pool);
     return {
       query: (sql, params) => pool.query(sql, params),
       async transacao(fn) {
@@ -56,9 +57,34 @@ async function criarMotor() {
   };
 }
 
+/**
+ * Aplica o schema no PostgreSQL (idempotente) quando ele mudou desde a última vez.
+ * A trava evita que várias instâncias apliquem ao mesmo tempo.
+ */
+async function aplicarSchema(pool) {
+  const hash = require('node:crypto').createHash('sha256').update(SCHEMA).digest('hex');
+  const atual = await pool.query('SELECT hash FROM schema_versao LIMIT 1').then((r) => r.rows[0]?.hash, () => null);
+  if (atual === hash) return;
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query('SELECT pg_advisory_xact_lock(724001)');
+    await c.query(SCHEMA);
+    await c.query('CREATE TABLE IF NOT EXISTS schema_versao (hash text NOT NULL, aplicado_em timestamptz NOT NULL DEFAULT now())');
+    await c.query('DELETE FROM schema_versao');
+    await c.query('INSERT INTO schema_versao (hash) VALUES ($1)', [hash]);
+    await c.query('COMMIT');
+  } catch (e) {
+    await c.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    c.release();
+  }
+}
+
 async function open() {
   if (motor) return motor;
-  iniciando ||= criarMotor().then((m) => (motor = m));
+  iniciando ||= criarMotor().then((m) => (motor = m), (e) => { iniciando = undefined; throw e; });
   return iniciando;
 }
 
