@@ -5,7 +5,7 @@ import {
 
 export default async function (conteudo, { params: [tela], modo }) {
   if (modo === 'senha') return senha(conteudo);
-  const telas = { produtos, formas, transportadoras, usuarios, equipes, empresas };
+  const telas = { produtos, formas, transportadoras, equipes, empresas };
   if (!telas[tela]) { conteudo.innerHTML = '<div class="vazio">Tela não encontrada.</div>'; return; }
   return telas[tela](conteudo);
 }
@@ -150,24 +150,6 @@ function transportadoras(conteudo) {
   });
 }
 
-function usuarios(conteudo) {
-  const perfis = Object.entries(state.me.perfis);
-  crudSimples(conteudo, {
-    tituloTela: 'Usuários', icone: 'bi-person-gear', url: '/api/cadastros/usuarios',
-    colunas: [{ k: 'nome', l: 'Nome' }, { k: 'login', l: 'Login' }, { k: 'email', l: 'E-mail' },
-      { k: 'perfil', l: 'Perfil', filter: { options: perfis }, render: (v) => esc(state.me.perfis[v] || v) }, { k: 'equipe', l: 'Equipe' },
-      { k: 'comissao_pct', l: 'Comissão %', t: 'num' }, { k: 'empresas', l: 'Empresas' }, ATIVO],
-    campos: (u) => `${campo('nome', 'Nome', { col: 'col-md-6', required: true })}${campo('login', 'Login', { col: 'col-md-3', required: true })}
-      ${campo('senha', u.id ? 'Nova senha (deixe em branco para manter)' : 'Senha inicial', { type: 'password', col: 'col-md-3', required: !u.id, attrs: 'autocomplete="new-password"' })}
-      ${campo('email', 'E-mail', { type: 'email', col: 'col-md-5' })}
-      ${campo('perfil', 'Perfil', { type: 'select', col: 'col-md-3', options: perfis })}
-      ${campo('equipe_id', 'Equipe', { type: 'select', col: 'col-md-4', options: opcoes(state.opcoes.equipes, '—') })}
-      ${campo('comissao_pct', 'Comissão padrão (%)', { type: 'number', col: 'col-md-3', attrs: 'step="0.01"' })}
-      ${campo('ativo', 'Ativo', { type: 'checkbox', col: 'col-md-2', value: 1 })}
-      <div class="col-md-7"><label class="form-label">Empresas liberadas</label><select name="empresas" multiple class="form-select form-select-sm" size="3">${state.opcoes.empresas.map((e) => `<option value="${e.id}">${esc(e.nome)}</option>`).join('')}</select></div>`,
-  });
-}
-
 function equipes(conteudo) {
   crudSimples(conteudo, {
     tituloTela: 'Equipes', icone: 'bi-people-fill', url: '/api/cadastros/equipes',
@@ -190,9 +172,9 @@ function senha(conteudo) {
   const pagina = titulo(conteudo, 'Alterar Minha Senha', 'bi-key');
   pagina.innerHTML = `<div class="card" style="max-width:420px"><div class="card-body"><form class="row g-2">
     ${campo('atual', 'Senha atual', { type: 'password', col: 'col-12', required: true, attrs: 'autocomplete="current-password"' })}
-    ${campo('nova', 'Nova senha (mín. 6 caracteres)', { type: 'password', col: 'col-12', required: true, attrs: 'autocomplete="new-password" minlength="6"' })}
+    ${campo('nova', 'Nova senha (mín. 8 caracteres, com letras e números)', { type: 'password', col: 'col-12', required: true, attrs: 'autocomplete="new-password" minlength="8"' })}
     ${campo('confirmacao', 'Confirme a nova senha', { type: 'password', col: 'col-12', required: true, attrs: 'autocomplete="new-password"' })}
-    <div class="col-12"><button class="btn btn-success btn-sm">Alterar senha</button></div></form></div></div>`;
+    <div class="col-12"><button class="btn btn-primary">Alterar senha</button></div></form></div></div>`;
   pagina.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {

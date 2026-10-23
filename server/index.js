@@ -46,6 +46,7 @@ function criarApp() {
   app.use('/vendor/bootstrap', express.static(path.join(nm, 'bootstrap', 'dist')));
   app.use('/vendor/bootstrap-icons', express.static(path.join(nm, 'bootstrap-icons', 'font')));
   app.use('/vendor/chart.js', express.static(path.join(nm, 'chart.js', 'dist')));
+  app.use('/vendor/fonte', express.static(path.join(nm, '@fontsource-variable', 'plus-jakarta-sans')));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
   // eslint-disable-next-line no-unused-vars

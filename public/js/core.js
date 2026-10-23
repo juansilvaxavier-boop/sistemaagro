@@ -20,6 +20,7 @@ export async function api(url, { method = 'GET', body, raw } = {}) {
   if (res.status === 401 && !url.startsWith('/api/auth/login')) {
     window.dispatchEvent(new CustomEvent('sessao-expirada'));
   }
+  if (res.status === 428 && data.erro && !url.includes('/serasa')) window.dispatchEvent(new CustomEvent('pendencia-acesso'));
   if (!res.ok) throw new ApiError(data.erro || `Erro ${res.status}`, res.status);
   return data;
 }
@@ -125,8 +126,10 @@ export function renderCell(col, v, row) {
 // ---------- Notificações ----------
 export function toast(msg, tipo = 'success', titulo) {
   const el = document.createElement('div');
-  el.className = `toast align-items-center text-bg-${tipo} border-0`;
-  el.innerHTML = `<div class="d-flex"><div class="toast-body">${titulo ? `<strong>${esc(titulo)}</strong><br>` : ''}${esc(msg)}</div>
+  const icone = { success: 'bi-check-circle-fill', danger: 'bi-exclamation-octagon-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill', primary: 'bi-chat-dots-fill' }[tipo] || 'bi-info-circle-fill';
+  el.className = `toast align-items-center text-bg-${tipo} border-0 shadow`;
+  el.setAttribute('role', tipo === 'danger' ? 'alert' : 'status');
+  el.innerHTML = `<div class="d-flex"><div class="toast-body d-flex gap-2"><i class="bi ${icone}"></i><div>${titulo ? `<strong>${esc(titulo)}</strong><br>` : ''}${esc(msg)}</div></div>
     <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
   document.getElementById('toasts').appendChild(el);
   const t = new bootstrap.Toast(el, { delay: tipo === 'danger' ? 7000 : 4000 });
@@ -274,10 +277,18 @@ export function debounce(fn, ms = 350) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
+// Mesma regra do servidor: permissão exata; pedir o grupo ("fila") vale se houver algum item dele.
 export const pode = (perm) => {
   const l = state.me?.permissoes || [];
-  return l.includes('*') || l.includes(perm) || l.some((p) => perm.startsWith(p + '.') || p.startsWith(perm + '.'));
+  return l.includes('*') || l.includes(perm) || l.some((p) => p.startsWith(perm + '.'));
 };
+
+/** Avatar com foto (quando houver) ou iniciais. */
+export function avatar(usuario, cls = '') {
+  const ini = String(usuario?.nome || '?').split(' ').filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  const foto = usuario?.tem_foto ? ` style="background-image:url('/api/auth/foto/${usuario.id}?v=${state.fotoVersao || 0}')"` : '';
+  return `<span class="avatar ${cls}"${foto} aria-hidden="true">${usuario?.tem_foto ? '' : esc(ini)}</span>`;
+}
 
 export function h(html) {
   const t = document.createElement('template');
@@ -333,7 +344,7 @@ export class DataTable {
       <div class="dt-wrap"><table class="table table-sm table-hover dt">
         <thead><tr>${this.o.actions ? '<th class="sem-ordem acoes"></th>' : ''}${cols.map((c) => `<th data-s="${c.k}" class="${c.t === 'money' || c.t === 'num' ? 'num' : ''}">${esc(c.l)} <i class="bi"></i></th>`).join('')}</tr>
           <tr class="filtros">${this.o.actions ? '<th></th>' : ''}${cols.map(filtro).join('')}</tr></thead>
-        <tbody><tr><td colspan="${cols.length + 1}" class="vazio"><div class="spinner-border spinner-border-sm"></div> Carregando...</td></tr></tbody>
+        <tbody>${Array.from({ length: 6 }, () => `<tr>${this.o.actions ? '<td></td>' : ''}${cols.map(() => '<td><span class="esqueleto"></span></td>').join('')}</tr>`).join('')}</tbody>
       </table></div>
       <div class="dt-footer">
         <div class="info text-muted"></div>
@@ -469,7 +480,7 @@ export function buscaCliente(input, onSelect) {
 }
 
 export function titulo(conteudo, texto, icone, extra = '') {
-  conteudo.innerHTML = `<div class="page-title"><h2><i class="bi ${icone} text-agro"></i> ${texto}</h2><div class="ms-auto d-flex gap-2 flex-wrap">${extra}</div></div><div id="pagina"></div>`;
+  conteudo.innerHTML = `<div class="page-title"><h2><i class="bi ${icone}"></i> <span>${texto}</span></h2><div class="ms-auto d-flex gap-2 flex-wrap">${extra}</div></div><div id="pagina"></div>`;
   return conteudo.querySelector('#pagina');
 }
 

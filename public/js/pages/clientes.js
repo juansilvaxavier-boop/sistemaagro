@@ -1,7 +1,7 @@
 // Clientes: lista, cadastro com seis abas, histórico de compra e blacklist.
 import {
   get, post, put, esc, fmt, modal, abas, campo, opcoes, lerForm, preencherForm, toast, erro, tentar, state,
-  DataTable, EditorLista, titulo, pode, pedirTexto, badge, tabelaSimples, buscaCliente, btnAcao,
+  DataTable, EditorLista, titulo, pode, pedirTexto, badge, tabelaSimples, buscaCliente, btnAcao, baixar,
 } from '../core.js';
 import { painelArquivos } from './arquivos.js';
 
@@ -45,6 +45,8 @@ export async function abrirCliente(id, aoSalvar) {
     ${state.me.usuario.perfil !== 'vendedor' ? campo('vendedor_id', 'Vendedor responsável', { type: 'select', col: 'col-md-4', options: opcoes(state.opcoes.usuarios.filter((u) => u.perfil === 'vendedor'), '—') }) : ''}
     ${campo('limite_credito', 'Limite de crédito', { type: 'number', col: 'col-md-4', attrs: 'step="0.01"' })}
     ${campo('observacao', 'Observações', { type: 'textarea', col: 'col-12' })}
+    ${campo('base_legal', 'Base legal do tratamento (LGPD)', { type: 'select', col: 'col-md-6', options: [['execucao_contrato', 'Execução de contrato (vendas e entregas)'], ['protecao_credito', 'Proteção do crédito'], ['obrigacao_legal', 'Obrigação legal/fiscal'], ['consentimento', 'Consentimento do titular']] })}
+    ${campo('consentimento_marketing', 'Cliente autorizou receber ofertas e comunicações de marketing', { type: 'checkbox', col: 'col-md-6' })}
   </div></form>`;
   const lista = [
     { id: 'geral', label: 'Geral', html: geral },
@@ -55,9 +57,18 @@ export async function abrirCliente(id, aoSalvar) {
     { id: 'rb', label: 'Referências bancárias', html: '<div data-ed="ref_bancarias"></div>' },
   ];
   if (id && pode('arquivos')) lista.push({ id: 'arq', label: '<i class="bi bi-paperclip"></i> Arquivos', html: '<div data-arquivos></div>' });
+  if (id && pode('lgpd.titular')) {
+    lista.push({ id: 'lgpd', label: '<i class="bi bi-shield-lock"></i> LGPD', html: `<p class="text-body-secondary">Atenda aos pedidos do titular dos dados (art. 18 da LGPD).</p>
+      ${c.anonimizado_em ? `<div class="alert alert-secondary">Cadastro anonimizado em ${fmt.datetime(c.anonimizado_em)}.</div>` : ''}
+      <div class="d-flex gap-2 flex-wrap"><button type="button" class="btn btn-outline-primary" data-lgpd-exportar><i class="bi bi-filetype-json"></i> Exportar dados do titular</button>
+      ${c.anonimizado_em ? '' : '<button type="button" class="btn btn-outline-danger" data-lgpd-anonimizar><i class="bi bi-person-x"></i> Anonimizar cliente</button>'}</div>
+      <p class="small text-body-secondary mt-3 mb-0">A anonimização apaga nome, documento, contatos, referências, consultas de crédito e arquivos. Notas, parcelas e pedidos continuam guardados sem identificar a pessoa, porque a lei fiscal exige.
+      Só é possível sem pedidos em andamento nem parcelas em aberto.</p>` });
+  }
   const bl = c.blacklist;
-  const alerta = bl?.bloqueio ? `<div class="alert alert-danger py-2"><i class="bi bi-shield-x"></i> Bloqueado: ${esc(bl.bloqueio.motivo)}</div>`
-    : bl?.alertas?.length ? `<div class="alert alert-warning py-2"><i class="bi bi-shield-exclamation"></i> ${esc(bl.alertas[0].motivo)}</div>` : '';
+  const aviso = c.dados_mascarados ? '<div class="alert alert-light border py-2"><i class="bi bi-eye-slash"></i> CPF/CNPJ, e-mail e telefones aparecem mascarados para o seu usuário (LGPD) e não podem ser alterados aqui.</div>' : '';
+  const alerta = aviso + (bl?.bloqueio ? `<div class="alert alert-danger py-2"><i class="bi bi-shield-x"></i> Bloqueado: ${esc(bl.bloqueio.motivo)}</div>`
+    : bl?.alertas?.length ? `<div class="alert alert-warning py-2"><i class="bi bi-shield-exclamation"></i> ${esc(bl.alertas[0].motivo)}</div>` : '');
 
   const editores = {};
   const m = modal({
@@ -101,6 +112,18 @@ export async function abrirCliente(id, aoSalvar) {
     { k: 'data_checagem', l: 'Checagem', type: 'date' }, { k: 'checada', l: 'Checada', type: 'checkbox' }, { k: 'positivo', l: 'Positivo', type: 'checkbox' }, { k: 'observacao', l: 'Observações' },
   ], c.ref_bancarias, { rotuloAdd: 'Referência' });
   if (!podeEditar) b.querySelectorAll('input,select,textarea,button[data-add],button[data-rem]').forEach((x) => { x.disabled = true; });
+  if (c.dados_mascarados) {
+    ['documento', 'email'].forEach((n) => { const x = b.querySelector(`[data-geral] [name=${n}]`); if (x) x.disabled = true; });
+    b.querySelectorAll('[data-ed=telefones] input, [data-ed=telefones] select, [data-ed=telefones] button').forEach((x) => { x.disabled = true; });
+  }
+  b.querySelector('[data-lgpd-exportar]')?.addEventListener('click', async () => {
+    const motivo = await pedirTexto('Motivo da exportação (ex.: pedido do titular por e-mail em dd/mm)', { titulo: 'Exportar dados do titular' });
+    if (motivo) tentar(() => baixar(`/api/admin/lgpd/cliente/${id}/exportar?motivo=${encodeURIComponent(motivo)}`, `dados_titular_${id}.json`));
+  });
+  b.querySelector('[data-lgpd-anonimizar]')?.addEventListener('click', async () => {
+    const motivo = await pedirTexto('Esta ação não pode ser desfeita. Informe o motivo (ex.: pedido do titular).', { titulo: 'Anonimizar cliente', ok: 'Anonimizar', min: 10 });
+    if (motivo && await tentar(() => post(`/api/admin/lgpd/cliente/${id}/anonimizar`, { motivo }), 'Cliente anonimizado.')) { m.close(); aoSalvar?.(id); }
+  });
   const arq = b.querySelector('[data-arquivos]');
   if (arq) painelArquivos(arq, { cliente_id: id });
 }

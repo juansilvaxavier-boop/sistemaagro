@@ -5,7 +5,7 @@ const raiz = path.join(__dirname, '..');
 const dist = path.join(raiz, 'dist');
 fs.rmSync(dist, { recursive: true, force: true });
 fs.cpSync(path.join(raiz, 'public'), dist, { recursive: true });
-const vendor = { bootstrap: 'bootstrap/dist', 'bootstrap-icons': 'bootstrap-icons/font', 'chart.js': 'chart.js/dist' };
+const vendor = { bootstrap: 'bootstrap/dist', 'bootstrap-icons': 'bootstrap-icons/font', 'chart.js': 'chart.js/dist', fonte: '@fontsource-variable/plus-jakarta-sans' };
 for (const [nome, origem] of Object.entries(vendor)) {
   fs.cpSync(path.join(raiz, 'node_modules', origem), path.join(dist, 'vendor', nome), { recursive: true });
 }

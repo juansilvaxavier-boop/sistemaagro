@@ -1,77 +1,156 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-bs-theme="light">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6f3a" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1712" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="ERP de venda, crédito, cobrança e logística de fertilizantes">
   <title>Agroterra Sistema</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🌱</text></svg>">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/icone.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/img/icone-192.png">
+  <script>
+    // Aplica o tema salvo antes de desenhar a página (evita piscar).
+    try {
+      const t = localStorage.getItem('agt-tema') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.bsTheme = t;
+      if (localStorage.getItem('agt-menu') === 'compacto') document.documentElement.classList.add('menu-compacto');
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="/vendor/fonte/index.css">
   <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
   <link rel="stylesheet" href="/vendor/bootstrap-icons/bootstrap-icons.min.css">
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <!-- Login -->
-  <section id="tela-login" class="login-wrap d-none">
-    <div class="login-card shadow">
-      <div class="text-center mb-4">
-        <div class="logo-big"><i class="bi bi-flower1"></i></div>
-        <h1 class="h4 mb-0">Agroterra Sistema</h1>
-        <small class="text-muted">Venda, crédito, cobrança e logística</small>
+  <a href="#conteudo" class="pular">Ir para o conteúdo</a>
+
+  <!-- Acesso -->
+  <section id="tela-login" class="acesso d-none">
+    <div class="acesso-arte" aria-hidden="true">
+      <div class="acesso-marca"><img src="/img/icone.svg" alt="" width="44" height="44"> Agroterra</div>
+      <h2>Do pedido à entrega,<br>cada etapa no seu lugar.</h2>
+      <ul>
+        <li><i class="bi bi-diagram-3"></i> Fluxo do pedido com fila por setor</li>
+        <li><i class="bi bi-shield-check"></i> Crédito, Serasa e blacklist na análise</li>
+        <li><i class="bi bi-cash-coin"></i> Cobrança, comissões e notas fiscais</li>
+      </ul>
+    </div>
+    <div class="acesso-form">
+      <div class="acesso-card">
+        <div id="passo-login">
+          <h1 class="h3 mb-1">Entrar</h1>
+          <p class="text-body-secondary mb-4">Use o usuário e a senha fornecidos pela administração.</p>
+          <form id="form-login" autocomplete="on" novalidate>
+            <div class="form-floating mb-3">
+              <input name="login" id="login" class="form-control" placeholder="usuário" required autofocus autocomplete="username" autocapitalize="none">
+              <label for="login">Usuário</label>
+            </div>
+            <div class="form-floating mb-3 position-relative">
+              <input name="senha" id="senha" type="password" class="form-control" placeholder="senha" required autocomplete="current-password">
+              <label for="senha">Senha</label>
+              <button type="button" class="btn btn-link ver-senha" data-ver-senha="senha" aria-label="Mostrar senha"><i class="bi bi-eye"></i></button>
+            </div>
+            <div id="login-erro" class="alert alert-danger py-2 d-none" role="alert"></div>
+            <button class="btn btn-primary btn-lg w-100" type="submit"><span class="spinner-border spinner-border-sm d-none me-2"></span>Entrar</button>
+          </form>
+        </div>
+        <div id="passo-empresa" class="d-none">
+          <h1 class="h4 mb-1">Escolha a empresa</h1>
+          <p class="text-body-secondary mb-3">Seu usuário tem acesso a mais de uma empresa.</p>
+          <div id="lista-empresas" class="list-group list-group-flush empresas"></div>
+        </div>
+        <div id="passo-senha" class="d-none">
+          <h1 class="h4 mb-1">Crie sua senha</h1>
+          <p class="text-body-secondary mb-3">A senha recebida é provisória. Defina uma senha pessoal com pelo menos 8 caracteres, letras e números.</p>
+          <form id="form-primeira-senha" class="vstack gap-3" novalidate>
+            <div class="form-floating"><input type="password" class="form-control" id="ps-atual" name="atual" placeholder="atual" required autocomplete="current-password"><label for="ps-atual">Senha provisória</label></div>
+            <div class="form-floating"><input type="password" class="form-control" id="ps-nova" name="nova" placeholder="nova" required minlength="8" autocomplete="new-password"><label for="ps-nova">Nova senha</label></div>
+            <div class="forca"><div class="forca-barra"><span></span></div><small class="text-body-secondary" id="forca-texto">Digite a nova senha</small></div>
+            <div class="form-floating"><input type="password" class="form-control" id="ps-conf" name="confirmacao" placeholder="confirmação" required autocomplete="new-password"><label for="ps-conf">Confirme a nova senha</label></div>
+            <div class="alert alert-danger py-2 d-none" role="alert"></div>
+            <button class="btn btn-primary btn-lg">Salvar senha</button>
+          </form>
+        </div>
+        <div id="passo-termo" class="d-none">
+          <h1 class="h4 mb-1">Privacidade e uso de dados</h1>
+          <p class="text-body-secondary mb-2">Leia e aceite para continuar.</p>
+          <div class="termo" id="texto-termo"></div>
+          <div class="form-check my-3"><input class="form-check-input" type="checkbox" id="aceito"><label class="form-check-label" for="aceito">Li e concordo com o termo de uso e a política de privacidade</label></div>
+          <button class="btn btn-primary btn-lg w-100" id="btn-aceitar" disabled>Aceitar e entrar</button>
+        </div>
       </div>
-      <form id="form-login" autocomplete="on">
-        <div class="mb-3">
-          <label class="form-label">Usuário</label>
-          <input name="login" class="form-control" required autofocus autocomplete="username">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Senha</label>
-          <input name="senha" type="password" class="form-control" required autocomplete="current-password">
-        </div>
-        <div id="login-erro" class="alert alert-danger py-2 d-none"></div>
-        <button class="btn btn-success w-100" type="submit"><i class="bi bi-box-arrow-in-right"></i> Entrar</button>
-      </form>
-      <form id="form-empresa" class="d-none">
-        <label class="form-label">Escolha a empresa</label>
-        <div id="lista-empresas" class="list-group mb-3"></div>
-      </form>
-      <p class="text-center text-muted small mt-4 mb-0">Demonstração: <code>diretoria</code> / <code>agro123</code></p>
+      <p class="text-body-secondary small mt-3 mb-0 text-center">Agroterra Sistema · <a href="#" data-abrir-privacidade>Política de privacidade</a></p>
     </div>
   </section>
 
   <!-- Aplicação -->
   <div id="app" class="d-none">
-    <aside id="sidebar">
-      <div class="brand"><i class="bi bi-flower1"></i> <span>Agroterra</span></div>
-      <div class="sidebar-user">
-        <div class="avatar" id="user-avatar"></div>
-        <div>
-          <div class="fw-semibold" id="user-nome"></div>
-          <small id="user-perfil"></small>
-        </div>
+    <aside id="sidebar" aria-label="Menu principal">
+      <div class="brand">
+        <img src="/img/icone.svg" alt="" width="30" height="30"><span>Agroterra</span>
+        <button class="btn btn-icon ms-auto d-none d-lg-inline-flex" id="btn-compactar" title="Recolher menu" aria-label="Recolher menu"><i class="bi bi-layout-sidebar"></i></button>
       </div>
+      <button class="busca-menu" id="btn-busca-menu" type="button"><i class="bi bi-search"></i><span>Buscar…</span><kbd>Ctrl K</kbd></button>
       <nav id="menu"></nav>
+      <a href="#/perfil" class="sidebar-user" id="sidebar-user">
+        <span class="avatar" id="user-avatar"></span>
+        <span class="sidebar-user-txt"><span class="fw-semibold d-block text-truncate" id="user-nome"></span><small id="user-perfil"></small></span>
+      </a>
     </aside>
+    <div class="backdrop-menu" id="backdrop-menu"></div>
     <div id="main">
-      <header id="topbar" class="d-flex align-items-center gap-2">
-        <button class="btn btn-link text-dark d-lg-none" id="btn-menu" aria-label="Menu"><i class="bi bi-list fs-4"></i></button>
-        <div id="breadcrumb" class="fw-semibold text-truncate"></div>
-        <div class="ms-auto d-flex align-items-center gap-2">
-          <button class="btn btn-sm btn-outline-secondary d-none d-md-inline-block" id="btn-empresa" title="Trocar empresa"><i class="bi bi-building"></i> <span id="empresa-nome"></span></button>
-          <button class="btn btn-sm btn-outline-secondary position-relative" id="btn-mensagens" title="Mensagens">
-            <i class="bi bi-chat-dots"></i>
-            <span id="badge-msg" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
-          </button>
+      <header id="topbar">
+        <button class="btn btn-icon d-lg-none" id="btn-menu" aria-label="Abrir menu"><i class="bi bi-list fs-4"></i></button>
+        <nav aria-label="Você está em" id="breadcrumb" class="text-truncate"></nav>
+        <div class="ms-auto d-flex align-items-center gap-1">
+          <button class="btn btn-busca d-none d-md-inline-flex" id="btn-busca" type="button"><i class="bi bi-search"></i><span>Buscar pedido, cliente ou tela</span><kbd>Ctrl K</kbd></button>
+          <button class="btn btn-icon d-md-none" id="btn-busca-mob" aria-label="Buscar"><i class="bi bi-search"></i></button>
+          <button class="btn btn-empresa d-none d-md-inline-flex" id="btn-empresa" title="Trocar empresa"><i class="bi bi-building"></i> <span id="empresa-nome" class="text-truncate"></span></button>
+          <button class="btn btn-icon position-relative" id="btn-chat" title="Chat" aria-label="Chat"><i class="bi bi-chat-dots"></i><span class="badge-ponto d-none" id="badge-chat"></span></button>
+          <button class="btn btn-icon position-relative" id="btn-mensagens" title="Mensagens dos setores" aria-label="Mensagens dos setores"><i class="bi bi-bell"></i><span class="badge-ponto d-none" id="badge-msg"></span></button>
+          <button class="btn btn-icon" id="btn-tema" title="Alternar tema claro/escuro" aria-label="Alternar tema"><i class="bi bi-moon-stars"></i></button>
           <div class="dropdown">
-            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i></button>
-            <ul class="dropdown-menu dropdown-menu-end">
+            <button class="btn btn-avatar" data-bs-toggle="dropdown" aria-label="Minha conta"><span class="avatar avatar-sm" id="top-avatar"></span></button>
+            <ul class="dropdown-menu dropdown-menu-end shadow">
+              <li><h6 class="dropdown-header" id="menu-conta-nome"></h6></li>
+              <li><a class="dropdown-item" href="#/perfil"><i class="bi bi-person-badge"></i> Meu perfil</a></li>
               <li><a class="dropdown-item" href="#/senha"><i class="bi bi-key"></i> Alterar minha senha</a></li>
+              <li><a class="dropdown-item" href="#/privacidade"><i class="bi bi-shield-lock"></i> Privacidade</a></li>
+              <li><button class="dropdown-item" id="btn-notificacoes"><i class="bi bi-bell"></i> Ativar avisos no navegador</button></li>
+              <li><button class="dropdown-item d-none" id="btn-instalar"><i class="bi bi-download"></i> Instalar o aplicativo</button></li>
               <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item" href="#" id="btn-sair"><i class="bi bi-box-arrow-right"></i> Sair</a></li>
+              <li><button class="dropdown-item text-danger" id="btn-sair"><i class="bi bi-box-arrow-right"></i> Sair</button></li>
             </ul>
           </div>
         </div>
       </header>
-      <main id="conteudo" class="p-3"></main>
+      <main id="conteudo" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <!-- Chat (painel lateral) -->
+  <aside id="chat" class="chat" aria-label="Chat interno" hidden>
+    <div class="chat-cab">
+      <button class="btn btn-icon d-none" id="chat-voltar" aria-label="Voltar"><i class="bi bi-arrow-left"></i></button>
+      <div class="flex-grow-1 text-truncate" id="chat-titulo"><strong>Chat</strong></div>
+      <button class="btn btn-icon" id="chat-fechar" aria-label="Fechar chat"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="chat-corpo" id="chat-corpo"></div>
+    <form class="chat-envio d-none" id="chat-form">
+      <textarea class="form-control" id="chat-texto" rows="1" placeholder="Escreva uma mensagem" aria-label="Mensagem"></textarea>
+      <button class="btn btn-primary" aria-label="Enviar"><i class="bi bi-send-fill"></i></button>
+    </form>
+  </aside>
+
+  <!-- Busca global -->
+  <div class="modal fade" id="paleta" tabindex="-1" aria-label="Busca global">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable paleta-dialog">
+      <div class="modal-content">
+        <div class="paleta-busca"><i class="bi bi-search"></i><input id="paleta-input" placeholder="Nº do pedido, nome ou CPF/CNPJ do cliente, ou nome da tela" autocomplete="off"><kbd>Esc</kbd></div>
+        <div class="paleta-res" id="paleta-res"></div>
+      </div>
     </div>
   </div>
 
