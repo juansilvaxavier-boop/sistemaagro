@@ -979,3 +979,7 @@ CREATE TABLE IF NOT EXISTS assistente_uso (
   created_at text NOT NULL DEFAULT sq_datetime('now', 'localtime')
 );
 CREATE INDEX IF NOT EXISTS ix_assistente_uso ON assistente_uso (usuario_id, created_at);
+
+-- Comissões do pedido definidas pela Diretoria: a aprovação passa a respeitar a escolha (inclusive "sem comissão").
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS comissoes_definidas_em text;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS comissoes_definidas_por integer REFERENCES usuarios(id);

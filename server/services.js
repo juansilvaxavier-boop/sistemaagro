@@ -98,20 +98,27 @@ async function registrarHistorico(pedidoId, { origem, destino, acao, observacao,
 }
 
 /** Comissões padrão do pedido: vendedor e supervisor com o % do cadastro do usuário. */
+async function comissoesPadrao(pedido) {
+  const out = [];
+  for (const [uid, papel] of [[pedido.vendedor_id, 'vendedor'], [pedido.supervisor_id, 'supervisor']]) {
+    if (!uid) continue;
+    const u = await db.get('SELECT nome, comissao_pct FROM usuarios WHERE id = ?', uid);
+    out.push({ usuario_id: uid, usuario: u?.nome, papel, percentual: u?.comissao_pct || 0 });
+  }
+  return out;
+}
+
 async function garantirComissoes(pedido) {
   const existentes = (await db.get('SELECT COUNT(*) AS n FROM pedido_comissoes WHERE pedido_id = ?', pedido.id)).n;
-  if (existentes) return;
-  const pessoas = [
-    [pedido.vendedor_id, 'vendedor'],
-    [pedido.supervisor_id, 'supervisor'],
-  ];
-  for (const [uid, papel] of pessoas) {
-    if (!uid) continue;
-    const u = await db.get('SELECT comissao_pct FROM usuarios WHERE id = ?', uid);
-    const pct = u?.comissao_pct || 0;
-    if (!pct) continue;
+  if (existentes || pedido.comissoes_definidas_em) {
+    // Já definidas (pela Diretoria ou antes): só acompanha o valor atual do pedido.
+    await db.run('UPDATE pedido_comissoes SET valor = ROUND((? * percentual / 100)::numeric, 2) WHERE pedido_id = ?', pedido.valor_total, pedido.id);
+    return;
+  }
+  for (const c of await comissoesPadrao(pedido)) {
+    if (!c.percentual) continue;
     await db.insert('pedido_comissoes', {
-      pedido_id: pedido.id, usuario_id: uid, papel, percentual: pct, valor: r2((pedido.valor_total * pct) / 100),
+      pedido_id: pedido.id, usuario_id: c.usuario_id, papel: c.papel, percentual: c.percentual, valor: r2((pedido.valor_total * c.percentual) / 100),
     });
   }
 }
@@ -356,7 +363,7 @@ module.exports = {
   ErroNegocio, hoje, addDias, diasEntre, r2,
   STATUS_PARCELA_SQL, SALDO_PARCELA_SQL, ABERTA_SQL,
   situacaoBlacklist, exigirClienteLiberado, simularSerasa, consultarSerasa,
-  recalcularPedido, registrarHistorico, garantirComissoes, emitirNota, gerarParcelas,
+  recalcularPedido, registrarHistorico, garantirComissoes, comissoesPadrao, emitirNota, gerarParcelas,
   saldoEstoque, movimentarEstoque, baixarEstoquePedido, estornarEstoquePedido,
   baixarParcela, prorrogarParcela, aplicarPenalidadeComissao, eventoParcela, registrarDevolucao,
 };

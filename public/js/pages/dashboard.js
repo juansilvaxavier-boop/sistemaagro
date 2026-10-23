@@ -11,13 +11,18 @@ const CORES = ['#2e7d32', '#1976d2', '#f9a825', '#c62828', '#6a1b9a', '#00838f',
 export default async function (conteudo) {
   const pagina = titulo(conteudo, 'Painel', 'bi-speedometer2', '<select class="form-select form-select-sm d-none" id="sel-perfil" style="width:auto"></select>');
   const sel = conteudo.querySelector('#sel-perfil');
+  let cabecalho = conteudo.querySelector('.page-title h2');
   const carregar = async (perfil) => {
     const d = await get('/api/dashboard' + qs({ perfil }));
+    if (!pagina.isConnected) return; // a pessoa já foi para outra tela
     const h = new Date().getHours();
     const saud = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
     const data = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-    conteudo.querySelector('.page-title h2').outerHTML = `<div><p class="saudacao">${saud}, ${esc(state.me.usuario.nome.split(' ')[0])}</p>
-      <div class="text-body-secondary">${esc(d.titulo)} · ${esc(data)}</div></div>`;
+    const novo = document.createElement('div');
+    novo.innerHTML = `<p class="saudacao">${saud}, ${esc(state.me.usuario.nome.split(' ')[0])}</p>
+      <div class="text-body-secondary">${esc(d.titulo)} · ${esc(data)}</div>`;
+    cabecalho.replaceWith(novo);
+    cabecalho = novo;
     ultimo = d;
     if (d.perfis_disponiveis.length > 1) {
       sel.classList.remove('d-none');

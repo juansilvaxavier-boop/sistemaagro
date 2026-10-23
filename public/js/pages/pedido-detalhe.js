@@ -12,7 +12,10 @@ export async function abrirPedido(id, aoMudar) {
   const p = d.pedido;
   const atualizar = () => { m.close(); aoMudar?.(); window.atualizarContadores?.(); };
 
+  // Na Diretoria, a primeira aba reúne o pedido completo para a decisão final.
+  const diretoria = p.etapa === 'diretoria' && d.acoes.length > 0;
   const lista = [
+    ...(diretoria ? [{ id: 'dir', label: '<i class="bi bi-award"></i> Visão da diretoria', html: painelDiretoria(d) }] : []),
     { id: 'resumo', label: '<i class="bi bi-card-text"></i> Pedido', html: resumo(d) },
     ...painelEtapa(d),
     { id: 'coment', label: `<i class="bi bi-chat-left-text"></i> Comentários (${d.comentarios.length})`, html: comentarios(d) },
@@ -141,10 +144,8 @@ function painelEtapa(d) {
     out.push({ id: 'frete', label: '<i class="bi bi-truck"></i> Frete e entrega', html: formFrete(d, true) });
   }
   if (p.etapa === 'diretoria' && atua) {
-    out.push({ id: 'dir', label: '<i class="bi bi-award"></i> Aprovação', html: `
-      <h6>Cotação de frete</h6>${formFrete(d, true)}
-      <h6 class="mt-3">Referências bancárias</h6>${referencias(d, 'bancaria', false)}
-      <h6 class="mt-3">Comissões do pedido</h6>${comissoes(d)}` });
+    out.push({ id: 'refs', label: '<i class="bi bi-telephone"></i> Referências', html: `<h6>Comerciais</h6>${referencias(d, 'comercial', false)}<h6 class="mt-3">Bancárias</h6>${referencias(d, 'bancaria', false)}` });
+    out.push({ id: 'frete', label: '<i class="bi bi-truck"></i> Frete e entrega', html: formFrete(d, true) });
     out.push(serasaAba);
   }
   if (p.etapa === 'cobranca' && atua) {
@@ -222,22 +223,105 @@ function formFrete(d, editavel) {
   </div></form>`;
 }
 
-function comissoes(d) {
-  const linhas = d.comissoes.length ? d.comissoes : [
-    { usuario_id: d.pedido.vendedor_id, papel: 'vendedor', percentual: '' },
-    ...(d.pedido.supervisor_id ? [{ usuario_id: d.pedido.supervisor_id, papel: 'supervisor', percentual: '' }] : []),
-  ];
-  const usuarios = state.opcoes.usuarios.filter((u) => ['vendedor', 'supervisor', 'diretoria'].includes(u.perfil));
-  const linha = (c) => `<tr><td><select class="form-select form-select-sm" name="usuario_id">${usuarios.map((u) => `<option value="${u.id}" ${u.id === c.usuario_id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></td>
-    <td><select class="form-select form-select-sm" name="papel">${['vendedor', 'supervisor', 'indicacao', 'outro'].map((x) => `<option ${x === c.papel ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
-    <td><input type="number" step="0.01" class="form-control form-control-sm" name="percentual" value="${c.percentual ?? ''}" placeholder="% padrão do cadastro"></td>
-    <td class="num">${c.valor != null ? fmt.money(c.valor) : ''}</td><td><button type="button" class="btn btn-sm btn-outline-danger py-0" data-rem>&times;</button></td></tr>`;
-  return `<form data-form="comissoes"><table class="table table-sm"><thead><tr><th>Colaborador</th><th>Papel</th><th>%</th><th class="num">Valor</th><th></th></tr></thead>
-    <tbody>${linhas.map(linha).join('')}</tbody></table>
-    <template>${linha({ papel: 'outro' })}</template>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-add-com>+ Colaborador</button>
-    <button class="btn btn-sm btn-success" type="submit">Salvar comissões</button>
-    <div class="form-text">Sem comissões definidas, a aprovação aplica o % do cadastro de cada usuário.</div></form>`;
+// ---------- Diretoria ----------
+const pct = (v) => `${Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
+const PAPEIS = { vendedor: 'Vendedor', supervisor: 'Supervisor', indicacao: 'Indicação', outro: 'Outro' };
+
+function painelDiretoria(d) {
+  const p = d.pedido;
+  const c = d.cliente;
+  const cr = d.credito || {};
+  const tabela = d.itens.reduce((a, i) => a + (i.brinde ? 0 : Number(i.valor_tabela || 0) * Number(i.quantidade || 0)), 0);
+  const descTabela = tabela ? (1 - Number(p.valor_produtos || 0) / tabela) * 100 : 0;
+  const brindes = d.itens.filter((i) => i.brinde);
+  const comAtual = d.comissoes.reduce((a, x) => a + Number(x.valor || 0), 0);
+  const ultSerasa = d.serasa[0];
+  const exposicao = Number(cr.em_aberto || 0) + Number(cr.outros_em_andamento || 0) + Number(p.valor_total || 0);
+  const estouro = cr.limite_credito > 0 && exposicao > cr.limite_credito;
+  const ind = (rotulo, valor, sub = '', cor = '') => `<div class="dir-ind ${cor}"><div class="rotulo">${rotulo}</div><div class="valor">${valor}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  const end = d.enderecos.find((e) => e.id === p.endereco_entrega_id);
+  const obs = d.historico.filter((h) => h.observacao && h.acao !== 'Comissão alterada pela Diretoria');
+  return `<div class="dir-inds mb-3">
+      ${ind('Valor do pedido', fmt.money(p.valor_total), `${d.itens.length} ite${d.itens.length === 1 ? 'm' : 'ns'} · ${esc(p.condicao?.descricao || '-')}`)}
+      ${ind('Desconto sobre a tabela', pct(descTabela), `Tabela ${fmt.money(tabela)}${brindes.length ? ` · ${brindes.length} brinde(s)` : ''}`, descTabela > 10 ? 'alerta' : '')}
+      ${ind('Comissão do pedido', `<span data-com-total>${fmt.money(comAtual)}</span>`, `<span data-com-pct>${pct(p.valor_total ? (comAtual / p.valor_total) * 100 : 0)}</span> do pedido`)}
+      ${d.credito ? ind('Crédito do cliente', fmt.money(cr.limite_credito), `Exposição com este pedido ${fmt.money(exposicao)}`, estouro ? 'perigo' : '') : ''}
+      ${d.credito ? ind('Em aberto · vencido', `${fmt.money(cr.em_aberto)}`, `${fmt.money(cr.vencido)} vencido${cr.maior_atraso ? ` · até ${cr.maior_atraso} dias` : ''}`, cr.vencido > 0 ? 'perigo' : '') : ''}
+      ${ind('Serasa', ultSerasa ? `Score ${esc(ultSerasa.score ?? '-')}` : 'Sem consulta', ultSerasa ? `${esc(ultSerasa.resultado || '')} · ${fmt.date(ultSerasa.created_at)}` : 'Consulte na aba Serasa', ultSerasa && ultSerasa.score < 500 ? 'alerta' : '')}
+    </div>
+    ${estouro ? `<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle"></i> A exposição do cliente (${fmt.money(exposicao)}) passa do limite de crédito (${fmt.money(cr.limite_credito)}).</div>` : ''}
+
+    <div class="card mb-3"><div class="card-header"><i class="bi bi-percent"></i> Comissão do pedido
+      ${d.comissoes_definidas ? `<span class="badge text-bg-info ms-1">Ajustada por ${esc(d.comissoes_definidas.por || 'Diretoria')} em ${fmt.datetime(d.comissoes_definidas.em)}</span>` : '<span class="badge text-bg-secondary ms-1">Padrão do cadastro</span>'}</div>
+      <div class="card-body">${editorComissoes(d)}</div></div>
+
+    <div class="row g-3">
+      <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-person-vcard"></i> Cliente</div><div class="card-body small">
+        <div class="fw-semibold fs-6">${esc(c.nome)}</div>
+        <div class="text-muted">${fmt.doc(c.documento)} ${c.inscricao_estadual ? '· IE ' + esc(c.inscricao_estadual) : ''} ${c.inscricao_produtor ? '· Produtor ' + esc(c.inscricao_produtor) : ''}</div>
+        <dl class="dir-dl mt-2">
+          <dt>Telefones</dt><dd>${d.telefones.map((t) => `${esc(t.numero)}${t.whatsapp ? ' <i class="bi bi-whatsapp text-success"></i>' : ''}`).join(' · ') || '—'}</dd>
+          <dt>E-mail</dt><dd>${esc(c.email || '—')}</dd>
+          <dt>Histórico</dt><dd>${d.historico_cliente.pedidos} pedido(s) · ${fmt.money(d.historico_cliente.total)}${d.historico_cliente.ultimo ? ` · último em ${fmt.date(d.historico_cliente.ultimo)}` : ''}</dd>
+          <dt>Endereços</dt><dd>${d.enderecos.map((e) => `<div class="mb-1">${e.id === p.endereco_entrega_id ? '<span class="badge text-bg-primary">Entrega</span> ' : ''}${endereco(e)}</div>`).join('') || '—'}</dd>
+          ${c.observacoes ? `<dt>Observações</dt><dd>${esc(c.observacoes)}</dd>` : ''}
+        </dl>
+        <a href="#/crm/cliente/${c.id}" data-fechar>Abrir visão 360° no CRM <i class="bi bi-box-arrow-up-right"></i></a>
+      </div></div></div>
+      <div class="col-lg-6"><div class="card h-100"><div class="card-header"><i class="bi bi-clipboard-check"></i> Condições e análise</div><div class="card-body small">
+        <dl class="dir-dl">
+          <dt>Pagamento</dt><dd>${esc(p.forma?.nome || '-')} · ${esc(p.condicao?.descricao || '-')}</dd>
+          <dt>Equipe</dt><dd>${esc(p.vendedor || '-')}${p.supervisor ? ` · Sup. ${esc(p.supervisor)}` : ''}${p.analista ? ` · Análise ${esc(p.analista)}` : ''}</dd>
+          <dt>Entrega</dt><dd>${esc(ROTULOS.tipo_entrega[p.tipo_entrega] || p.tipo_entrega || '-')}${p.transportadora ? ` · ${esc(p.transportadora)}` : ''}${p.frete_valor != null ? ` · Frete ${fmt.money(p.frete_valor)} (${p.frete_prazo_dias || '-'} dias)` : ''}${p.frete_ignorado ? ` · cotação ignorada: ${esc(p.frete_motivo_ignorar || '')}` : ''}</dd>
+          <dt>Local</dt><dd>${end ? `${esc(end.cidade || '')}/${esc(end.uf || '')}` : '—'}</dd>
+          <dt>Referências</dt><dd>${refResumo(d.ref_comerciais, 'comerciais')} · ${refResumo(d.ref_bancarias, 'bancárias')}</dd>
+          ${p.observacao ? `<dt>Obs. do vendedor</dt><dd>${esc(p.observacao)}</dd>` : ''}
+          ${p.observacao_supervisor ? `<dt>Obs. do supervisor</dt><dd>${esc(p.observacao_supervisor)}</dd>` : ''}
+        </dl>
+        ${obs.length ? `<div class="text-muted fw-semibold mt-2 mb-1">Observações do fluxo</div><ul class="timeline">${obs.slice(-4).reverse().map((h) => `<li><div class="text-muted">${fmt.datetime(h.created_at)} · ${esc(h.usuario || '')} · ${esc(h.acao)}</div><div>${esc(h.observacao)}</div></li>`).join('')}</ul>` : ''}
+      </div></div></div>
+      <div class="col-12"><div class="card"><div class="card-header"><i class="bi bi-box-seam"></i> Itens</div>
+        ${tabelaSimples([
+          { k: 'produto', l: 'Produto' }, { k: 'embalagem', l: 'Embalagem' }, { k: 'quantidade', l: 'Qtd', t: 'num' },
+          { k: 'valor_tabela', l: 'Tabela', t: 'money' }, { k: 'valor_unitario', l: 'Unitário', t: 'money' },
+          { k: 'desc', l: 'Desc. s/ tabela', t: 'num', render: (v, r) => (r.brinde ? '<span class="badge text-bg-info">brinde</span>' : r.valor_tabela ? pct((1 - r.valor_unitario / r.valor_tabela) * 100) : '—') },
+          { k: 'valor_total', l: 'Total', t: 'money' },
+        ], d.itens)}
+        <div class="card-footer text-end small">Produtos <b>${fmt.money(p.valor_produtos)}</b> · Desconto da condição <b>${fmt.money(p.valor_desconto)}</b> · <span class="fs-6">Total <b>${fmt.money(p.valor_total)}</b></span></div></div></div>
+    </div>`;
+}
+
+function refResumo(lista, nome) {
+  if (!lista.length) return `sem ${nome}`;
+  const ok = lista.filter((r) => r.checada && r.positivo).length;
+  return `${ok}/${lista.length} ${nome} positivas`;
+}
+
+function editorComissoes(d) {
+  const p = d.pedido;
+  const definidas = d.comissoes.length || d.comissoes_definidas;
+  const linhas = definidas ? d.comissoes : d.comissoes_padrao;
+  const usuarios = state.opcoes.usuarios.filter((u) => ['vendedor', 'supervisor', 'diretoria', 'admin'].includes(u.perfil) || linhas.some((c) => c.usuario_id === u.id));
+  const padrao = Object.fromEntries(d.comissoes_padrao.map((c) => [`${c.usuario_id}:${c.papel}`, c.percentual]));
+  const linha = (c) => `<tr>
+    <td><select class="form-select form-select-sm" name="usuario_id" aria-label="Colaborador">${usuarios.map((u) => `<option value="${u.id}" ${u.id === c.usuario_id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></td>
+    <td><select class="form-select form-select-sm" name="papel" aria-label="Papel">${Object.entries(PAPEIS).map(([k, l]) => `<option value="${k}" ${k === c.papel ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+    <td class="num text-muted small" data-padrao>${padrao[`${c.usuario_id}:${c.papel}`] != null ? pct(padrao[`${c.usuario_id}:${c.papel}`]) : '—'}</td>
+    <td><div class="input-group input-group-sm"><input type="number" step="any" min="0" max="100" class="form-control" name="percentual" value="${c.percentual ?? ''}" aria-label="Percentual"><span class="input-group-text">%</span></div></td>
+    <td><div class="input-group input-group-sm"><span class="input-group-text">R$</span><input type="number" step="any" min="0" class="form-control" name="valor" value="${c.percentual != null ? (p.valor_total * c.percentual / 100).toFixed(2) : ''}" aria-label="Valor"></div></td>
+    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-rem title="Remover"><i class="bi bi-x-lg"></i></button></td></tr>`;
+  return `<form data-form="comissoes">
+    <div class="table-responsive"><table class="table table-sm align-middle mb-2 tabela-comissao"><thead><tr><th>Colaborador</th><th>Papel</th><th class="num">% cadastro</th><th style="width:130px">% do pedido</th><th style="width:160px">Valor</th><th></th></tr></thead>
+    <tbody>${linhas.map(linha).join('')}</tbody>
+    <tfoot><tr><th colspan="3" class="text-end">Total da comissão</th><th data-tot-pct>—</th><th data-tot-valor>—</th><th></th></tr></tfoot></table></div>
+    <template>${linha({ papel: 'outro', percentual: 0 })}</template>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-add-com><i class="bi bi-plus-lg"></i> Colaborador</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-com-padrao><i class="bi bi-arrow-counterclockwise"></i> Voltar ao padrão</button>
+      <input class="form-control form-control-sm" name="motivo" placeholder="Motivo da alteração (opcional)" style="max-width:320px">
+      <button class="btn btn-sm btn-success ms-auto" type="submit"><i class="bi bi-check2"></i> Salvar comissão</button>
+    </div>
+    <div class="form-text">Altere pelo % ou pelo valor em R$; um calcula o outro sobre ${fmt.money(p.valor_total)}. Sem nenhuma linha, o pedido fica sem comissão. A alteração fica no histórico do pedido.</div></form>`;
 }
 
 function comentarios(d) {
@@ -260,6 +344,64 @@ function financeiro(d) {
 }
 
 // ---------- Eventos ----------
+function ligarComissoes(fc, d, recarregar) {
+  const total = Number(d.pedido.valor_total) || 0;
+  const padrao = Object.fromEntries(d.comissoes_padrao.map((c) => [`${c.usuario_id}:${c.papel}`, c.percentual]));
+  const somar = () => {
+    let sp = 0;
+    let sv = 0;
+    fc.querySelectorAll('tbody tr').forEach((tr) => {
+      sp += Number(tr.querySelector('[name=percentual]').value) || 0;
+      sv += Number(tr.querySelector('[name=valor]').value) || 0;
+      const k = `${tr.querySelector('[name=usuario_id]').value}:${tr.querySelector('[name=papel]').value}`;
+      tr.querySelector('[data-padrao]').textContent = padrao[k] != null ? pct(padrao[k]) : '—';
+    });
+    fc.querySelector('[data-tot-pct]').textContent = pct(sp);
+    fc.querySelector('[data-tot-valor]').textContent = fmt.money(sv);
+    const dir = fc.closest('.tab-pane');
+    if (dir?.querySelector('[data-com-total]')) {
+      dir.querySelector('[data-com-total]').textContent = fmt.money(sv);
+      dir.querySelector('[data-com-pct]').textContent = pct(sp);
+    }
+    fc.querySelector('[data-tot-pct]').classList.toggle('text-danger', sp > 100);
+  };
+  fc.addEventListener('input', (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    if (e.target.name === 'percentual') tr.querySelector('[name=valor]').value = e.target.value === '' ? '' : (total * Number(e.target.value) / 100).toFixed(2);
+    if (e.target.name === 'valor') tr.querySelector('[name=percentual]').value = e.target.value === '' || !total ? '' : Math.round((Number(e.target.value) / total) * 100 * 10000) / 10000;
+    somar();
+  });
+  fc.addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') somar(); });
+  fc.addEventListener('click', (e) => {
+    if (e.target.closest('[data-rem]')) { e.target.closest('tr').remove(); somar(); }
+    if (e.target.closest('[data-add-com]')) { fc.querySelector('tbody').append(fc.querySelector('template').content.cloneNode(true)); somar(); }
+    if (e.target.closest('[data-com-padrao]')) {
+      const tb = fc.querySelector('tbody');
+      tb.innerHTML = '';
+      for (const c of d.comissoes_padrao) {
+        tb.append(fc.querySelector('template').content.cloneNode(true));
+        const tr = tb.lastElementChild;
+        tr.querySelector('[name=usuario_id]').value = c.usuario_id;
+        tr.querySelector('[name=papel]').value = c.papel;
+        tr.querySelector('[name=percentual]').value = c.percentual;
+        tr.querySelector('[name=valor]').value = (total * c.percentual / 100).toFixed(2);
+      }
+      somar();
+    }
+  });
+  fc.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const comissoes = [...fc.querySelectorAll('tbody tr')].map((tr) => ({
+      usuario_id: Number(tr.querySelector('[name=usuario_id]').value),
+      papel: tr.querySelector('[name=papel]').value,
+      percentual: tr.querySelector('[name=percentual]').value,
+    }));
+    if (await tentar(() => put(`/api/pedidos/${d.pedido.id}/comissoes`, { comissoes, motivo: fc.querySelector('[name=motivo]').value.trim() || null }), 'Comissão salva.')) recarregar();
+  });
+  somar();
+}
+
 function ligarEventos(m, d, recarregar) {
   const p = d.pedido;
   const el = m.body;
@@ -278,16 +420,8 @@ function ligarEventos(m, d, recarregar) {
     prazo_producao: f.querySelector('[name=prazo_producao]').value || null,
     itens: [...f.querySelectorAll('tr[data-item]')].map((tr) => ({ id: Number(tr.dataset.item), ...lerForm(tr) })),
   }));
-  form('comissoes', (f) => put(`/api/pedidos/${p.id}/comissoes`, {
-    comissoes: [...f.querySelectorAll('tbody tr')].map((tr) => ({ ...lerForm(tr), usuario_id: Number(tr.querySelector('[name=usuario_id]').value) })),
-  }));
   const fc = el.querySelector('[data-form="comissoes"]');
-  if (fc) {
-    fc.addEventListener('click', (e) => {
-      if (e.target.closest('[data-rem]')) e.target.closest('tr').remove();
-      if (e.target.closest('[data-add-com]')) fc.querySelector('tbody').append(fc.querySelector('template').content.cloneNode(true));
-    });
-  }
+  if (fc) ligarComissoes(fc, d, recarregar);
   el.querySelectorAll('[data-salvar-ref]').forEach((b) => b.addEventListener('click', async () => {
     const tr = b.closest('tr');
     if (await tentar(() => put(`/api/clientes/referencias/${tr.dataset.tipo}/${tr.dataset.ref}`, lerForm(tr)), 'Referência atualizada.')) recarregar();

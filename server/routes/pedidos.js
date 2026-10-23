@@ -105,7 +105,7 @@ r.get('/:id', async (req, res) => {
       'SELECT c.*, u.nome AS usuario FROM pedido_comentarios c LEFT JOIN usuarios u ON u.id = c.usuario_id WHERE pedido_id = ? ORDER BY c.id DESC', id,
     ),
     comissoes: await db.all(
-      'SELECT c.*, u.nome AS usuario FROM pedido_comissoes c JOIN usuarios u ON u.id = c.usuario_id WHERE pedido_id = ?', id,
+      'SELECT c.*, u.nome AS usuario FROM pedido_comissoes c JOIN usuarios u ON u.id = c.usuario_id WHERE pedido_id = ? ORDER BY c.id', id,
     ),
     links: await db.all('SELECT * FROM pedido_links_pagamento WHERE pedido_id = ? ORDER BY id DESC', id),
     serasa: await db.all(
@@ -122,7 +122,24 @@ r.get('/:id', async (req, res) => {
          FROM pedidos WHERE cliente_id = ? AND id <> ? AND etapa <> 'cancelado'`, p.cliente_id, id,
     ),
     acoes: W.acoesDisponiveis(p, req.user),
+    comissoes_padrao: await S.comissoesPadrao(p),
+    comissoes_definidas: p.comissoes_definidas_em
+      ? { em: p.comissoes_definidas_em, por: (await db.get('SELECT nome FROM usuarios WHERE id = ?', p.comissoes_definidas_por))?.nome }
+      : null,
   };
+  // Situação de crédito do cliente: para quem decide crédito e aprovação.
+  if (['fila.analise', 'fila.diretoria', 'financeiro.parcelas'].some((x) => A.can(req.user, x))) {
+    dados.credito = await db.get(
+      `SELECT c.limite_credito,
+          IFNULL((SELECT SUM(${S.SALDO_PARCELA_SQL}) FROM parcelas p WHERE p.cliente_id = c.id AND ${S.ABERTA_SQL}), 0) AS em_aberto,
+          IFNULL((SELECT SUM(${S.SALDO_PARCELA_SQL}) FROM parcelas p WHERE p.cliente_id = c.id AND ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime')), 0) AS vencido,
+          IFNULL((SELECT MAX(CAST(julianday('now','localtime') - julianday(p.vencimento) AS INTEGER)) FROM parcelas p
+                   WHERE p.cliente_id = c.id AND ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime')), 0) AS maior_atraso,
+          IFNULL((SELECT SUM(valor_total) FROM pedidos x WHERE x.cliente_id = c.id AND x.id <> ?
+                   AND x.etapa IN ('supervisao','analise','diretoria','cobranca','producao','faturamento')), 0) AS outros_em_andamento
+         FROM clientes c WHERE c.id = ?`, id, p.cliente_id,
+    );
+  }
   mascararObjeto(req.user, dados.cliente);
   mascararLinhas(req.user, dados.telefones.map((t) => Object.assign(t, { telefone: t.numero }))).forEach((t) => { t.numero = t.telefone; delete t.telefone; });
   res.json(dados);
@@ -242,21 +259,47 @@ r.put('/:id/frete', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Diretoria define as comissões do pedido (% ou valor em R$). Lista vazia = pedido sem comissão.
 r.put('/:id/comissoes', async (req, res) => {
   const p = await naEtapa(req, 'diretoria');
-  const lista = req.body?.comissoes || [];
+  const lista = Array.isArray(req.body?.comissoes) ? req.body.comissoes : [];
+  const total = Number(p.valor_total) || 0;
+  const antes = await db.all('SELECT c.*, u.nome FROM pedido_comissoes c JOIN usuarios u ON u.id = c.usuario_id WHERE pedido_id = ? ORDER BY c.id', p.id);
+  const novas = [];
+  for (const c of lista) {
+    const uid = Number(c.usuario_id);
+    const u = uid && await db.get('SELECT id, nome, comissao_pct FROM usuarios WHERE id = ? AND ativo = 1', uid);
+    if (!u) throw new ErroNegocio('Colaborador inválido na comissão.');
+    const papel = ['vendedor', 'supervisor', 'indicacao', 'outro'].includes(c.papel) ? c.papel : 'outro';
+    if (novas.some((x) => x.usuario_id === uid && x.papel === papel)) throw new ErroNegocio(`${u.nome} aparece duas vezes como ${papel}.`);
+    let pct;
+    if (c.valor != null && c.valor !== '' && (c.percentual == null || c.percentual === '')) {
+      const v = Number(c.valor);
+      if (!(v >= 0) || v > total) throw new ErroNegocio(`Valor de comissão inválido para ${u.nome}.`);
+      pct = total ? Math.round((v / total) * 100 * 10000) / 10000 : 0;
+    } else {
+      pct = c.percentual == null || c.percentual === '' ? Number(u.comissao_pct) || 0 : Number(c.percentual);
+    }
+    if (!(pct >= 0) || pct > 100) throw new ErroNegocio(`Percentual de comissão inválido para ${u.nome}.`);
+    novas.push({ usuario_id: uid, nome: u.nome, papel, percentual: pct, valor: S.r2((total * pct) / 100) });
+  }
+  const somaPct = novas.reduce((a, c) => a + c.percentual, 0);
+  if (somaPct > 100) throw new ErroNegocio('A soma das comissões passa de 100% do pedido.');
+  const fmtPct = (n) => `${Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 4 })}%`;
+  const descr = (l) => (l.length ? l.map((c) => `${c.nome} (${c.papel}) ${fmtPct(c.percentual)}`).join('; ') : 'sem comissão');
   await db.tx(async () => {
     await db.run('DELETE FROM pedido_comissoes WHERE pedido_id = ?', p.id);
-    for (const c of lista) {
-      // Sem % informado, vale o % do cadastro do colaborador.
-      const pct = c.percentual == null || c.percentual === ''
-        ? (await db.get('SELECT comissao_pct FROM usuarios WHERE id = ?', c.usuario_id))?.comissao_pct || 0
-        : Number(c.percentual);
-      if (!c.usuario_id || !(pct >= 0) || pct > 100) throw new ErroNegocio('Comissão inválida.');
-      await db.insert('pedido_comissoes', { pedido_id: p.id, usuario_id: c.usuario_id, papel: c.papel, percentual: pct, valor: S.r2((p.valor_total * pct) / 100) });
+    for (const c of novas) {
+      await db.insert('pedido_comissoes', { pedido_id: p.id, usuario_id: c.usuario_id, papel: c.papel, percentual: c.percentual, valor: c.valor });
     }
+    await db.run(`UPDATE pedidos SET comissoes_definidas_em = datetime('now','localtime'), comissoes_definidas_por = ?, updated_at = datetime('now','localtime') WHERE id = ?`, req.user.id, p.id);
+    await S.registrarHistorico(p.id, {
+      origem: p.etapa, destino: p.etapa, acao: 'Comissão alterada pela Diretoria',
+      observacao: `Antes: ${descr(antes)}. Agora: ${descr(novas)}.${req.body?.motivo ? ` Motivo: ${String(req.body.motivo).slice(0, 300)}` : ''}`,
+      usuarioId: req.user.id,
+    });
   });
-  res.json({ ok: true });
+  res.json({ ok: true, comissoes: novas, total: S.r2(novas.reduce((a, c) => a + c.valor, 0)) });
 });
 
 r.put('/:id/producao', async (req, res) => {

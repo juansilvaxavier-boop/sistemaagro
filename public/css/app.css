@@ -504,3 +504,19 @@ a.kpi-link:hover .kpi { border-color: var(--borda-forte); box-shadow: var(--somb
 [data-bs-theme="dark"] .dt tr.table-warning > *, [data-bs-theme="dark"] .table tr.table-warning > * { --bs-table-bg: rgba(245,166,35,.08); --bs-table-hover-bg: rgba(245,166,35,.13); }
 [data-bs-theme="dark"] .dt tr.table-success > *, [data-bs-theme="dark"] .table tr.table-success > * { --bs-table-bg: rgba(48,164,108,.08); --bs-table-hover-bg: rgba(48,164,108,.13); }
 code { color: var(--texto-2); background: var(--superficie-3); padding: 1px 6px; border-radius: 6px; font-size: .8em; }
+
+/* Visão da diretoria no pedido */
+.dir-inds { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.dir-ind { border: 1px solid var(--borda); border-radius: 12px; padding: 12px 14px; background: var(--superficie); }
+.dir-ind .rotulo { font-size: .74rem; color: var(--texto-2); font-weight: 500; }
+.dir-ind .valor { font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dir-ind .sub { font-size: .72rem; color: var(--texto-3); margin-top: 2px; }
+.dir-ind.alerta { border-color: color-mix(in srgb, #f5a623 45%, var(--borda)); background: color-mix(in srgb, #f5a623 7%, var(--superficie)); }
+.dir-ind.perigo { border-color: color-mix(in srgb, #e5484d 40%, var(--borda)); background: color-mix(in srgb, #e5484d 6%, var(--superficie)); }
+.dir-ind.perigo .valor { color: #c9363b; }
+.dir-dl { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 0; }
+.dir-dl dt { color: var(--texto-2); font-weight: 500; }
+.dir-dl dd { margin: 0; min-width: 0; }
+.tabela-comissao td, .tabela-comissao th { vertical-align: middle; }
+.tabela-comissao tfoot th { border-bottom: 0; font-size: .82rem; }
+@media (max-width: 575.98px) { .dir-inds { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dir-ind .valor { font-size: .98rem; } .dir-dl { grid-template-columns: 1fr; gap: 0 0; } .dir-dl dd { margin-bottom: 8px; } }
