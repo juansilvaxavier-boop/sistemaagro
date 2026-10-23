@@ -42,6 +42,18 @@ export async function abrirPedido(id, aoMudar) {
     botoes.unshift({ label: '<i class="bi bi-pencil"></i> Editar', cls: 'btn-outline-primary', onClick: () => { location.hash = `#/pedido/${p.id}/editar`; } });
   }
   botoes.unshift({ label: '<i class="bi bi-printer"></i> Resumo', cls: 'btn-outline-secondary', onClick: () => { imprimirResumo(d); return false; } });
+  if (pode('etiquetas') && ['faturamento', 'expedicao', 'transito', 'entregue'].includes(p.etapa)) {
+    botoes.unshift({
+      label: '<i class="bi bi-upc-scan"></i> Etiqueta', cls: 'btn-outline-dark',
+      onClick: async () => { const { abrirEtiqueta } = await import('../etiqueta.js'); abrirEtiqueta(p.id, aoMudar); return false; },
+    });
+  }
+  if (pode('chamados')) {
+    botoes.unshift({
+      label: '<i class="bi bi-headset"></i> Chamado', cls: 'btn-outline-secondary',
+      onClick: async () => { const { novoChamado } = await import('./chamados.js'); novoChamado({ pedido_numero: p.numero }); return false; },
+    });
+  }
 
   const m = modal({
     title: `Pedido ${p.numero} · ${esc(d.cliente.nome)} ${badgeEtapa(p.etapa)}`,

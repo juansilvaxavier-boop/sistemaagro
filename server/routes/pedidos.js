@@ -29,7 +29,7 @@ const LISTA_SQL = `
     en.uf, en.cidade, p.etapa, ${etapaLabelSql} AS etapa_label, p.etapa_desde,
     CAST(julianday('now','localtime') - julianday(p.etapa_desde) AS INTEGER) AS dias_etapa,
     p.prazo_producao, p.data_chegada_producao, p.data_embarque, p.data_entrega_prevista, p.data_entrega,
-    t.nome AS transportadora, nf.numero AS nota, p.tipo_entrega,
+    t.nome AS transportadora, nf.numero AS nota, p.tipo_entrega, p.volumes, p.codigo_rastreio,
     (SELECT tipo FROM blacklist b WHERE b.cliente_id = c.id AND b.ativo = 1 ORDER BY CASE tipo WHEN 'bloqueio' THEN 0 ELSE 1 END LIMIT 1) AS blacklist,
     (SELECT COUNT(*) FROM mensagens m WHERE m.pedido_id = p.id) AS mensagens
   FROM pedidos p
@@ -281,6 +281,61 @@ r.put('/:id/expedicao', async (req, res) => {
   const b = req.body || {};
   const campos = p.etapa === 'expedicao' ? ['data_embarque', 'data_entrega_prevista', 'transportadora_id'] : ['transportadora_id', 'data_embarque', 'data_entrega'];
   await db.update('pedidos', p.id, b, campos);
+  res.json({ ok: true });
+});
+
+// ---------- Etiqueta de envio (Correios e transportadora) ----------
+async function dadosEnvio(p) {
+  const itens = await db.all(
+    `SELECT i.quantidade, i.unidade, pr.nome AS produto, e.descricao AS embalagem, e.quantidade AS conteudo, e.unidade AS unidade_emb, e.peso_kg
+       FROM pedido_itens i JOIN produtos pr ON pr.id = i.produto_id LEFT JOIN produto_embalagens e ON e.id = i.embalagem_id
+      WHERE i.pedido_id = ? ORDER BY i.id`, p.id,
+  );
+  // Peso estimado: peso cadastrado da embalagem ou, sem ele, o conteúdo quando a unidade é KG.
+  const pesoItem = (i) => i.quantidade * (i.peso_kg || (String(i.unidade_emb || i.unidade).toUpperCase() === 'KG' ? i.conteudo || 1 : 0));
+  const pesoEstimado = S.r2(itens.reduce((s, i) => s + pesoItem(i), 0));
+  // Embalagem acima de 100 kg (big bag, granel) conta como um volume por item; as menores, uma por unidade.
+  const volumesEstimados = Math.max(1, Math.min(99, Math.round(itens.reduce((s, i) => s + ((i.peso_kg || i.conteudo || 0) > 100 ? 1 : i.quantidade), 0))));
+  return { itens, peso_estimado: pesoEstimado, volumes_estimados: volumesEstimados };
+}
+
+r.get('/:id/etiqueta', A.exige('etiquetas'), async (req, res) => {
+  const p = await carregar(req, Number(req.params.id));
+  const empresa = await db.get('SELECT * FROM empresas WHERE id = ?', p.empresa_id);
+  const cliente = await db.get('SELECT id, nome, nome_fantasia, documento, tipo_pessoa FROM clientes WHERE id = ?', p.cliente_id);
+  const end = p.endereco_entrega_id
+    ? await db.get('SELECT * FROM cliente_enderecos WHERE id = ?', p.endereco_entrega_id)
+    : await db.get('SELECT * FROM cliente_enderecos WHERE cliente_id = ? ORDER BY principal DESC LIMIT 1', p.cliente_id);
+  // O telefone vai completo: a transportadora precisa dele para a entrega (finalidade legítima).
+  const tel = await db.get('SELECT numero, contato FROM cliente_telefones WHERE cliente_id = ? ORDER BY whatsapp DESC, id LIMIT 1', p.cliente_id);
+  const nota = await db.get(`SELECT numero, serie, chave, data_emissao, valor FROM notas_fiscais WHERE pedido_id = ? AND status <> 'cancelada' ORDER BY id DESC LIMIT 1`, p.id);
+  const transp = p.transportadora_id ? await db.get('SELECT nome, cnpj, telefone FROM transportadoras WHERE id = ?', p.transportadora_id) : null;
+  const envio = await dadosEnvio(p);
+  await require('../auditoria').registrar('etiqueta', 'pedidos', p.id, null, { volumes: p.volumes || envio.volumes_estimados });
+  res.json({
+    pedido: {
+      id: p.id, numero: p.numero, etapa: p.etapa, etapa_label: W.ETAPAS[p.etapa]?.label, tipo_entrega: p.tipo_entrega, valor_total: p.valor_total,
+      volumes: p.volumes, peso_kg: p.peso_kg, codigo_rastreio: p.codigo_rastreio, data_embarque: p.data_embarque, data_entrega_prevista: p.data_entrega_prevista,
+      frete_codigo_cotacao: p.frete_codigo_cotacao, observacao: p.observacao,
+    },
+    remetente: empresa,
+    destinatario: { ...mascararObjeto(req.user, cliente), endereco: end, telefone: tel?.numero, contato: tel?.contato },
+    nota, transportadora: transp, ...envio,
+  });
+});
+
+r.put('/:id/envio', A.exige('etiquetas'), async (req, res) => {
+  const p = await carregar(req, Number(req.params.id));
+  const b = req.body || {};
+  const volumes = b.volumes == null || b.volumes === '' ? null : parseInt(b.volumes, 10);
+  if (volumes != null && !(volumes >= 1 && volumes <= 999)) throw new ErroNegocio('Volumes deve ficar entre 1 e 999.');
+  const peso = b.peso_kg == null || b.peso_kg === '' ? null : Number(b.peso_kg);
+  if (peso != null && !(peso >= 0)) throw new ErroNegocio('Peso inválido.');
+  const rastreio = b.codigo_rastreio ? String(b.codigo_rastreio).trim().toUpperCase().slice(0, 40) : null;
+  await db.update('pedidos', p.id, { volumes, peso_kg: peso, codigo_rastreio: rastreio });
+  if (rastreio && rastreio !== p.codigo_rastreio) {
+    await S.registrarHistorico(p.id, { origem: p.etapa, destino: p.etapa, acao: 'Código de rastreio informado', observacao: rastreio, usuarioId: req.user.id });
+  }
   res.json({ ok: true });
 });
 

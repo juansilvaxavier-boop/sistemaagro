@@ -223,6 +223,7 @@ r.post('/notas/:id/cancelar', A.exige('financeiro.notas'), async (req, res) => {
     await db.run(`UPDATE parcelas SET status = 'cancelada' WHERE nota_id = ?`, n.id);
     if (n.pedido_id) {
       await db.run(`DELETE FROM comissoes WHERE pedido_id = ? AND status = 'aberta'`, n.pedido_id);
+      await S.estornarEstoquePedido(n.pedido_id, 'cancelamento', req.user.id);
       const ped = await db.get('SELECT etapa FROM pedidos WHERE id = ?', n.pedido_id);
       await db.run(`UPDATE pedidos SET etapa = 'faturamento', etapa_desde = datetime('now','localtime') WHERE id = ?`, n.pedido_id);
       await S.registrarHistorico(n.pedido_id, { origem: ped.etapa, destino: 'faturamento', acao: `NF ${n.numero} cancelada`, observacao: motivo, usuarioId: req.user.id });

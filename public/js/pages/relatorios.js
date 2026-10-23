@@ -27,6 +27,19 @@ function filtrosDe(tipo) {
       + campo('prazo_meses', 'Prazo em meses (substitui o período)', { type: 'number', col: 'col-md-3', attrs: 'min="1" max="60"' })
       + campo('sumarizacao', 'Sumarização', { type: 'select', col: 'col-md-3', options: [['produto', 'Produto'], ['grupo', 'Grupo'], ['cliente', 'Cliente'], ['vendedor', 'Vendedor'], ['mes', 'Mês']] })
       + campo('por_embalagem', 'Por embalagem', { type: 'checkbox', col: 'col-md-2' });
+    case 'contas-pagar': return campo('venc_de', 'Vencimento de', { type: 'date', col: 'col-md-3' }) + campo('venc_ate', 'até', { type: 'date', col: 'col-md-3' })
+      + campo('situacao', 'Situação', { type: 'select', col: 'col-md-3', options: [['', 'Todas (exceto canceladas)'], ['abertas', 'Em aberto'], ['vencidas', 'Vencidas'], ['pagas', 'Pagas']] })
+      + campo('fornecedor_id', 'Fornecedor', { type: 'select', col: 'col-md-3', options: opcoes(o.fornecedores, 'Todos') })
+      + campo('categoria', 'Categoria', { type: 'select', col: 'col-md-3', options: [['', 'Todas'], ...['Matéria-prima', 'Embalagem', 'Frete', 'Folha', 'Impostos', 'Aluguel', 'Energia', 'Manutenção', 'Serviços', 'Outros'].map((c) => [c, c])] })
+      + campo('agrupar', 'Agrupar por', { type: 'select', col: 'col-md-3', options: [['', 'Não agrupar'], ['categoria', 'Categoria'], ['fornecedor', 'Fornecedor']] });
+    case 'fluxo-caixa': return campo('venc_de', 'De', { type: 'date', col: 'col-md-3', value: hoje() })
+      + campo('venc_ate', 'Até', { type: 'date', col: 'col-md-3', value: new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10) })
+      + '<div class="col-md-6 small text-muted d-flex align-items-end">Parcelas a receber em aberto menos contas a pagar em aberto, dia a dia.</div>';
+    case 'posicao-estoque': return campo('grupo_id', 'Grupo', { type: 'select', col: 'col-md-3', options: opcoes(o.grupos, 'Todos') })
+      + campo('por_lote', 'Abrir por lote', { type: 'checkbox', col: 'col-md-2' }) + campo('zerados', 'Incluir zerados', { type: 'checkbox', col: 'col-md-2' })
+      + campo('agrupar_grupo', 'Agrupar por grupo', { type: 'checkbox', col: 'col-md-2' });
+    case 'movimentacao-estoque': return per('mov', 'Movimento')
+      + campo('origem', 'Origem', { type: 'select', col: 'col-md-3', options: [['', 'Todas'], ['compra', 'Compra'], ['producao', 'Produção'], ['venda', 'Venda'], ['devolucao', 'Devolução'], ['cancelamento', 'Cancelamento de NF'], ['inventario', 'Inventário'], ['perda', 'Perda'], ['consumo', 'Consumo'], ['amostra', 'Amostra'], ['ajuste', 'Ajuste']] });
     default: return '<div class="col-12 small text-muted">Este relatório não tem filtros.</div>';
   }
 }

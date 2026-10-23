@@ -3,9 +3,15 @@ import { TEXTO_TERMO } from './privacidade.js';
 import * as chat from './chat.js';
 
 const MENU = [
-  { grupo: 'Início', itens: [{ href: '#/dashboard', l: 'Painel', i: 'bi-grid-1x2', p: 'dashboard' }] },
+  {
+    grupo: 'Início', itens: [
+      { href: '#/dashboard', l: 'Painel', i: 'bi-grid-1x2', p: 'dashboard' },
+      { href: '#/chamados', l: 'Chamados Internos', i: 'bi-headset', p: 'chamados', etapa: 'chamados' },
+    ],
+  },
   {
     grupo: 'Vendas', itens: [
+      { href: '#/propostas', l: 'Propostas Comerciais', i: 'bi-file-earmark-text', p: 'propostas' },
       { href: '#/fila/venda', l: 'Vendedor', i: 'bi-cart3', p: 'fila.venda', etapa: 'venda' },
       { href: '#/fila/supervisao', l: 'Supervisor', i: 'bi-person-check', p: 'fila.supervisao', etapa: 'supervisao' },
       { href: '#/fila/analise', l: 'Análise', i: 'bi-search', p: 'fila.analise', etapa: 'analise' },
@@ -26,6 +32,7 @@ const MENU = [
       { href: '#/financeiro/notas', l: 'Nota Fiscal de Saída', i: 'bi-file-earmark-text', p: 'financeiro.notas' },
     ],
   },
+  { grupo: 'Estoque', itens: [{ href: '#/estoque', l: 'Controle de Estoque', i: 'bi-boxes', p: 'estoque' }] },
   {
     grupo: 'Relacionamento', itens: [
       { href: '#/crm', l: 'CRM', i: 'bi-diagram-3', p: 'crm' },
@@ -36,6 +43,7 @@ const MENU = [
   },
   {
     grupo: 'Financeiro', itens: [
+      { href: '#/pagar', l: 'Contas a Pagar', i: 'bi-credit-card-2-back', p: 'financeiro.pagar' },
       { href: '#/financeiro/parcelas', l: 'Gestão de Parcelas', i: 'bi-list-check', p: 'financeiro.parcelas' },
       { href: '#/financeiro/lancamentos', l: 'Descontos/Créditos', i: 'bi-plus-slash-minus', p: 'financeiro.lancamentos' },
       { href: '#/financeiro/comissoes', l: 'Revisar Comissões', i: 'bi-percent', p: 'financeiro.comissoes' },
@@ -48,6 +56,7 @@ const MENU = [
       { href: '#/cadastros/produtos', l: 'Produtos', i: 'bi-box', p: 'cadastros.produto' },
       { href: '#/cadastros/formas', l: 'Formas de Pagamento', i: 'bi-credit-card', p: 'cadastros.forma' },
       { href: '#/cadastros/transportadoras', l: 'Transportadoras', i: 'bi-truck-front', p: 'cadastros.transportadora' },
+      { href: '#/cadastros/fornecedores', l: 'Fornecedores', i: 'bi-shop', p: 'cadastros.fornecedor' },
       { href: '#/cadastros/colaboradores', l: 'Colaboradores', i: 'bi-person-vcard', p: 'cadastros.colaborador' },
       { href: '#/cadastros/usuarios', l: 'Usuários e Permissões', i: 'bi-person-lock', p: 'cadastros.usuario' },
       { href: '#/cadastros/equipes', l: 'Equipes', i: 'bi-people-fill', p: 'cadastros.usuario' },
@@ -72,6 +81,12 @@ const ROTAS = [
   [/^#\/clientes$/, () => import('./pages/clientes.js'), 'lista'],
   [/^#\/historico-compra$/, () => import('./pages/clientes.js'), 'historico'],
   [/^#\/blacklist$/, () => import('./pages/clientes.js'), 'blacklist'],
+  [/^#\/propostas$/, () => import('./pages/propostas.js')],
+  [/^#\/propostas\/nova$/, () => import('./pages/propostas.js'), 'form'],
+  [/^#\/propostas\/(\d+)\/editar$/, () => import('./pages/propostas.js'), 'form'],
+  [/^#\/estoque$/, () => import('./pages/estoque.js')],
+  [/^#\/pagar$/, () => import('./pages/pagar.js')],
+  [/^#\/chamados$/, () => import('./pages/chamados.js')],
   [/^#\/crm$/, () => import('./pages/crm.js')],
   [/^#\/crm\/cliente\/(\d+)$/, () => import('./pages/crm.js'), 'cliente'],
   [/^#\/cobranca$/, () => import('./pages/cobranca.js')],
@@ -290,6 +305,7 @@ export async function atualizarContadores() {
   if (!state.me?.empresa) return;
   try {
     const c = await get('/api/pedidos/contagem');
+    if (pode('chamados')) c.chamados = (await get('/api/chamados/contagem')).para_mim;
     document.querySelectorAll('[data-cont]').forEach((b) => {
       const n = c[b.dataset.cont] || 0;
       b.textContent = n > 999 ? '999+' : n.toLocaleString('pt-BR');
@@ -325,6 +341,12 @@ function conectarEventos() {
     const d = JSON.parse(e.data);
     chat.receber(d);
     avisar(d.de_nome, d.texto.slice(0, 140), '/#/dashboard');
+  });
+  fonte.addEventListener('chamado', (e) => {
+    const d = JSON.parse(e.data);
+    toast(d.texto, 'warning', 'Chamado interno');
+    avisar(`Chamado #${d.numero}`, d.texto, `/#/chamados?id=${d.id}`);
+    atualizarContadores();
   });
   fonte.addEventListener('chat_lida', (e) => chat.lidas(JSON.parse(e.data)));
 }
@@ -373,7 +395,7 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && state.me?.empresa) { e.preventDefault(); abrirBusca(); }
 });
 const telas = () => MENU.flatMap((g) => g.itens.filter((i) => !i.p || pode(i.p)).map((i) => ({ ...i, grupo: g.grupo })))
-  .concat([{ href: '#/perfil', l: 'Meu perfil', i: 'bi-person-badge', grupo: 'Conta' }, { href: '#/pedido/novo', l: 'Novo pedido', i: 'bi-cart-plus', grupo: 'Ações', p: 'pedido.criar' }])
+  .concat([{ href: '#/perfil', l: 'Meu perfil', i: 'bi-person-badge', grupo: 'Conta' }, { href: '#/pedido/novo', l: 'Novo pedido', i: 'bi-cart-plus', grupo: 'Ações', p: 'pedido.criar' }, { href: '#/propostas/nova', l: 'Nova proposta comercial', i: 'bi-file-earmark-plus', grupo: 'Ações', p: 'propostas' }])
   .filter((i) => !i.p || pode(i.p));
 const semAcento = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const buscar = debounce(async (q) => {

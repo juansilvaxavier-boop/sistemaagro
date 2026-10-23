@@ -180,6 +180,95 @@ const RELATORIOS = {
       };
     },
   },
+  'contas-pagar': {
+    titulo: 'Contas a Pagar', perm: 'financeiro.pagar',
+    async gerar(q, ctx) {
+      const { STATUS_SQL, SALDO_SQL } = require('./pagar');
+      const f = filtros(q, {
+        venc_de: ['c.vencimento >= ?'], venc_ate: ['c.vencimento <= ?'], fornecedor_id: ['c.fornecedor_id = ?'], categoria: ['c.categoria = ?'],
+      });
+      const situacao = { abertas: `AND c.status = 'a_pagar'`, pagas: `AND c.status = 'pago'`, vencidas: `AND c.status = 'a_pagar' AND c.vencimento < date('now','localtime')` }[q.situacao] || `AND c.status <> 'cancelado'`;
+      return {
+        colunas: [col('vencimento', 'Vencimento', 'date'), col('fornecedor', 'Fornecedor'), col('descricao', 'Descrição'), col('categoria', 'Categoria'),
+          col('documento', 'Documento'), col('valor', 'Valor', 'money'), col('valor_pago', 'Pago', 'money'), col('saldo', 'Saldo', 'money'),
+          col('data_pagamento', 'Pagamento', 'date'), col('status', 'Status')],
+        linhas: await db.all(
+          `SELECT c.vencimento, f.razao_social AS fornecedor, c.descricao, c.categoria, c.documento, c.valor, c.valor_pago, ${SALDO_SQL} AS saldo,
+                  c.data_pagamento, ${STATUS_SQL} AS status
+             FROM contas_pagar c LEFT JOIN fornecedores f ON f.id = c.fornecedor_id
+            WHERE c.empresa_id = ? ${situacao} ${f.where} ORDER BY ${q.agrupar === 'categoria' ? 'c.categoria, ' : q.agrupar === 'fornecedor' ? 'f.razao_social, ' : ''}c.vencimento`,
+          ctx.emp, ...f.params,
+        ),
+        totalizar: ['valor', 'valor_pago', 'saldo'], agrupar: ['categoria', 'fornecedor'].includes(q.agrupar) ? q.agrupar : null,
+      };
+    },
+  },
+  'fluxo-caixa': {
+    titulo: 'Fluxo de Caixa Previsto', perm: 'relatorios.financeiro',
+    async gerar(q, ctx) {
+      const de = q.venc_de || S.hoje();
+      const ate = q.venc_ate || S.addDias(de, 30);
+      const { SALDO_SQL } = require('./pagar');
+      const linhas = await db.all(
+        `SELECT d AS data, ROUND(SUM(entrada)::numeric, 2)::float8 AS entradas, ROUND(SUM(saida)::numeric, 2)::float8 AS saidas FROM (
+           SELECT p.vencimento AS d, ${S.SALDO_PARCELA_SQL} AS entrada, 0 AS saida FROM parcelas p
+            WHERE p.empresa_id = ? AND ${S.ABERTA_SQL} AND p.vencimento BETWEEN ? AND ?
+           UNION ALL
+           SELECT c.vencimento, 0, ${SALDO_SQL} FROM contas_pagar c WHERE c.empresa_id = ? AND c.status = 'a_pagar' AND c.vencimento BETWEEN ? AND ?
+         ) x GROUP BY d ORDER BY d`, ctx.emp, de, ate, ctx.emp, de, ate,
+      );
+      let acumulado = 0;
+      for (const l of linhas) {
+        l.saldo_dia = S.r2(l.entradas - l.saidas);
+        acumulado = S.r2(acumulado + l.saldo_dia);
+        l.acumulado = acumulado;
+      }
+      return {
+        colunas: [col('data', 'Data', 'date'), col('entradas', 'A receber', 'money'), col('saidas', 'A pagar', 'money'), col('saldo_dia', 'Saldo do dia', 'money'), col('acumulado', 'Acumulado', 'money')],
+        linhas, totalizar: ['entradas', 'saidas', 'saldo_dia'],
+      };
+    },
+  },
+  'posicao-estoque': {
+    titulo: 'Posição de Estoque', perm: 'relatorios.estoque',
+    async gerar(q, ctx) {
+      const porLote = q.por_lote === '1';
+      const linhas = await db.all(
+        `SELECT p.codigo, p.nome AS produto, g.nome AS grupo, e.descricao AS embalagem, ${porLote ? 'm.lote' : "''"} AS lote, MIN(m.validade) AS validade,
+                ROUND(SUM(m.quantidade)::numeric, 2)::float8 AS saldo, COALESCE(e.estoque_minimo, 0) AS minimo
+           FROM estoque_movimentos m JOIN produtos p ON p.id = m.produto_id LEFT JOIN grupos_produto g ON g.id = p.grupo_id
+           LEFT JOIN produto_embalagens e ON e.id = m.embalagem_id
+          WHERE m.empresa_id = ? ${q.grupo_id ? 'AND p.grupo_id = ?' : ''}
+          GROUP BY p.id, p.codigo, p.nome, g.nome, e.id, e.descricao, e.estoque_minimo${porLote ? ', m.lote' : ''}
+          ${q.zerados === '1' ? '' : 'HAVING SUM(m.quantidade) <> 0'}
+          ORDER BY p.nome, e.descricao, MIN(m.validade)`, ctx.emp, ...(q.grupo_id ? [Number(q.grupo_id)] : []),
+      );
+      return {
+        colunas: [col('codigo', 'Código'), col('produto', 'Produto'), col('grupo', 'Grupo'), col('embalagem', 'Embalagem'),
+          ...(porLote ? [col('lote', 'Lote'), col('validade', 'Validade', 'date')] : []), col('saldo', 'Saldo'), col('minimo', 'Mínimo')],
+        linhas, totalizar: ['saldo'], agrupar: q.agrupar_grupo === '1' ? 'grupo' : null,
+      };
+    },
+  },
+  'movimentacao-estoque': {
+    titulo: 'Movimentação de Estoque', perm: 'relatorios.estoque',
+    async gerar(q, ctx) {
+      const f = filtros(q, { mov_de: ['m.created_at >= ?'], mov_ate: ['m.created_at <= ?', fimDia], origem: ['m.origem = ?'] });
+      return {
+        colunas: [col('data', 'Data', 'datetime'), col('produto', 'Produto'), col('embalagem', 'Embalagem'), col('origem', 'Origem'), col('lote', 'Lote'),
+          col('entrada', 'Entrada'), col('saida', 'Saída'), col('documento', 'Documento'), col('usuario', 'Usuário')],
+        linhas: await db.all(
+          `SELECT m.created_at AS data, p.nome AS produto, e.descricao AS embalagem, m.origem, m.lote,
+                  CASE WHEN m.quantidade > 0 THEN m.quantidade END AS entrada, CASE WHEN m.quantidade < 0 THEN -m.quantidade END AS saida,
+                  COALESCE(m.documento, f.razao_social) AS documento, u.nome AS usuario
+             FROM estoque_movimentos m JOIN produtos p ON p.id = m.produto_id LEFT JOIN produto_embalagens e ON e.id = m.embalagem_id
+             LEFT JOIN fornecedores f ON f.id = m.fornecedor_id LEFT JOIN usuarios u ON u.id = m.usuario_id
+            WHERE m.empresa_id = ? ${f.where} ORDER BY m.id`, ctx.emp, ...f.params,
+        ),
+        totalizar: ['entrada', 'saida'],
+      };
+    },
+  },
   'vendedores-supervisor': {
     titulo: 'Vendedores por Supervisor', perm: 'relatorios.vendas',
     async gerar() {

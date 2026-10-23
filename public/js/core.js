@@ -524,3 +524,11 @@ export class EditorLista {
     });
   }
 }
+
+/** Card de indicador (mesmo visual do painel). */
+export function kpi(label, valor, { icone = 'bi-graph-up', cor = 'primary', sub = '', link } = {}) {
+  const card = `<div class="card kpi cor-${cor} h-100"><div class="card-body d-flex gap-3 align-items-start">
+    <span class="icone"><i class="bi ${icone}"></i></span>
+    <div class="flex-grow-1 min-w-0"><div class="rotulo">${esc(label)}</div><div class="valor">${valor}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div></div></div>`;
+  return `<div>${link ? `<a class="kpi-link" href="${link}">${card}</a>` : card}</div>`;
+}

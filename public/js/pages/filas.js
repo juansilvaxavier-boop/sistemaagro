@@ -1,4 +1,4 @@
-import { DataTable, state, titulo, abas, pode, fmt, esc } from '../core.js';
+import { DataTable, state, titulo, abas, pode, fmt, esc, btnAcao } from '../core.js';
 import { abrirPedido } from './pedido-detalhe.js';
 
 const C = {
@@ -24,6 +24,8 @@ const C = {
   prevista: { k: 'data_entrega_prevista', l: 'Entrega prevista', t: 'date' },
   entrega: { k: 'data_entrega', l: 'Entregue em', t: 'date' },
   etapa: { k: 'etapa', l: 'Etapa', t: 'etapa' },
+  volumes: { k: 'volumes', l: 'Volumes', t: 'num' },
+  rastreio: { k: 'codigo_rastreio', l: 'Rastreio' },
   desde: { k: 'etapa_desde', l: 'Na etapa desde', t: 'datetime' },
 };
 
@@ -35,8 +37,8 @@ const COLUNAS = {
   cobranca: ['numero', 'data', 'documento', 'cliente', 'forma', 'condicao', 'valor', 'vendedor', 'dias'],
   producao: ['numero', 'documento', 'cliente', 'uf', 'vendedor', 'chegada', 'prazo', 'dias'],
   faturamento: ['numero', 'data', 'documento', 'cliente', 'cidade', 'uf', 'forma', 'valor', 'vendedor', 'nota', 'dias'],
-  expedicao: ['numero', 'nota', 'cliente', 'cidade', 'uf', 'prazo', 'supervisor', 'transportadora', 'embarque', 'prevista', 'dias'],
-  transito: ['numero', 'nota', 'cliente', 'cidade', 'uf', 'transportadora', 'embarque', 'prevista', 'entrega'],
+  expedicao: ['numero', 'nota', 'cliente', 'cidade', 'uf', 'prazo', 'supervisor', 'transportadora', 'volumes', 'rastreio', 'embarque', 'prevista', 'dias'],
+  transito: ['numero', 'nota', 'cliente', 'cidade', 'uf', 'transportadora', 'volumes', 'rastreio', 'embarque', 'prevista', 'entrega'],
   devolucao: ['numero', 'nota', 'cliente', 'valor', 'vendedor', 'desde'],
 };
 const PROGRESSAO = ['numero', 'data', 'documento', 'cliente', 'valor', 'vendedor', 'supervisor', 'etapa', 'desde', 'nota'];
@@ -55,12 +57,17 @@ export default async function (conteudo, { params: [etapa] }) {
   const tabelas = [];
   const abrir = (r) => abrirPedido(r.id, () => tabelas.forEach((t) => t.reload()));
   const cols = (COLUNAS[etapa] || COLUNAS.venda).map((k) => C[k]);
+  // Expedição e faturamento imprimem a etiqueta de envio direto da fila.
+  const comEtiqueta = pode('etiquetas') && ['faturamento', 'expedicao', 'transito'].includes(etapa) ? {
+    actions: (r) => (etapa !== 'faturamento' || r.nota ? btnAcao('etiqueta', 'bi-upc-scan', 'Etiqueta de envio') : ''),
+    onAction: { etiqueta: async (r) => { const { abrirEtiqueta } = await import('../etiqueta.js'); abrirEtiqueta(r.id, () => tabelas.forEach((t) => t.reload())); } },
+  } : {};
   tabelas.push(new DataTable(pagina.querySelector('#t-pedidos'), {
-    url: `/api/pedidos/fila/${etapa}`, columns: cols, rowClick: abrir, title: `Fila ${info.label}`, sort: 'etapa_desde', dir: 'asc',
+    url: `/api/pedidos/fila/${etapa}`, columns: cols, rowClick: abrir, title: `Fila ${info.label}`, sort: 'etapa_desde', dir: 'asc', ...comEtiqueta,
   }));
   if (etapa === 'transito') {
     tabelas.push(new DataTable(pagina.querySelector('#t-entregues'), {
-      url: '/api/pedidos/fila/transito?aba=entregues', columns: cols, rowClick: abrir, title: 'Pedidos entregues', sort: 'data_entrega', dir: 'desc',
+      url: '/api/pedidos/fila/transito?aba=entregues', columns: cols, rowClick: abrir, title: 'Pedidos entregues', sort: 'data_entrega', dir: 'desc', ...comEtiqueta,
     }));
   }
   const etapas = Object.entries(state.me.etapas).map(([k, v]) => [k, v.label]);

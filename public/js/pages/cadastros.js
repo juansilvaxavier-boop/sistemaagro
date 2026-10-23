@@ -1,11 +1,11 @@
-// Cadastros (menu Registro): produto, forma de pagamento, transportadoras, usuários, equipes, empresas e senha.
+// Cadastros (menu Registro): produto, forma de pagamento, transportadoras, fornecedores, usuários, equipes, empresas e senha.
 import {
   get, post, put, esc, titulo, abas, DataTable, EditorLista, modal, campo, opcoes, lerForm, preencherForm, toast, state, erro,
 } from '../core.js';
 
 export default async function (conteudo, { params: [tela], modo }) {
   if (modo === 'senha') return senha(conteudo);
-  const telas = { produtos, formas, transportadoras, equipes, empresas };
+  const telas = { produtos, formas, transportadoras, fornecedores, equipes, empresas };
   if (!telas[tela]) { conteudo.innerHTML = '<div class="vazio">Tela não encontrada.</div>'; return; }
   return telas[tela](conteudo);
 }
@@ -63,6 +63,7 @@ async function abrirProduto(id, aoSalvar) {
   const emb = new EditorLista(m.body.querySelector('[data-emb]'), [
     { k: 'descricao', l: 'Descrição' }, { k: 'quantidade', l: 'Quantidade', type: 'number' },
     { k: 'unidade', l: 'Unidade', type: 'select', options: [['KG', 'KG'], ['L', 'L'], ['UN', 'UN']] }, { k: 'custo', l: 'Custo por embalagem', type: 'number' },
+    { k: 'peso_kg', l: 'Peso bruto (kg)', type: 'number' }, { k: 'estoque_minimo', l: 'Estoque mínimo', type: 'number' },
   ], p.embalagens, { novo: { unidade: p.unidade }, rotuloAdd: 'Embalagem' });
   const brinde = new EditorLista(m.body.querySelector('[data-brinde]'), [
     { k: 'brinde_produto_id', l: 'Produto brinde', type: 'select', options: opcoes(state.opcoes.produtos) }, { k: 'qtd_minima', l: 'Qtd mínima comprada', type: 'number' },
@@ -162,8 +163,36 @@ function equipes(conteudo) {
 function empresas(conteudo) {
   crudSimples(conteudo, {
     tituloTela: 'Empresas', icone: 'bi-building', url: '/api/cadastros/empresas',
-    colunas: [{ k: 'nome', l: 'Razão social' }, { k: 'cnpj', l: 'CNPJ', t: 'doc' }, { k: 'uf', l: 'UF' }],
-    campos: () => `${campo('nome', 'Razão social', { col: 'col-md-6', required: true })}${campo('cnpj', 'CNPJ', { col: 'col-md-4' })}${campo('uf', 'UF', { col: 'col-md-2' })}`,
+    colunas: [{ k: 'nome', l: 'Razão social' }, { k: 'cnpj', l: 'CNPJ', t: 'doc' }, { k: 'cidade', l: 'Cidade' }, { k: 'uf', l: 'UF' }, { k: 'telefone', l: 'Telefone' }],
+    campos: () => `${campo('nome', 'Razão social', { col: 'col-md-6', required: true })}${campo('cnpj', 'CNPJ', { col: 'col-md-4' })}${campo('uf', 'UF', { col: 'col-md-2' })}
+      ${campo('endereco', 'Endereço (remetente das etiquetas)', { col: 'col-md-12' })}${campo('cidade', 'Cidade', { col: 'col-md-5' })}
+      ${campo('cep', 'CEP', { col: 'col-md-3' })}${campo('telefone', 'Telefone', { col: 'col-md-4' })}`,
+  });
+}
+
+const CATEGORIAS_FORNECEDOR = ['Matéria-prima', 'Embalagem', 'Frete', 'Serviços', 'Manutenção', 'Energia', 'Aluguel', 'Impostos', 'Outros'];
+function fornecedores(conteudo) {
+  crudSimples(conteudo, {
+    tituloTela: 'Fornecedores', icone: 'bi-shop', url: '/api/cadastros/fornecedores',
+    colunas: [
+      { k: 'razao_social', l: 'Razão social' }, { k: 'nome_fantasia', l: 'Fantasia' }, { k: 'documento', l: 'CPF/CNPJ', t: 'doc' },
+      { k: 'categoria', l: 'Categoria', filter: { options: CATEGORIAS_FORNECEDOR.map((c) => [c, c]) } }, { k: 'cidade', l: 'Cidade' }, { k: 'uf', l: 'UF' },
+      { k: 'telefone', l: 'Telefone' }, { k: 'contato', l: 'Contato' }, { k: 'em_aberto', l: 'A pagar', t: 'money' }, ATIVO,
+    ],
+    campos: () => '<div class="col-12">' + abas([
+      { id: 'geral', label: 'Geral', html: `<div class="row g-2">
+        ${campo('tipo_pessoa', 'Tipo', { type: 'select', col: 'col-md-2', options: [['J', 'Jurídica'], ['F', 'Física']] })}
+        ${campo('documento', 'CNPJ/CPF', { col: 'col-md-3' })}${campo('razao_social', 'Razão social / nome', { col: 'col-md-7', required: true })}
+        ${campo('nome_fantasia', 'Nome fantasia', { col: 'col-md-5' })}${campo('inscricao_estadual', 'Inscrição estadual', { col: 'col-md-3' })}
+        ${campo('categoria', 'Categoria', { type: 'select', col: 'col-md-4', options: [['', '—'], ...CATEGORIAS_FORNECEDOR.map((c) => [c, c])] })}
+        ${campo('contato', 'Contato', { col: 'col-md-4' })}${campo('telefone', 'Telefone', { col: 'col-md-3' })}${campo('email', 'E-mail', { type: 'email', col: 'col-md-5' })}
+        ${campo('prazo_pagamento_dias', 'Prazo de pagamento (dias)', { type: 'number', col: 'col-md-3' })}${campo('ativo', 'Ativo', { type: 'checkbox', col: 'col-md-3', value: 1 })}
+        ${campo('observacao', 'Observação', { type: 'textarea', col: 'col-12' })}</div>` },
+      { id: 'end', label: 'Endereço', html: `<div class="row g-2">${campo('cep', 'CEP', { col: 'col-md-3' })}${campo('logradouro', 'Logradouro', { col: 'col-md-7' })}
+        ${campo('numero', 'Número', { col: 'col-md-2' })}${campo('bairro', 'Bairro', { col: 'col-md-4' })}${campo('cidade', 'Cidade', { col: 'col-md-6' })}${campo('uf', 'UF', { col: 'col-md-2' })}</div>` },
+      { id: 'banco', label: 'Dados bancários', html: `<div class="row g-2">${campo('banco', 'Banco', { col: 'col-md-4' })}${campo('agencia', 'Agência', { col: 'col-md-3' })}
+        ${campo('conta', 'Conta', { col: 'col-md-5' })}${campo('chave_pix', 'Chave PIX', { col: 'col-md-12' })}</div>` },
+    ], 'forn') + '</div>',
   });
 }
 

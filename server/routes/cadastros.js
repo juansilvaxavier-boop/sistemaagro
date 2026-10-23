@@ -37,7 +37,7 @@ function crud(caminho, { tabela, campos, sql, permLer, permEditar, antesSalvar }
 }
 
 // ---------- Empresas, equipes e usuários ----------
-crud('/empresas', { tabela: 'empresas', campos: ['nome', 'cnpj', 'uf'], permLer: 'cadastros.empresa' });
+crud('/empresas', { tabela: 'empresas', campos: ['nome', 'cnpj', 'uf', 'endereco', 'cidade', 'cep', 'telefone'], permLer: 'cadastros.empresa' });
 
 crud('/equipes', {
   tabela: 'equipes', campos: ['nome', 'supervisor_id'], permLer: ['cadastros.usuario', 'relatorios'], permEditar: 'cadastros.usuario',
@@ -196,7 +196,7 @@ async function salvarProduto(req, id) {
       }
       for (const e of b.embalagens) {
         const dados = { ...e, produto_id: id };
-        const campos = ['produto_id', 'descricao', 'quantidade', 'unidade', 'custo'];
+        const campos = ['produto_id', 'descricao', 'quantidade', 'unidade', 'custo', 'peso_kg', 'estoque_minimo'];
         if (e.id) await db.update('produto_embalagens', e.id, dados, campos);
         else e.id = await db.insert('produto_embalagens', dados, campos);
       }
@@ -268,6 +268,31 @@ r.put('/formas-pagamento/:id', A.exige('cadastros.forma'), async (req, res) => r
 crud('/transportadoras', { tabela: 'transportadoras', campos: ['nome', 'cnpj', 'telefone', 'email', 'ativo'], permLer: 'cadastros.transportadora' });
 crud('/bancos', { tabela: 'bancos', campos: ['codigo', 'nome'], permLer: 'financeiro' });
 
+// ---------- Fornecedores ----------
+const camposFornecedor = [
+  'tipo_pessoa', 'documento', 'razao_social', 'nome_fantasia', 'inscricao_estadual', 'categoria', 'email', 'telefone', 'contato',
+  'cep', 'logradouro', 'numero', 'bairro', 'cidade', 'uf', 'banco', 'agencia', 'conta', 'chave_pix', 'prazo_pagamento_dias', 'observacao', 'ativo',
+];
+function dadosFornecedor(b) {
+  const d = { ...b };
+  if (!String(d.razao_social || '').trim()) throw new ErroNegocio('Informe a razão social ou o nome.');
+  d.tipo_pessoa = d.tipo_pessoa === 'F' ? 'F' : 'J';
+  if (d.documento) {
+    d.documento = String(d.documento).replace(/\D/g, '');
+    const { validarCpf, validarCnpj } = require('./clientes');
+    if (d.tipo_pessoa === 'J' ? !validarCnpj(d.documento) : !validarCpf(d.documento)) throw new ErroNegocio(d.tipo_pessoa === 'J' ? 'CNPJ inválido.' : 'CPF inválido.');
+  }
+  if (d.uf) d.uf = String(d.uf).toUpperCase().slice(0, 2);
+  return d;
+}
+crud('/fornecedores', {
+  tabela: 'fornecedores', campos: camposFornecedor, permLer: ['cadastros.fornecedor', 'financeiro.pagar', 'estoque.movimentar'], permEditar: 'cadastros.fornecedor',
+  antesSalvar: dadosFornecedor,
+  sql: `SELECT f.id, f.razao_social, f.nome_fantasia, f.documento, f.categoria, f.cidade, f.uf, f.telefone, f.email, f.contato, f.ativo,
+          (SELECT COALESCE(SUM(c.valor - COALESCE(c.valor_pago,0)), 0) FROM contas_pagar c WHERE c.fornecedor_id = f.id AND c.status = 'a_pagar') AS em_aberto
+        FROM fornecedores f`,
+});
+
 // ---------- Listas de apoio (combos) ----------
 r.get('/opcoes', async (req, res) => {
   const u = req.user;
@@ -280,6 +305,11 @@ r.get('/opcoes', async (req, res) => {
     bancos: await db.all('SELECT id, codigo, nome FROM bancos ORDER BY nome'),
     equipes: await db.all('SELECT id, nome, supervisor_id FROM equipes ORDER BY nome'),
     empresas: await db.all('SELECT id, nome FROM empresas ORDER BY nome'),
+    fornecedores: await db.all('SELECT id, razao_social AS nome, categoria, prazo_pagamento_dias FROM fornecedores WHERE ativo = 1 ORDER BY razao_social'),
+    embalagens: await db.all(
+      `SELECT e.id, e.produto_id, e.descricao, e.unidade, p.nome AS produto FROM produto_embalagens e JOIN produtos p ON p.id = e.produto_id
+        WHERE p.ativo = 1 ORDER BY p.nome, e.quantidade`,
+    ),
     usuarios: await db.all('SELECT id, nome, perfil, equipe_id FROM usuarios WHERE ativo = 1 ORDER BY nome'),
     vendedores: await db.all(
       `SELECT id, nome, equipe_id FROM usuarios WHERE ativo = 1 AND perfil = 'vendedor' ${u.perfil === 'vendedor' ? 'AND id = ' + Number(u.id) : ''} ORDER BY nome`,

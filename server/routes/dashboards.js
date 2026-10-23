@@ -329,6 +329,49 @@ async function faixasScore() {
   return { labels: ordem, series: [{ nome: 'Consultas', dados: ordem.map((k) => m[k] || 0) }] };
 }
 
+/** Indicadores dos módulos de estoque, contas a pagar, propostas e chamados, conforme o painel. */
+async function cardsModulos(perfil, ctx, user) {
+  const out = [];
+  const geral = ['diretoria', 'admin'].includes(perfil);
+  if (geral || ['producao', 'expedicao', 'faturamento'].includes(perfil)) {
+    const e = await db.get(
+      `SELECT COUNT(*) FILTER (WHERE s < m AND m > 0) AS baixo, COUNT(*) FILTER (WHERE s <= 0) AS zerado FROM (
+         SELECT COALESCE(e.estoque_minimo,0) AS m, COALESCE((SELECT SUM(quantidade) FROM estoque_movimentos x WHERE x.embalagem_id = e.id AND x.empresa_id = ?),0) AS s
+           FROM produto_embalagens e JOIN produtos p ON p.id = e.produto_id WHERE p.ativo = 1) t`, ctx.emp,
+    );
+    out.push(card('Estoque abaixo do mínimo', e.baixo, { icone: 'bi-box2', cor: e.baixo ? 'warning' : 'success', sub: `${e.zerado} sem saldo`, link: '#/estoque' }));
+  }
+  if (geral || perfil === 'financeiro') {
+    const p = await db.get(
+      `SELECT COALESCE(SUM(valor - COALESCE(valor_pago,0)) FILTER (WHERE vencimento < date('now','localtime')), 0) AS vencido,
+              COUNT(*) FILTER (WHERE vencimento < date('now','localtime')) AS qv,
+              COALESCE(SUM(valor - COALESCE(valor_pago,0)) FILTER (WHERE vencimento = date('now','localtime')), 0) AS hoje,
+              COUNT(*) FILTER (WHERE vencimento = date('now','localtime')) AS qh
+         FROM contas_pagar WHERE empresa_id = ? AND status = 'a_pagar'`, ctx.emp,
+    );
+    out.push(money('A pagar vencido', p.vencido, { icone: 'bi-credit-card-2-back', cor: 'danger', sub: `${p.qv} contas`, link: '#/pagar' }));
+    out.push(money('A pagar hoje', p.hoje, { icone: 'bi-calendar2-check', cor: 'warning', sub: `${p.qh} contas`, link: '#/pagar' }));
+  }
+  if (['vendedor', 'supervisor'].includes(perfil) || geral) {
+    const f = perfil === 'supervisor'
+      ? { sql: 'p.empresa_id = ? AND p.vendedor_id IN (SELECT id FROM usuarios WHERE equipe_id IN (SELECT id FROM equipes WHERE supervisor_id = ?) OR id = ?)', params: [ctx.emp, ctx.uid, ctx.uid] }
+      : filtroPedidos(perfil, ctx.uid, ctx.emp);
+    const pr = await db.get(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(valor_total),0) AS v FROM propostas p WHERE ${f.sql} AND status = 'enviada' AND validade >= date('now','localtime')`, ...f.params,
+    );
+    out.push(money('Propostas em aberto', pr.v, { icone: 'bi-file-earmark-text', cor: 'info', sub: `${pr.n} aguardando o cliente`, link: '#/propostas' }));
+  }
+  if (can(user, 'chamados')) {
+    const c = await db.get(
+      `SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE prazo < date('now','localtime')) AS atrasados FROM chamados
+        WHERE status NOT IN ('resolvido','fechado') AND (empresa_id IS NULL OR empresa_id = ?) AND (setor_destino = ? OR responsavel_id = ?)`,
+      ctx.emp, perfil, ctx.uid,
+    );
+    out.push(card('Chamados para atender', c.n, { icone: 'bi-headset', cor: c.atrasados ? 'danger' : 'secondary', sub: `${c.atrasados} fora do prazo`, link: '#/chamados' }));
+  }
+  return out;
+}
+
 r.get('/', async (req, res) => {
   const proprio = req.user.perfil;
   // Cada usuário vê o painel do próprio setor (vendedor: as próprias vendas; supervisor: a equipe).
@@ -336,7 +379,9 @@ r.get('/', async (req, res) => {
   const todos = can(req.user, 'dashboard.todos');
   const pedido = req.query.perfil && todos && PAINEIS[req.query.perfil] ? req.query.perfil : proprio;
   const painel = PAINEIS[pedido] || PAINEIS.diretoria;
-  const dados = await painel({ uid: req.user.id, emp: req.empresaId });
+  const ctx = { uid: req.user.id, emp: req.empresaId };
+  const dados = await painel(ctx);
+  dados.cards.push(...await cardsModulos(pedido, ctx, req.user));
   res.json({
     perfil: pedido, titulo: `Painel ${PERFIS[pedido] || ''}`.trim(),
     perfis_disponiveis: todos ? Object.keys(PAINEIS).filter((p) => p !== 'admin') : [proprio], ...dados,

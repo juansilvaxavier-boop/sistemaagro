@@ -15,7 +15,7 @@ npm run demo       # http://localhost:3000 com dados de demonstração (banco lo
 npm start          # sem dados de demonstração: cria só a empresa e o usuário admin
 npm run seed:demo  # recria o banco local de demonstração
 npm test           # testes de ponta a ponta (PGlite em memória)
-TEST_DATABASE_URL=postgresql://... npm test   # mesmos testes num PostgreSQL de verdade
+TEST_DATABASE_URL=postgresql://... npm test   # mesmos testes num PostgreSQL de verdade (rodam em série)
 ```
 
 ### Banco de dados
@@ -36,6 +36,7 @@ TEST_DATABASE_URL=postgresql://... npm test   # mesmos testes num PostgreSQL de 
 | `ADMIN_LOGIN`, `EMPRESA_NOME`, `EMPRESA_CNPJ` | Dados iniciais opcionais |
 | `CRON_SECRET` | Protege a rota do backup agendado |
 | `UPLOAD_MAX_MB` | Tamanho máximo dos anexos (padrão 4) |
+| `ESTOQUE_BLOQUEAR` | `1` impede emitir NF-e sem saldo em estoque (padrão: permite e mostra alerta) |
 
 ### Primeiro acesso em produção
 
@@ -46,7 +47,8 @@ Não há dados nem senhas de demonstração em produção. O sistema cria a empr
 2. **Cadastros → Colaboradores:** cadastre as pessoas.
 3. **Cadastros → Usuários e Permissões:** crie o acesso de cada colaborador, com perfil e, se quiser, permissões individuais.
    A senha definida é provisória e a pessoa troca no primeiro acesso.
-4. Cadastre produtos, formas de pagamento, transportadoras e equipes.
+4. Cadastre produtos (com peso e estoque mínimo nas embalagens), formas de pagamento, transportadoras, fornecedores e equipes.
+   Preencha endereço e CEP da empresa: eles saem como remetente nas etiquetas.
 
 ### Usuários de demonstração (só com `npm run demo`)
 
@@ -123,6 +125,19 @@ Telas de apoio: **Histórico de Compra de Cliente** (por CPF/CNPJ) e **Cliente (
 | **Dashboards por perfil** | *Painel*: indicadores e gráficos de Vendedor, Supervisor, Análise, Diretoria, Produção, Faturamento, Expedição e Financeiro; a Diretoria pode ver o painel de qualquer perfil |
 | **Arquivos e documentos** | Menu *Arquivos* e aba *Arquivos* no cliente e no pedido: envio por arrastar e soltar, categorias (contrato, comprovante...), visualização e download com controle de acesso |
 
+### Estoque, expedição, compras e atendimento interno
+
+| Módulo | Onde | O que faz |
+|---|---|---|
+| **Controle de estoque** | *Estoque → Controle de Estoque* | Saldo por produto e embalagem, com lote, validade, custo médio, quantidade em pedidos e disponível; estoque mínimo com alerta; entradas (compra, produção, devolução) e saídas (perda, consumo, amostra); inventário com folha de contagem e ajuste automático. A NF-e emitida baixa o estoque e o cancelamento ou a devolução total estornam. Com `ESTOQUE_BLOQUEAR=1` o faturamento sem saldo é bloqueado. |
+| **Etiqueta de envio** | Botão *Etiqueta* no pedido e nas filas de Faturamento, Expedição e Trânsito | Etiqueta 10 × 15 cm (impressora térmica) ou A4 com 4 por folha, uma por volume: destinatário, CEP com código de barras, remetente, NF-e e chave, peso, volume X/N e código de rastreio (Correios ou CT-e) em Code 128. |
+| **Contas a pagar** | *Financeiro → Contas a Pagar* | Lançamento único, parcelado ou recorrente; baixa total ou parcial com juros e desconto; estorno; cancelamento (também das parcelas seguintes); indicadores de vencido, vence hoje e próximos 7 dias. |
+| **Fornecedores** | *Cadastros → Fornecedores* | Dados cadastrais com validação de CNPJ/CPF, endereço, dados bancários e PIX, categoria e prazo de pagamento padrão (preenche o vencimento). |
+| **Chamados internos** | *Início → Chamados Internos* e botão *Chamado* no pedido | Abertura para um setor, prioridade com prazo (urgente 1 dia, alta 2, média 5, baixa 10), atribuição, comentários, pedido de informação, solução, avaliação de 1 a 5 e aviso em tempo real. |
+| **Proposta comercial** | *Vendas → Propostas Comerciais* | Orçamento com preço de tabela por forma de pagamento, desconto por item, frete e condições comerciais; impressão em PDF para o cliente; enviada → aceita/recusada (com motivo) → *Gerar pedido* com os mesmos itens e preços; duplicar; atualiza a oportunidade do CRM. |
+
+Relatórios novos: Contas a Pagar, Fluxo de Caixa Previsto (a receber × a pagar), Posição de Estoque e Movimentação de Estoque.
+
 ## Regras de passagem entre etapas
 
 O levantamento não mostra as regras de desvio, então elas ficam centralizadas em `server/workflow.js` (`REGRAS` e `ACOES`)
@@ -156,7 +171,8 @@ server/
   sse.js          Notificações em tempo real
   lista.js        Resposta de lista e exportação Excel (exceljs)
   seed.js         Dados de demonstração
-  routes/         auth, cadastros, clientes, pedidos, mensagens, financeiro, cobranca, crm, arquivos, dashboards, relatorios
+  routes/         auth, cadastros, clientes, pedidos, mensagens, financeiro, cobranca, crm, arquivos, dashboards, relatorios,
+                  estoque, pagar, chamados, propostas, chat, admin
 public/
   index.html, css/app.css
   js/core.js      API, formatação, modais, tabela padrão (DataTable) e editor de listas

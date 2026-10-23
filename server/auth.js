@@ -20,7 +20,9 @@ const PERFIS = {
 
 // Todas as permissões que podem ser liberadas individualmente para um usuário.
 const CATALOGO = [
-  ['Geral', [['dashboard', 'Ver o painel do próprio setor'], ['dashboard.todos', 'Ver o painel de qualquer setor'], ['chat', 'Usar o chat interno']]],
+  ['Geral', [['dashboard', 'Ver o painel do próprio setor'], ['dashboard.todos', 'Ver o painel de qualquer setor'], ['chat', 'Usar o chat interno'],
+    ['chamados', 'Abrir e acompanhar chamados internos'], ['chamados.gerir', 'Gerir todos os chamados']]],
+  ['Comercial', [['propostas', 'Propostas comerciais']]],
   ['Filas do pedido', [
     ['fila.venda', 'Fila do Vendedor'], ['pedido.criar', 'Criar e editar pedidos'], ['fila.supervisao', 'Fila do Supervisor'],
     ['fila.analise', 'Fila da Análise'], ['fila.diretoria', 'Fila da Diretoria'], ['fila.cobranca', 'Cobrança (à vista)'],
@@ -32,14 +34,16 @@ const CATALOGO = [
     ['blacklist', 'Ver blacklist'], ['blacklist.editar', 'Incluir e excluir da blacklist'], ['serasa', 'Consultar Serasa'],
   ]],
   ['Relacionamento', [['crm', 'CRM'], ['cobranca', 'Cobrança'], ['arquivos', 'Arquivos e documentos']]],
+  ['Estoque e expedição', [['estoque', 'Ver estoque'], ['estoque.movimentar', 'Lançar entradas, saídas e inventário'], ['etiquetas', 'Imprimir etiquetas de envio']]],
   ['Financeiro', [
     ['financeiro.parcelas', 'Gestão de parcelas'], ['financeiro.lancamentos', 'Descontos e créditos'], ['financeiro.comissoes', 'Revisar comissões'],
     ['financeiro.devolucoes', 'Desconto de devolução'], ['financeiro.negativados', 'Clientes negativados'], ['financeiro.notas', 'Notas fiscais'],
+    ['financeiro.pagar', 'Contas a pagar'],
   ]],
-  ['Relatórios', [['relatorios.vendas', 'Relatórios de vendas'], ['relatorios.financeiro', 'Relatórios financeiros']]],
+  ['Relatórios', [['relatorios.vendas', 'Relatórios de vendas'], ['relatorios.financeiro', 'Relatórios financeiros'], ['relatorios.estoque', 'Relatórios de estoque']]],
   ['Cadastros', [
     ['cadastros.produto', 'Produtos'], ['cadastros.forma', 'Formas de pagamento'], ['cadastros.transportadora', 'Transportadoras'],
-    ['cadastros.colaborador', 'Colaboradores'], ['cadastros.usuario', 'Usuários, equipes e permissões'], ['cadastros.empresa', 'Empresas'],
+    ['cadastros.fornecedor', 'Fornecedores'], ['cadastros.colaborador', 'Colaboradores'], ['cadastros.usuario', 'Usuários, equipes e permissões'], ['cadastros.empresa', 'Empresas'],
   ]],
   ['Segurança e LGPD', [
     ['lgpd.dados', 'Ver CPF/CNPJ, telefone e e-mail completos'], ['lgpd.titular', 'Exportar e anonimizar dados de titulares'],
@@ -51,20 +55,20 @@ const CATALOGO = [
 const PERMISSOES = {
   admin: ['*'],
   diretoria: ['*'],
-  vendedor: ['dashboard', 'chat', 'fila.venda', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico', 'crm', 'arquivos', 'relatorios.vendas', 'lgpd.dados'],
+  vendedor: ['dashboard', 'chat', 'chamados', 'propostas', 'fila.venda', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico', 'crm', 'arquivos', 'relatorios.vendas', 'lgpd.dados'],
   supervisor: [
-    'dashboard', 'chat', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
+    'dashboard', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
     'blacklist', 'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
   analista: [
-    'dashboard', 'chat', 'fila.analise', 'clientes', 'clientes.editar', 'clientes.historico', 'blacklist', 'blacklist.editar',
+    'dashboard', 'chat', 'chamados', 'fila.analise', 'clientes', 'clientes.editar', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
-  producao: ['dashboard', 'chat', 'fila.producao', 'arquivos'],
-  faturamento: ['dashboard', 'chat', 'fila.faturamento', 'clientes', 'clientes.historico', 'serasa', 'financeiro.notas', 'arquivos', 'relatorios.financeiro', 'lgpd.dados'],
-  expedicao: ['dashboard', 'chat', 'fila.expedicao', 'fila.transito', 'cadastros.transportadora', 'arquivos'],
+  producao: ['dashboard', 'chat', 'chamados', 'fila.producao', 'arquivos', 'estoque', 'estoque.movimentar', 'relatorios.estoque'],
+  faturamento: ['dashboard', 'chat', 'chamados', 'estoque', 'etiquetas', 'fila.faturamento', 'clientes', 'clientes.historico', 'serasa', 'financeiro.notas', 'arquivos', 'relatorios.financeiro', 'lgpd.dados'],
+  expedicao: ['dashboard', 'chat', 'chamados', 'fila.expedicao', 'fila.transito', 'cadastros.transportadora', 'arquivos', 'estoque', 'estoque.movimentar', 'etiquetas', 'relatorios.estoque'],
   financeiro: [
-    'dashboard', 'chat', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
+    'dashboard', 'chat', 'chamados', 'financeiro.pagar', 'cadastros.fornecedor', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'cobranca', 'financeiro.parcelas', 'financeiro.lancamentos', 'financeiro.comissoes',
     'financeiro.devolucoes', 'financeiro.negativados', 'financeiro.notas', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],

@@ -130,6 +130,7 @@ async function emitirNota(pedido, usuarioId) {
   });
   await gerarParcelas(pedido, notaId);
   await gerarComissoesFaturamento(pedido);
+  await baixarEstoquePedido(pedido, usuarioId);
   return await db.get('SELECT * FROM notas_fiscais WHERE id = ?', notaId);
 }
 
@@ -178,6 +179,60 @@ async function gerarComissoesFaturamento(pedido) {
       empresa_id: pedido.empresa_id, pedido_id: pedido.id, valor_base: pedido.valor_total, percentual: c.percentual,
       valor: c.valor, status: 'aberta',
     });
+  }
+}
+
+// ---------- Estoque ----------
+// Bloquear o faturamento sem saldo é opcional (ESTOQUE_BLOQUEAR=1); por padrão o saldo pode ficar negativo e aparece em alerta.
+const ESTOQUE_BLOQUEAR = process.env.ESTOQUE_BLOQUEAR === '1';
+
+async function saldoEstoque(empresaId, produtoId, embalagemId, lote) {
+  const r = await db.get(
+    `SELECT COALESCE(SUM(quantidade), 0) AS s FROM estoque_movimentos
+      WHERE empresa_id = ? AND produto_id = ? AND COALESCE(embalagem_id, 0) = ? ${lote ? 'AND lote = ?' : ''}`,
+    empresaId, produtoId, embalagemId || 0, ...(lote ? [lote] : []),
+  );
+  return r.s;
+}
+
+/** Grava uma movimentação. quantidade já vem com sinal (+ entra, - sai). */
+async function movimentarEstoque(m) {
+  if (!m.produto_id || !Number(m.quantidade)) throw new ErroNegocio('Informe produto e quantidade.');
+  return db.insert('estoque_movimentos', {
+    empresa_id: m.empresa_id, produto_id: m.produto_id, embalagem_id: m.embalagem_id || null, tipo: m.tipo, origem: m.origem || 'manual',
+    quantidade: r2(m.quantidade), lote: m.lote || null, validade: m.validade || null, custo_unitario: m.custo_unitario ?? null,
+    fornecedor_id: m.fornecedor_id || null, pedido_id: m.pedido_id || null, documento: m.documento || null, observacao: m.observacao || null,
+    usuario_id: m.usuario_id || null,
+  });
+}
+
+/** Saída do estoque no faturamento: um movimento por item do pedido (brindes inclusos). */
+async function baixarEstoquePedido(pedido, usuarioId) {
+  const itens = await db.all('SELECT * FROM pedido_itens WHERE pedido_id = ?', pedido.id);
+  for (const i of itens) {
+    if (ESTOQUE_BLOQUEAR) {
+      const saldo = await saldoEstoque(pedido.empresa_id, i.produto_id, i.embalagem_id);
+      if (saldo < i.quantidade) {
+        const prod = await db.get('SELECT nome FROM produtos WHERE id = ?', i.produto_id);
+        throw new ErroNegocio(`Estoque insuficiente de ${prod.nome}: saldo ${saldo}, pedido ${i.quantidade}.`);
+      }
+    }
+    await movimentarEstoque({
+      empresa_id: pedido.empresa_id, produto_id: i.produto_id, embalagem_id: i.embalagem_id, tipo: 'saida', origem: 'venda',
+      quantidade: -i.quantidade, lote: i.lote, pedido_id: pedido.id, documento: `Pedido ${pedido.numero}`, usuario_id: usuarioId,
+    });
+  }
+}
+
+/** Devolve ao estoque o que saiu pelo pedido (cancelamento da NF ou devolução total). */
+async function estornarEstoquePedido(pedidoId, origem, usuarioId) {
+  const saidas = await db.all(
+    `SELECT empresa_id, produto_id, embalagem_id, lote, SUM(quantidade) AS q FROM estoque_movimentos
+      WHERE pedido_id = ? GROUP BY empresa_id, produto_id, embalagem_id, lote HAVING SUM(quantidade) < 0`, pedidoId,
+  );
+  const ped = await db.get('SELECT numero FROM pedidos WHERE id = ?', pedidoId);
+  for (const x of saidas) {
+    await movimentarEstoque({ ...x, tipo: 'entrada', origem, quantidade: -x.q, pedido_id: pedidoId, documento: `Pedido ${ped?.numero}`, usuario_id: usuarioId });
   }
 }
 
@@ -287,6 +342,7 @@ async function registrarDevolucao(dados, usuarioId) {
       valor, ped.id,
     );
     if (total) {
+      await estornarEstoquePedido(ped.id, 'devolucao', usuarioId);
       await registrarHistorico(ped.id, { origem: ped.etapa, destino: 'devolucao', acao: 'Devolução total', observacao: dados.motivo, usuarioId });
       await db.run(`UPDATE pedidos SET etapa = 'devolucao', etapa_desde = datetime('now','localtime'), updated_at = datetime('now','localtime') WHERE id = ?`, ped.id);
     } else {
@@ -301,5 +357,6 @@ module.exports = {
   STATUS_PARCELA_SQL, SALDO_PARCELA_SQL, ABERTA_SQL,
   situacaoBlacklist, exigirClienteLiberado, simularSerasa, consultarSerasa,
   recalcularPedido, registrarHistorico, garantirComissoes, emitirNota, gerarParcelas,
+  saldoEstoque, movimentarEstoque, baixarEstoquePedido, estornarEstoquePedido,
   baixarParcela, prorrogarParcela, aplicarPenalidadeComissao, eventoParcela, registrarDevolucao,
 };

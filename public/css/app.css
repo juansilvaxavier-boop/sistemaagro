@@ -316,4 +316,5 @@ a.kpi-link:hover .kpi { transform: translateY(-2px); box-shadow: var(--sombra-al
 }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
 .kpis > div > .card, .kpis > div > a > .card { height: 100%; }
+.kpis .kpi .valor { white-space: nowrap; font-size: clamp(1.05rem, 1.5vw, 1.45rem); }
 .min-w-0 { min-width: 0; }

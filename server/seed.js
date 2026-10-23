@@ -42,8 +42,12 @@ async function seed() {
   const senha = A.hashSenha('agro123');
   return db.comUsuario({ semAuditoria: true }, () => db.tx(async () => {
     // ---------- Empresas ----------
-    const emp1 = await db.insert('empresas', { nome: 'Agroterra Fertilizantes Ltda', cnpj: '12345678000195', uf: 'MG' });
-    const emp2 = await db.insert('empresas', { nome: 'Agroterra Nutrição Vegetal Ltda', cnpj: '98765432000198', uf: 'SP' });
+    const emp1 = await db.insert('empresas', {
+      nome: 'Agroterra Fertilizantes Ltda', cnpj: '12345678000195', uf: 'MG', endereco: 'Rodovia BR-365, km 412, Distrito Industrial', cidade: 'Patrocínio', cep: '38740000', telefone: '3438310000',
+    });
+    const emp2 = await db.insert('empresas', {
+      nome: 'Agroterra Nutrição Vegetal Ltda', cnpj: '98765432000198', uf: 'SP', endereco: 'Av. das Indústrias, 1500', cidade: 'Franca', cep: '14400000', telefone: '1637220000',
+    });
 
     // ---------- Usuários ----------
     const u = (nome, login, perfil, extra = {}) => db.insert('usuarios', { nome, login, perfil, senha_hash: login === 'admin' ? A.hashSenha('admin123') : senha, email: `${login}@agroterra.com.br`, ...extra });
@@ -340,6 +344,157 @@ async function seed() {
       if (chance(0.2)) await db.insert('crm_tarefas', { cliente_id: c.id, titulo: pick(['Retornar ligação', 'Levar amostra de solo', 'Enviar proposta', 'Agendar visita']), vencimento: S.addDias(hojeIso, int(-3, 15)), responsavel_id: c.vend });
     }
     await db.run(`UPDATE crm_oportunidades SET motivo_perda = 'Preço acima da concorrência' WHERE estagio = 'perdida'`);
+
+    // ---------- Fornecedores ----------
+    const fornecedores = {};
+    for (const [razao, categoria, prazo] of [
+      ['Mineração Cerrado Fosfatos S.A.', 'Matéria-prima', 28], ['Potássio do Brasil Comércio Ltda', 'Matéria-prima', 30], ['Embalagens Triângulo Ltda', 'Embalagem', 21],
+      ['Química Foliar Insumos Ltda', 'Matéria-prima', 35], ['Transportes Rodominas Ltda', 'Frete', 15], ['Cemig Distribuição S.A.', 'Energia', 10],
+      ['Imobiliária Alto Paranaíba', 'Aluguel', 5], ['TecnoAgro Manutenção Industrial', 'Manutenção', 20],
+    ]) {
+      fornecedores[categoria] = fornecedores[categoria] || [];
+      fornecedores[categoria].push(await db.insert('fornecedores', {
+        tipo_pessoa: 'J', documento: cnpj(), razao_social: razao, nome_fantasia: razao.split(' ').slice(0, 2).join(' '), categoria, prazo_pagamento_dias: prazo,
+        email: `financeiro@${razao.split(' ')[0].toLowerCase().normalize('NFD').replace(/[^a-z]/g, '')}.com.br`, telefone: `34${int(30000000, 39999999)}`,
+        contato: `${pick(nomes)} ${pick(sobrenomes)}`, cidade: pick(cidades)[0], uf: 'MG', chave_pix: chance(0.5) ? cnpj() : null,
+      }));
+    }
+
+    // ---------- Estoque ----------
+    // Saídas do faturamento já foram lançadas pelas notas; ajusta a data delas à da nota e cria as compras iniciais.
+    await db.run(
+      `UPDATE estoque_movimentos m SET created_at = nf.data_emissao FROM notas_fiscais nf
+        WHERE nf.pedido_id = m.pedido_id AND m.origem = 'venda' AND nf.status <> 'cancelada'`,
+    );
+    for (const prod of produtos) {
+      for (const e of prod.embs) {
+        e.minimo = int(2, 8) * 10;
+        await db.run('UPDATE produto_embalagens SET estoque_minimo = ?, peso_kg = ? WHERE id = ?', e.minimo, e.un === 'KG' ? e.qtd : S.r2(e.qtd * 1.2), e.id);
+      }
+    }
+    for (const empEstoque of [emp1, emp2]) {
+    const vendidos = Object.fromEntries((await db.all(
+      `SELECT embalagem_id, -SUM(quantidade) AS q FROM estoque_movimentos WHERE empresa_id = ? GROUP BY embalagem_id`, empEstoque,
+    )).map((x) => [x.embalagem_id, x.q]));
+    // Pedidos ainda não faturados também precisam de saldo, para o "disponível" ficar realista.
+    const reservados = Object.fromEntries((await db.all(
+      `SELECT i.embalagem_id, SUM(i.quantidade) AS q FROM pedido_itens i JOIN pedidos p ON p.id = i.pedido_id
+        WHERE p.empresa_id = ? AND p.etapa IN ('supervisao','analise','diretoria','cobranca','producao','faturamento') GROUP BY i.embalagem_id`, empEstoque,
+    )).map((x) => [x.embalagem_id, x.q]));
+    let nEmb = 0;
+    for (const prod of produtos) {
+      for (const e of prod.embs) {
+        const minimo = e.minimo;
+        // Algumas embalagens ficam abaixo do mínimo para aparecer o alerta.
+        const saldoFinal = nEmb++ % 5 === 2 ? int(0, minimo - 1) : minimo + (reservados[e.id] || 0) + int(10, 150);
+        const total = (vendidos[e.id] || 0) + saldoFinal;
+        const lotes = [Math.round(total * 0.6), total - Math.round(total * 0.6)].filter((q) => q > 0);
+        for (const [k, q] of lotes.entries()) {
+          const dt = S.addDias(hojeIso, k ? -60 : -200);
+          await db.insert('estoque_movimentos', {
+            empresa_id: empEstoque, produto_id: prod.id, embalagem_id: e.id, tipo: 'entrada', origem: prod.grupo === gSolo ? 'producao' : 'compra', quantidade: q,
+            lote: `L${dt.slice(2, 4)}${dt.slice(5, 7)}-${String(prod.id).padStart(3, '0')}${k}`, validade: S.addDias(dt, 730), custo_unitario: e.custo,
+            fornecedor_id: prod.grupo === gSolo ? null : fornecedores['Matéria-prima'][k % fornecedores['Matéria-prima'].length],
+            documento: prod.grupo === gSolo ? 'Ordem de produção' : `NF ${int(10000, 99999)}`, usuario_id: producao, created_at: ts(dt, 10),
+          });
+        }
+      }
+    }
+    }
+    await db.insert('estoque_movimentos', {
+      empresa_id: emp1, produto_id: produtos[1].id, embalagem_id: produtos[1].embs[0].id, tipo: 'saida', origem: 'perda', quantidade: -2,
+      observacao: 'Sacos rasgados no manuseio', usuario_id: expedidor, created_at: ts(S.addDias(hojeIso, -12), 15),
+    });
+    await db.run(`UPDATE estoque_movimentos SET quantidade = quantidade + 2 WHERE id = (SELECT MIN(id) FROM estoque_movimentos WHERE embalagem_id = ? AND quantidade > 0)`, produtos[1].embs[0].id);
+
+    // ---------- Envio: volumes e rastreio nos pedidos já embarcados ----------
+    for (const p of await db.all(`SELECT id, tipo_entrega FROM pedidos WHERE etapa IN ('transito','entregue') AND empresa_id = ?`, emp1)) {
+      const itens = (await db.get('SELECT COALESCE(SUM(i.quantidade),0) AS q, COALESCE(SUM(i.quantidade * e.peso_kg),0) AS kg FROM pedido_itens i LEFT JOIN produto_embalagens e ON e.id = i.embalagem_id WHERE i.pedido_id = ?', p.id));
+      await db.run('UPDATE pedidos SET volumes = ?, peso_kg = ?, codigo_rastreio = ? WHERE id = ?', Math.max(1, Math.min(99, Math.round(itens.q))), S.r2(itens.kg),
+        p.tipo_entrega === 'posta_restante' ? `AA${int(100000000, 999999999)}BR` : `CT${int(1000000, 9999999)}`, p.id);
+    }
+
+    // ---------- Contas a pagar ----------
+    const contas = [
+      ['Matéria-prima', 'Compra de MAP e KCl', 38000, 3], ['Matéria-prima', 'Compra de ureia granulada', 26500, 2], ['Embalagem', 'Sacaria 50 kg e big bags', 9200, 2],
+      ['Matéria-prima', 'Insumos para linha foliar', 14800, 3], ['Frete', 'Fretes de transferência', 4300, 1], ['Energia', 'Energia elétrica da fábrica', 6900, 1],
+      ['Aluguel', 'Aluguel do galpão', 12000, 1], ['Manutenção', 'Manutenção do misturador', 3500, 1],
+    ];
+    for (let mes = -2; mes <= 1; mes++) {
+      for (const [cat, desc, base, parcelas] of contas) {
+        if (parcelas > 1 && chance(0.4)) continue;
+        const forn = pick(fornecedores[cat]);
+        const grupo = parcelas > 1 ? require('node:crypto').randomUUID() : null;
+        const emissao = S.addDias(hojeIso, mes * 30 - int(0, 10));
+        for (let k = 1; k <= parcelas; k++) {
+          const venc = S.addDias(emissao, (['Energia', 'Aluguel'].includes(cat) ? 10 : 28) * k);
+          const valor = S.r2((base * (0.85 + rnd() * 0.3)) / parcelas);
+          const paga = venc < S.addDias(hojeIso, -5) && chance(0.85);
+          await db.insert('contas_pagar', {
+            empresa_id: emp1, fornecedor_id: forn, descricao: parcelas > 1 ? `${desc} (${k}/${parcelas})` : desc, categoria: cat,
+            documento: cat === 'Aluguel' ? 'Contrato' : `NF ${int(1000, 99999)}`, emissao, competencia: emissao.slice(0, 7), vencimento: venc, valor,
+            valor_pago: paga ? valor : 0, data_pagamento: paga ? venc : null, status: paga ? 'pago' : 'a_pagar', forma_pagamento: paga ? pick(['Boleto', 'PIX', 'TED']) : null,
+            parcela: k, total_parcelas: parcelas, grupo, usuario_id: financeiro, created_at: ts(emissao, 11),
+          });
+        }
+      }
+    }
+
+    // ---------- Chamados internos ----------
+    const chamadosDemo = [
+      [vendedores[0], 'producao', 'alta', 'Produção', 'Prioridade na produção do pedido do Sr. José', 'Cliente vai começar o plantio na segunda, precisa do NPK até sexta.', 'em_andamento', producao],
+      [faturista, 'admin', 'urgente', 'TI', 'Impressora de etiquetas não imprime', 'A impressora térmica da expedição parou depois da atualização do Windows.', 'aberto', null],
+      [expedidor, 'faturamento', 'media', 'Logística', 'Corrigir endereço de entrega', 'O endereço do pedido está sem número e a transportadora recusou a coleta.', 'resolvido', faturista],
+      [vendedores[1], 'financeiro', 'media', 'Financeiro', '2ª via de boleto para cliente', 'O cliente perdeu o boleto da parcela 2. Pode reenviar por e-mail?', 'resolvido', financeiro],
+      [analista, 'vendedor', 'baixa', 'Comercial', 'Atualizar referências comerciais', 'Clientes novos estão chegando sem referência comercial. Reforçar com a equipe.', 'aguardando', null],
+      [producao, 'expedicao', 'alta', 'Logística', 'Paletes acumulados na doca 2', 'Precisamos liberar espaço para a produção de amanhã.', 'aberto', null],
+      [financeiro, 'diretoria', 'media', 'Financeiro', 'Aprovar pagamento de manutenção', 'Orçamento da TecnoAgro acima do previsto, preciso de aprovação.', 'fechado', diretor],
+    ];
+    for (const [k, [sol, setor, prio, cat, titulo, desc, status, resp]] of chamadosDemo.entries()) {
+      const aberto = S.addDias(hojeIso, -int(1, 12));
+      const numero = await db.nextSeq('chamado', 1001);
+      const cid = await db.insert('chamados', {
+        numero, empresa_id: emp1, titulo, descricao: desc, categoria: cat, setor_destino: setor, prioridade: prio, status, solicitante_id: sol, responsavel_id: resp,
+        prazo: S.addDias(aberto, { urgente: 1, alta: 2, media: 5, baixa: 10 }[prio]), resolvido_em: ['resolvido', 'fechado'].includes(status) ? S.addDias(aberto, 1) : null,
+        avaliacao: status === 'fechado' ? 5 : null, created_at: ts(aberto, 9 + k), updated_at: ts(aberto, 10 + k),
+      });
+      await db.insert('chamado_interacoes', { chamado_id: cid, usuario_id: sol, tipo: 'abertura', texto: 'Chamado aberto', created_at: ts(aberto, 9 + k) });
+      if (resp) await db.insert('chamado_interacoes', { chamado_id: cid, usuario_id: resp, tipo: 'comentario', texto: 'Estou verificando e retorno em breve.', created_at: ts(aberto, 11 + k) });
+      if (['resolvido', 'fechado'].includes(status)) {
+        await db.insert('chamado_interacoes', { chamado_id: cid, usuario_id: resp, tipo: 'status', texto: 'Em andamento → Resolvido: Ajuste feito, pode conferir.', created_at: ts(S.addDias(aberto, 1), 15) });
+      }
+    }
+
+    // ---------- Propostas comerciais ----------
+    for (let k = 0; k < 10; k++) {
+      const cli = pick(clientes);
+      const formaNome = pick(['Boleto bancário', 'PIX à vista']);
+      const status = ['rascunho', 'enviada', 'enviada', 'enviada', 'aceita', 'recusada', 'enviada', 'rascunho', 'recusada', 'enviada'][k];
+      const criada = S.addDias(hojeIso, -int(1, 25));
+      const numero = await db.nextSeq('proposta', 5001);
+      const prid = await db.insert('propostas', {
+        numero, empresa_id: emp1, cliente_id: cli.id, vendedor_id: cli.vend, forma_id: formas[formaNome], condicao_id: condicoes[formaNome][0], status,
+        validade: S.addDias(criada, k === 6 ? 5 : 20), prazo_entrega: `${int(5, 15)} dias após aprovação do crédito`, tipo_entrega: 'transportadora',
+        condicoes_comerciais: 'Preços válidos para pagamento na condição informada. Frete CIF para pedidos acima de 10 t.',
+        enviada_em: status !== 'rascunho' ? S.addDias(criada, 1) : null, respondida_em: ['aceita', 'recusada'].includes(status) ? S.addDias(criada, 4) : null,
+        motivo_recusa: status === 'recusada' ? pick(['Preço acima da concorrência', 'Cliente adiou o plantio']) : null,
+        created_at: ts(criada, 10), updated_at: ts(criada, 10),
+      });
+      let soma = 0;
+      for (const prod of [pick(produtos), pick(produtos)]) {
+        const e = pick(prod.embs);
+        const qtd = int(5, 80);
+        const unit = S.r2(e.preco * (formaNome === 'Boleto bancário' ? 1.04 : 1) * (1 - int(0, 5) / 100));
+        soma += qtd * unit;
+        await db.insert('proposta_itens', {
+          proposta_id: prid, produto_id: prod.id, embalagem_id: e.id, quantidade: qtd, unidade: e.un, valor_tabela: e.preco, custo_embalagem: e.custo,
+          valor_unitario: unit, valor_total: S.r2(qtd * unit),
+        });
+      }
+      const cond = await db.get('SELECT desconto_pct FROM condicoes_pagamento WHERE id = ?', condicoes[formaNome][0]);
+      const desc = S.r2(soma * (cond.desconto_pct || 0) / 100);
+      await db.run('UPDATE propostas SET valor_produtos = ?, valor_desconto = ?, valor_total = ? WHERE id = ?', S.r2(soma), desc, S.r2(soma - desc), prid);
+    }
 
     // ---------- Mensagens ----------
     const emAnalise = await db.all(`SELECT * FROM pedidos WHERE etapa IN ('analise','producao','faturamento') LIMIT 6`);
