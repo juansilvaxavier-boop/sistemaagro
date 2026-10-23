@@ -1,7 +1,7 @@
 -- Agroterra Sistema - schema PostgreSQL. Idempotente: pode rodar em todo início.
 
 -- ============ Funções de data (formato texto AAAA-MM-DD HH:MI:SS, fuso de São Paulo) ============
-CREATE OR REPLACE FUNCTION sq_ts(t text, mods text[]) RETURNS timestamp LANGUAGE plpgsql STABLE AS $$
+CREATE OR REPLACE FUNCTION sq_ts(t text, mods text[]) RETURNS timestamp LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$
 DECLARE ts timestamp; m text;
 BEGIN
   IF t IS NULL THEN RETURN NULL; END IF;
@@ -16,13 +16,13 @@ BEGIN
   RETURN ts;
 END $$;
 
-CREATE OR REPLACE FUNCTION sq_datetime(t text, VARIADIC mods text[] DEFAULT '{}') RETURNS text LANGUAGE sql STABLE AS
+CREATE OR REPLACE FUNCTION sq_datetime(t text, VARIADIC mods text[] DEFAULT '{}') RETURNS text LANGUAGE sql STABLE SET search_path FROM CURRENT AS
   $$ SELECT to_char(sq_ts(t, mods), 'YYYY-MM-DD HH24:MI:SS') $$;
-CREATE OR REPLACE FUNCTION sq_date(t text, VARIADIC mods text[] DEFAULT '{}') RETURNS text LANGUAGE sql STABLE AS
+CREATE OR REPLACE FUNCTION sq_date(t text, VARIADIC mods text[] DEFAULT '{}') RETURNS text LANGUAGE sql STABLE SET search_path FROM CURRENT AS
   $$ SELECT to_char(sq_ts(t, mods), 'YYYY-MM-DD') $$;
-CREATE OR REPLACE FUNCTION julianday(t text, VARIADIC mods text[] DEFAULT '{}') RETURNS double precision LANGUAGE sql STABLE AS
+CREATE OR REPLACE FUNCTION julianday(t text, VARIADIC mods text[] DEFAULT '{}') RETURNS double precision LANGUAGE sql STABLE SET search_path FROM CURRENT AS
   $$ SELECT extract(epoch FROM sq_ts(t, mods)) / 86400.0 + 2440587.5 $$;
-CREATE OR REPLACE FUNCTION round(x double precision, n integer) RETURNS double precision LANGUAGE sql IMMUTABLE AS
+CREATE OR REPLACE FUNCTION round(x double precision, n integer) RETURNS double precision LANGUAGE sql IMMUTABLE SET search_path FROM CURRENT AS
   $$ SELECT round(x::numeric, n)::double precision $$;
 
 -- ============ Acesso ============
