@@ -243,9 +243,9 @@ async function comissao(conteudo) {
   const cfg = await get('/api/cadastros/config');
   const gerentes = state.opcoes.usuarios.filter((u) => u.perfil === 'gerente');
   pagina.innerHTML = `<div class="row g-3"><div class="col-lg-7"><div class="card"><div class="card-header"><i class="bi bi-sliders"></i> Percentuais</div><div class="card-body">
-    <form class="vstack gap-3" data-cfg>${cfg.map((c) => c.tipo === 'pct' ? `<div><label class="form-label">${esc(c.rotulo)}</label>
-      <div class="input-group" style="max-width:220px"><input type="number" step="0.01" min="0" max="100" class="form-control" name="${c.chave}" value="${c.valor}"><span class="input-group-text">%</span></div>
-      <div class="form-text">Padrão: ${c.padrao}%</div></div>` : `<div><label class="form-label">${esc(c.rotulo)}</label>
+    <form class="vstack gap-3" data-cfg>${cfg.map((c) => c.tipo !== 'usuarios' ? `<div><label class="form-label">${esc(c.rotulo)}</label>
+      <div class="input-group" style="max-width:220px"><input type="number" step="${c.tipo === 'pct' ? '0.01' : '1'}" min="0" ${c.tipo === 'pct' ? 'max="100"' : 'max="28"'} class="form-control" name="${c.chave}" value="${c.valor}">${c.tipo === 'pct' ? '<span class="input-group-text">%</span>' : ''}</div>
+      <div class="form-text">Padrão: ${c.padrao}${c.tipo === 'pct' ? '%' : ''}</div></div>` : `<div><label class="form-label">${esc(c.rotulo)}</label>
       ${gerentes.length ? gerentes.map((g) => `<div class="form-check"><input class="form-check-input" type="checkbox" data-gerente value="${g.id}" id="g${g.id}" ${c.valor.includes(g.id) ? 'checked' : ''}><label class="form-check-label" for="g${g.id}">${esc(g.nome)}</label></div>`).join('')
         : '<div class="text-body-secondary small">Nenhum usuário com perfil Gerente comercial. Crie em Usuários e Permissões.</div>'}</div>`).join('')}
       <div><button class="btn btn-success"><i class="bi bi-check2"></i> Salvar regras</button></div></form></div></div></div>
@@ -256,11 +256,12 @@ async function comissao(conteudo) {
         <li><b>Vendedor</b> recebe o percentual cheio quando o pedido está <b>dentro da política</b>: nenhum item abaixo do preço de tabela além do desconto máximo. Fora da política, o pedido chega à Diretoria marcado e ela define a comissão.</li>
         <li>Um <b>% individual</b> no cadastro do usuário vendedor substitui a regra.</li>
         <li>A Diretoria pode ajustar a comissão de qualquer pedido antes da aprovação final; a alteração fica no histórico.</li>
-        <li>As regras valem para os pedidos aprovados depois da mudança.</li></ul></div></div></div></div>`;
+        <li>As regras valem para os pedidos aprovados depois da mudança.</li>
+        <li>Comissões <b>revisadas</b> pelo Financeiro entram na folha do mês (CLT) quando o RH gera os eventos; para PJ, autônomo ou quem não tem cadastro de colaborador, o fechamento da folha lança uma conta a pagar com vencimento no dia escolhido do mês seguinte.</li></ul></div></div></div></div>`;
   pagina.querySelector('[data-cfg]').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;
-    const body = Object.fromEntries(cfg.filter((c) => c.tipo === 'pct').map((c) => [c.chave, f.querySelector(`[name="${c.chave}"]`).value]));
+    const body = Object.fromEntries(cfg.filter((c) => c.tipo !== 'usuarios').map((c) => [c.chave, f.querySelector(`[name="${c.chave}"]`).value]));
     body['comissao.gerentes'] = [...f.querySelectorAll('[data-gerente]:checked')].map((x) => Number(x.value));
     try { await put('/api/cadastros/config', body); toast('Regras de comissão salvas.'); } catch (err) { erro(err); }
   });

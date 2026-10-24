@@ -119,10 +119,24 @@ async function validarAnalise(p) {
 async function validarLotes(p) {
   const sem = (await db.get(`SELECT COUNT(*) AS n FROM pedido_itens WHERE pedido_id = ? AND (lote IS NULL OR lote = '')`, p.id)).n;
   if (sem) throw new S.ErroNegocio(`Informe o lote de todos os itens (${sem} sem lote).`);
+  await validarVencidos(p);
+}
+
+/** Lote vencido (pela validade do item ou do lote no estoque) não sai da produção nem é faturado, salvo se a regra for só avisar. */
+async function validarVencidos(p) {
+  if ((await require('./config').obter('estoque.bloquear_vencido')) === 'avisar') return;
+  const venc = await db.all(
+    `SELECT pr.nome AS produto, i.lote, COALESCE(NULLIF(i.validade, ''), (SELECT MIN(m.validade) FROM estoque_movimentos m WHERE m.embalagem_id = i.embalagem_id AND m.lote = i.lote AND m.validade IS NOT NULL)) AS validade
+       FROM pedido_itens i JOIN produtos pr ON pr.id = i.produto_id WHERE i.pedido_id = ? AND i.lote IS NOT NULL AND i.lote <> ''`, p.id,
+  );
+  const hoje = S.hoje();
+  const v = venc.filter((x) => x.validade && x.validade < hoje);
+  if (v.length) throw new S.ErroNegocio(`Lote vencido: ${v.map((x) => `${x.produto} lote ${x.lote} (venceu em ${x.validade.split('-').reverse().join('/')})`).join('; ')}. Troque o lote antes de seguir.`);
 }
 
 async function validarFaturamento(p) {
   if (!p.endereco_entrega_id && p.tipo_entrega !== 'retirada') throw new S.ErroNegocio('Informe o endereço de entrega antes de faturar.');
+  await validarVencidos(p);
 }
 
 async function validarEmbarque(p) {

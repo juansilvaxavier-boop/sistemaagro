@@ -33,6 +33,7 @@ function criarApp() {
   app.get('/api/cron/backup', (req, res, next) => require('./routes/admin').cronBackup(req, res).catch(next));
   app.get('/api/cron/crm', (req, res, next) => require('./routes/admin').cronCrm(req, res).catch(next));
   app.use('/api/auth', require('./routes/auth'));
+  app.use('/api/portal', require('./routes/portal'));
   const api = express.Router();
   api.use(A.autenticado());
   api.use('/cadastros', require('./routes/cadastros'));
@@ -61,6 +62,7 @@ function criarApp() {
   api.use('/consulta', require('./routes/consulta'));
   api.use('/admin', require('./routes/admin'));
   api.use('/integracoes', require('./routes/integracoes'));
+  api.use('/portal-acesso', require('./routes/portal').admin);
   app.use('/api', api);
   app.use('/api', (req, res) => res.status(404).json({ erro: 'Rota não encontrada.' }));
 
@@ -70,6 +72,7 @@ function criarApp() {
   app.use('/vendor/chart.js', express.static(path.join(nm, 'chart.js', 'dist')));
   app.use('/vendor/fonte', express.static(path.join(nm, '@fontsource-variable', 'plus-jakarta-sans')));
   app.use('/vendor/mapa-brasil', express.static(path.join(nm, '@svg-maps', 'brazil')));
+  app.get('/portal', (req, res) => res.redirect('/portal.html'));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
   // eslint-disable-next-line no-unused-vars

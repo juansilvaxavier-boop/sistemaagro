@@ -49,6 +49,12 @@ Ficam em Comercial → Propostas Comerciais (#/propostas). Para criar uma, use "
 - **Blacklist** (#/blacklist): clientes com bloqueio ou alerta. Incluir ou excluir alguém exige permissão.
 - CPF, CNPJ, telefone e e-mail aparecem mascarados para quem não tem a permissão "Ver CPF/CNPJ, telefone e e-mail completos" (LGPD).
 
+## Portal do cliente
+- O cliente acessa em /portal com o CPF/CNPJ e uma senha. Ali ele vê os pedidos e a situação de cada um (Recebido, Em análise, Em separação, Faturando, Em transporte, Entregue), o rastreio, os boletos em aberto (copia a linha digitável ou o PIX), as notas, o extrato e faz pedido pela tabela de preço da região dele.
+- Para liberar o acesso: CRM → abrir o cliente → card "Portal do cliente" → "Gerar link de acesso" e enviar o link por WhatsApp. O link vale 7 dias; o cliente cria a senha nele. Esqueceu a senha: gere um novo link ("Link para nova senha"). "Desativar" corta o acesso na hora.
+- Pedido feito no portal cai na etapa Vendedor, na carteira do vendedor do cliente, com origem "Portal do cliente". O vendedor recebe o aviso, confere frete, prazo e condição e envia normalmente.
+- Após 5 senhas erradas o acesso fica bloqueado por 15 minutos.
+
 ## CRM e cobrança
 - **CRM** (#/crm): oportunidades por estágio, tarefas, interações e a visão 360° do cliente (#/crm/cliente/ID).
 - **Tarefas do CRM** (#/crm/tarefas): as tarefas da pessoa, manuais e automáticas. Filtros Abertas, Para hoje, Automáticas e Concluídas; supervisor e gerente podem ver as da equipe. Ao concluir uma tarefa com cliente, dá para registrar a interação (ligação, visita, WhatsApp...) que vai para a linha do tempo do cliente. "Reagendar" muda a data e a prioridade.
@@ -67,6 +73,8 @@ Ficam em Comercial → Propostas Comerciais (#/propostas). Para criar uma, use "
 
 ## Estoque e expedição
 - **Controle de Estoque** (#/estoque): saldos, entradas, saídas, inventário e lotes. O botão "Repor estoque" leva à sugestão de compra.
+- **Validade e parados** (aba do Estoque): lotes vencidos e que vencem nos próximos dias (padrão 90) com o valor em risco, e produtos sem saída há mais de N dias (padrão 120). Em cada linha: "Criar campanha" (vira campanha em Metas e campanhas para os vendedores girarem o item) e "Baixar como perda". O botão "Regras" ajusta os prazos e se o lote vencido bloqueia ou só avisa.
+- Lote vencido no pedido bloqueia "Concluir produção" e "Emitir nota fiscal": troque o lote. Na aba Produção do pedido, o campo Lote sugere os lotes do estoque na ordem de vencimento (o que vence primeiro sai primeiro) e preenche a validade.
 
 ## Metas, preços e crédito
 - **Metas** (#/metas): metas do mês por empresa, equipe e vendedor (valor vendido, volume, pedidos e clientes novos), com realizado, % e projeção. Quem tem "Definir metas" (Gerente, Diretoria) usa "Definir metas" e "Copiar do mês anterior". O vendedor vê a própria meta; o supervisor, a equipe. O painel mostra o card "Meta do mês".
@@ -103,6 +111,7 @@ Ficam em Início → Chamados Internos (#/chamados). Qualquer setor pode abrir u
 - **Férias** (#/rh/ferias): programação dentro das regras da CLT. Os dias de direito dependem das faltas no período aquisitivo. As férias podem ser divididas em até 3 períodos: um deles com pelo menos 14 dias e nenhum com menos de 5. O abono pecuniário é de até 1/3, e o sistema avisa quando o período concessivo está vencendo.
 - **Ponto e Ocorrências** (#/rh/ocorrencias): faltas, atestados, atrasos, horas extras (50% e 100%), banco de horas, advertências e suspensões.
 - **Solicitações** (#/rh/solicitacoes): o RH aprova ou recusa os pedidos dos colaboradores. Um atestado aprovado vira ocorrência.
+- **Comissão na folha**: as comissões revisadas pelo Financeiro e ainda não pagas aparecem no card "Comissões que esta folha vai pagar". Para CLT, entram como evento ao "Gerar eventos automáticos"; para PJ, autônomo ou vendedor sem cadastro de colaborador, o fechamento lança uma conta a pagar (categoria Comissões, vence no dia configurado do mês seguinte, padrão 10). Fechar a competência marca as comissões como pagas; reabrir desfaz (se a conta de comissão já foi paga, estorne antes). Comissão ainda em revisão fica para a folha seguinte.
 - **Folha** (#/rh/folha): gera os eventos do mês (horas extras, faltas, comissões, descontos de benefícios), permite ajustar à mão, fechar a competência e exportar em Excel para a contabilidade. INSS, IRRF e FGTS são calculados pela contabilidade. Depois que o mês é fechado, as ocorrências daquele mês ficam travadas. Reabrir exige permissão de gestão e um motivo.
 
 ## Relatórios

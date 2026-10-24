@@ -14,6 +14,10 @@ const PADROES = {
   'credito.sem_limite': { valor: 'liberar', rotulo: 'Cliente sem limite definido', tipo: 'opcao', opcoes: [['liberar', 'Liberar (só alerta)'], ['bloquear', 'Bloquear a venda a prazo']] },
   'credito.meses_cobertura': { valor: 3, rotulo: 'Limite sugerido: meses de compra média que o limite cobre', tipo: 'valor' },
   'dre.impostos_pct': { valor: 0, rotulo: 'Impostos sobre a venda (% da receita bruta) no resultado do mês', tipo: 'pct' },
+  'comissao.dia_pagamento': { valor: 10, rotulo: 'Dia do mês seguinte para pagar a comissão de PJ/autônomo (contas a pagar)', tipo: 'valor' },
+  'estoque.alerta_validade_dias': { valor: 90, rotulo: 'Avisar lotes que vencem nos próximos (dias)', tipo: 'valor' },
+  'estoque.dias_parado': { valor: 120, rotulo: 'Produto parado: sem saída há mais de (dias)', tipo: 'valor' },
+  'estoque.bloquear_vencido': { valor: 'bloquear', rotulo: 'Lote vencido no pedido', tipo: 'opcao', opcoes: [['bloquear', 'Bloquear concluir produção e faturar'], ['avisar', 'Só avisar']] },
   'compras.aprovacao_acima': { valor: 5000, rotulo: 'Pedido de compra acima deste valor precisa de aprovação (R$; 0 = todos precisam)', tipo: 'valor' },
 };
 

@@ -159,8 +159,8 @@ function painelEtapa(d) {
       <div class="row g-2 mb-2">${campo('prazo_producao', 'Prazo de produção', { type: 'date', col: 'col-md-3', value: p.prazo_producao || '' })}
       <div class="col-md-5 small d-flex align-items-end">Chegou na produção em ${fmt.datetime(p.data_chegada_producao)}</div></div>
       <table class="table table-sm"><thead><tr><th>Produto</th><th>Qtd</th><th>Embalagem</th><th>Lote *</th><th>Fabricação</th><th>Validade</th></tr></thead><tbody>
-      ${d.itens.map((i) => `<tr data-item="${i.id}"><td>${esc(i.produto)}${i.brinde ? ' <span class="badge text-bg-info">brinde</span>' : ''}</td><td>${fmt.num(i.quantidade)} ${esc(i.unidade || '')}</td><td>${esc(i.embalagem || '')}</td>
-        <td><input class="form-control form-control-sm" name="lote" value="${esc(i.lote || '')}"></td>
+      ${d.itens.map((i) => `<tr data-item="${i.id}" data-emb="${i.embalagem_id || ''}"><td>${esc(i.produto)}${i.brinde ? ' <span class="badge text-bg-info">brinde</span>' : ''}</td><td>${fmt.num(i.quantidade)} ${esc(i.unidade || '')}</td><td>${esc(i.embalagem || '')}</td>
+        <td><input class="form-control form-control-sm" name="lote" value="${esc(i.lote || '')}" list="fefo-${i.id}" autocomplete="off"><datalist id="fefo-${i.id}"></datalist><div class="form-text small" data-fefo></div></td>
         <td><input type="date" class="form-control form-control-sm" name="fabricacao" value="${esc(i.fabricacao || '')}"></td>
         <td><input type="date" class="form-control form-control-sm" name="validade" value="${esc(i.validade || '')}"></td></tr>`).join('')}
       </tbody></table><button class="btn btn-sm btn-success" type="submit">Salvar lotes</button></form>` });
@@ -448,6 +448,7 @@ function ligarEventos(m, d, recarregar) {
   form('endereco', (f) => put(`/api/pedidos/${p.id}/endereco`, lerForm(f)));
   form('expedicao', (f) => put(`/api/pedidos/${p.id}/expedicao`, lerForm(f)));
   form('comentario', (f) => post(`/api/pedidos/${p.id}/comentarios`, lerForm(f)));
+  fefo(el.querySelector('[data-form="producao"]'));
   form('producao', (f) => put(`/api/pedidos/${p.id}/producao`, {
     prazo_producao: f.querySelector('[name=prazo_producao]').value || null,
     itens: [...f.querySelectorAll('tr[data-item]')].map((tr) => ({ id: Number(tr.dataset.item), ...lerForm(tr) })),
@@ -515,3 +516,26 @@ function imprimirResumo(d) {
   w.document.close();
 }
 
+/** Sugere os lotes do estoque na ordem de vencimento (primeiro que vence, primeiro que sai) e preenche a validade. */
+async function fefo(f) {
+  if (!f || !pode('estoque')) return;
+  const hojeIso = new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 10);
+  for (const tr of f.querySelectorAll('tr[data-emb]')) {
+    if (!tr.dataset.emb) continue;
+    const lotes = (await get(`/api/estoque/lotes/${tr.dataset.emb}`).catch(() => [])).filter((l) => l.lote && l.saldo > 0);
+    const validos = lotes.filter((l) => !l.validade || l.validade >= hojeIso);
+    tr.querySelector('datalist').innerHTML = lotes.map((l) => `<option value="${esc(l.lote)}">${l.validade && l.validade < hojeIso ? 'VENCIDO · ' : ''}saldo ${fmt.num(l.saldo)}${l.validade ? ' · val. ' + fmt.date(l.validade) : ''}</option>`).join('');
+    const inp = tr.querySelector('[name=lote]');
+    const aviso = tr.querySelector('[data-fefo]');
+    const conferir = () => {
+      const l = lotes.find((x) => x.lote === inp.value);
+      const val = tr.querySelector('[name=validade]');
+      if (l?.validade && !val.value) val.value = l.validade;
+      aviso.innerHTML = l?.validade && l.validade < hojeIso ? '<span class="text-danger"><i class="bi bi-exclamation-octagon"></i> Lote vencido</span>'
+        : validos[0] && inp.value !== validos[0].lote ? `Vence primeiro: <a href="#" data-usar>${esc(validos[0].lote)}</a>` : '';
+      aviso.querySelector('[data-usar]')?.addEventListener('click', (ev) => { ev.preventDefault(); inp.value = validos[0].lote; val.value = validos[0].validade || val.value; conferir(); });
+    };
+    inp.addEventListener('change', conferir);
+    conferir();
+  }
+}

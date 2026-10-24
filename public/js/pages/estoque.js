@@ -21,6 +21,7 @@ export default async function (conteudo) {
   pagina.innerHTML = `<div class="kpis mb-3" id="kpis"></div>${abas([
     { id: 'saldos', label: '<i class="bi bi-boxes"></i> Saldos', html: '<div id="t-saldos"></div>' },
     { id: 'mov', label: '<i class="bi bi-arrow-left-right"></i> Movimentações', html: '<div id="t-mov"></div>' },
+    { id: 'val', label: '<i class="bi bi-calendar-x"></i> Validade e parados', html: '<div id="val"></div>' },
     ...(mov ? [{ id: 'inv', label: '<i class="bi bi-clipboard-check"></i> Inventário', html: '<div id="inv"></div>' }] : []),
   ], 'est')}`;
 
@@ -31,7 +32,8 @@ export default async function (conteudo) {
       kpi('Valor em estoque (custo)', fmt.money(r.valor), { icone: 'bi-cash-stack', cor: 'success' }),
       kpi('Abaixo do mínimo', fmt.num(r.baixos), { icone: 'bi-exclamation-triangle', cor: r.baixos ? 'warning' : 'success' }),
       kpi('Sem saldo', fmt.num(r.zerados), { icone: 'bi-x-octagon', cor: r.zerados ? 'danger' : 'success' }),
-      kpi('Lotes vencendo em 60 dias', fmt.num(r.vencendo), { icone: 'bi-calendar-x', cor: r.vencendo ? 'warning' : 'secondary' }),
+      kpi(`Lotes vencendo em ${r.dias_validade} dias`, fmt.num(r.vencendo), { icone: 'bi-calendar-x', cor: r.vencidos ? 'danger' : r.vencendo ? 'warning' : 'secondary', sub: r.vencidos ? `${fmt.num(r.vencidos)} já vencido(s)` : '' }),
+      kpi('Produtos parados', fmt.num(r.parados), { icone: 'bi-hourglass-bottom', cor: r.parados ? 'warning' : 'secondary' }),
     ].join('');
   };
 
@@ -75,7 +77,8 @@ export default async function (conteudo) {
       { k: 'fornecedor', l: 'Fornecedor' }, { k: 'pedido', l: 'Pedido' }, { k: 'documento', l: 'Documento' }, { k: 'observacao', l: 'Observação', cls: 'quebra' }, { k: 'usuario', l: 'Usuário' },
     ],
   });
-  const atualizar = () => { tSaldos.reload(); tMov.reload(); resumo(); };
+  const val = validadeParados(pagina.querySelector('#val'), mov, () => atualizar());
+  const atualizar = () => { tSaldos.reload(); tMov.reload(); val.reload(); resumo(); };
   resumo();
   if (mov) {
     conteudo.querySelector('#btn-entrada').addEventListener('click', () => movimentar('entrada', null, atualizar));
@@ -176,5 +179,104 @@ async function inventario(el, aoSalvar) {
     if (!itens.length) return toast('Preencha ao menos uma contagem.', 'warning');
     const r = await tentar(() => post('/api/estoque/inventario', { itens }));
     if (r) { toast(`${r.ajustes.length} ajuste(s) lançado(s).`); carregar(); aoSalvar?.(); }
+  });
+}
+
+const VAL = { vencido: ['Vencido', 'danger'], vence_30: ['Vence em até 30 dias', 'warning'], vence_depois: ['Vence depois', 'info'] };
+
+/** Lotes vencidos e vencendo, e produtos sem saída há muito tempo: baixa como perda ou campanha para girar. */
+function validadeParados(el, mov, aoMudar) {
+  const camp = pode('metas.gerir');
+  el.innerHTML = `<div class="d-flex flex-wrap gap-2 align-items-end mb-2"><h6 class="mb-0 me-auto"><i class="bi bi-calendar-x"></i> Lotes vencidos e vencendo</h6>
+      ${mov ? '<button class="btn btn-sm btn-outline-secondary" data-regras><i class="bi bi-sliders"></i> Regras</button>' : ''}
+      <label class="small text-muted">Vencendo em até <input type="number" class="form-control form-control-sm d-inline-block" style="width:80px" data-dias-val min="0" step="15"> dias</label></div>
+    <div data-tv></div>
+    <div class="d-flex flex-wrap gap-2 align-items-end mb-2 mt-4"><h6 class="mb-0 me-auto"><i class="bi bi-hourglass-bottom"></i> Produtos parados</h6>
+      <label class="small text-muted">Sem saída há mais de <input type="number" class="form-control form-control-sm d-inline-block" style="width:80px" data-dias-par min="1" step="30"> dias</label></div>
+    <p class="small text-muted mb-2">Conta como saída a venda, o consumo interno e a amostra (ou o último pedido faturado do item). Item nunca vendido conta desde a primeira entrada.</p>
+    <div data-tp></div>`;
+  const dv = el.querySelector('[data-dias-val]');
+  const dp = el.querySelector('[data-dias-par]');
+  const tv = new DataTable(el.querySelector('[data-tv]'), {
+    url: () => `/api/estoque/validade${dv.value ? `?dias=${dv.value}` : ''}`, title: 'Lotes vencidos e vencendo', sort: 'validade', dir: 'asc',
+    columns: [
+      { k: 'produto', l: 'Produto' }, { k: 'embalagem', l: 'Embalagem' }, { k: 'lote', l: 'Lote' }, { k: 'validade', l: 'Validade', t: 'date' },
+      { k: 'dias_para_vencer', l: 'Dias', t: 'num', render: (v) => `<span class="${v < 0 ? 'text-danger fw-semibold' : v <= 30 ? 'text-warning-emphasis fw-semibold' : ''}">${v < 0 ? `vencido há ${-v}` : v}</span>` },
+      { k: 'situacao', l: 'Situação', filter: { options: Object.entries(VAL).map(([k, [l]]) => [k, l]) }, render: (v) => `<span class="badge text-bg-${VAL[v][1]}">${VAL[v][0]}</span>` },
+      { k: 'saldo', l: 'Saldo', t: 'num' }, { k: 'custo', l: 'Custo unit.', t: 'money' }, { k: 'valor', l: 'Valor em risco', t: 'money' },
+    ],
+    rowClass: (r) => (r.situacao === 'vencido' ? 'table-danger' : r.situacao === 'vence_30' ? 'table-warning' : ''),
+    actions: (r) => [
+      camp && r.situacao !== 'vencido' ? btnAcao('campanha', 'bi-megaphone', 'Criar campanha para vender antes de vencer', 'outline-primary') : '',
+      mov ? btnAcao('perda', 'bi-trash3', 'Baixar como perda', 'outline-danger') : '',
+    ].join(' '),
+    onAction: { campanha: (r) => campanha(r, `vender o lote ${r.lote} antes de ${fmt.date(r.validade)}`), perda: (r) => perda(r, aoMudar) },
+  });
+  const tp = new DataTable(el.querySelector('[data-tp]'), {
+    url: () => `/api/estoque/parados${dp.value ? `?dias=${dp.value}` : ''}`, title: 'Produtos parados', sort: 'valor', dir: 'desc',
+    columns: [
+      { k: 'codigo', l: 'Código' }, { k: 'produto', l: 'Produto' }, { k: 'grupo', l: 'Grupo' }, { k: 'embalagem', l: 'Embalagem' },
+      { k: 'saldo', l: 'Saldo', t: 'num' }, { k: 'ultima_venda', l: 'Última saída', t: 'date', render: (v, r) => (r.nunca_vendido ? '<span class="badge text-bg-secondary">nunca vendido</span>' : fmt.date(v)) },
+      { k: 'dias_parado', l: 'Dias parado', t: 'num' }, { k: 'valor', l: 'Capital parado', t: 'money' },
+    ],
+    actions: () => (camp ? btnAcao('campanha', 'bi-megaphone', 'Criar campanha para girar', 'outline-primary') : ''),
+    onAction: { campanha: (r) => campanha(r, `girar estoque parado há ${r.dias_parado} dias`) },
+  });
+  get('/api/estoque/regras').then((cfg) => {
+    const v = Object.fromEntries(cfg.map((c) => [c.chave, c.valor]));
+    dv.placeholder = v['estoque.alerta_validade_dias'];
+    dp.placeholder = v['estoque.dias_parado'];
+  }).catch(() => {});
+  el.querySelector('[data-regras]')?.addEventListener('click', async () => {
+    const cfg = await get('/api/estoque/regras');
+    modal({
+      title: 'Regras de validade e produto parado', size: 'md',
+      body: `<form class="vstack gap-3">${cfg.map((c) => (c.tipo === 'opcao'
+        ? `<div><label class="form-label">${esc(c.rotulo)}</label><select class="form-select form-select-sm" name="${c.chave}">${c.opcoes.map(([v, l]) => `<option value="${v}" ${v === c.valor ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`
+        : `<div><label class="form-label">${esc(c.rotulo)}</label><input type="number" class="form-control form-control-sm" name="${c.chave}" value="${c.valor ?? ''}" min="0" step="1" style="max-width:140px"><div class="form-text">Padrão: ${c.padrao}</div></div>`)).join('')}</form>`,
+      buttons: [{ label: 'Salvar regras', onClick: async ({ body }) => {
+        const f = body.querySelector('form');
+        await put('/api/estoque/regras', Object.fromEntries([...f.querySelectorAll('[name]')].map((x) => [x.name, x.value])));
+        toast('Regras salvas.');
+        aoMudar?.();
+      } }],
+    });
+  });
+  let t;
+  for (const [inp, tab] of [[dv, tv], [dp, tp]]) inp.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => tab.reload(), 400); });
+  return { reload: () => { tv.reload(); tp.reload(); } };
+}
+
+function perda(r, aoSalvar) {
+  modal({
+    title: `<i class="bi bi-trash3 text-danger"></i> Baixar como perda · ${esc(r.produto)} lote ${esc(r.lote)}`, size: 'md',
+    body: `<form class="row g-2">${campo('quantidade', 'Quantidade (embalagens)', { type: 'number', col: 'col-md-5', required: true, value: r.saldo, attrs: `min="0.01" max="${r.saldo}" step="0.01"` })}
+      ${campo('documento', 'Documento (laudo, descarte)', { col: 'col-md-7' })}
+      ${campo('observacao', 'Observação', { col: 'col-12', value: r.situacao === 'vencido' ? `Lote vencido em ${fmt.date(r.validade)}` : '' })}</form>
+      <div class="small text-muted mt-2">Valor da perda: ${fmt.money(r.valor)} (saldo total do lote).</div>`,
+    buttons: [{ label: 'Baixar como perda', cls: 'btn-danger', onClick: async ({ body }) => {
+      await post('/api/estoque/movimentos', { ...lerForm(body.querySelector('form')), tipo: 'saida', origem: 'perda', embalagem_id: r.embalagem_id, lote: r.lote });
+      toast('Perda lançada.');
+      aoSalvar?.();
+    } }],
+  });
+}
+
+function campanha(r, objetivo) {
+  const ini = hoje();
+  const fim = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+  const fimSug = r.validade && r.validade < fim ? r.validade : fim;
+  modal({
+    title: `<i class="bi bi-megaphone"></i> Campanha · ${esc(r.produto)}`, size: 'md',
+    body: `<p class="small text-muted">Objetivo: ${esc(objetivo)}. Saldo ${fmt.num(r.saldo)} ${esc(r.embalagem || '')}. Acompanhe em Metas e campanhas.</p>
+      <form class="row g-2">${campo('nome', 'Nome', { col: 'col-12', required: true, value: `Giro ${r.produto}` })}
+      ${campo('inicio', 'Início', { type: 'date', col: 'col-md-6', value: ini })}${campo('fim', 'Fim', { type: 'date', col: 'col-md-6', value: fimSug })}
+      ${campo('indicador', 'Medir por', { type: 'select', col: 'col-md-6', options: [['valor', 'Valor vendido'], ['volume', 'Volume (kg/L)'], ['pedidos', 'Pedidos']] })}
+      ${campo('meta_individual', 'Meta por vendedor', { type: 'number', col: 'col-md-6', required: true, attrs: 'min="0" step="any"' })}
+      ${campo('premio', 'Prêmio', { col: 'col-12' })}${campo('descricao', 'Descrição', { col: 'col-12', value: `Campanha para ${objetivo}.` })}</form>`,
+    buttons: [{ label: 'Criar campanha', onClick: async ({ body }) => {
+      await post('/api/metas/campanhas', { ...lerForm(body.querySelector('form')), produto_id: r.produto_id });
+      toast('Campanha criada. Ela aparece em Metas e campanhas para os vendedores.');
+    } }],
   });
 }

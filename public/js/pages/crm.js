@@ -178,6 +178,7 @@ async function cliente360(conteudo, id) {
           ${c.email ? `<div><i class="bi bi-envelope"></i> <a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div>` : ''}
           ${d.enderecos.map((e) => `<div class="mt-1"><i class="bi bi-geo-alt"></i> ${esc(e.logradouro || '')}, ${esc(e.numero || '')} - ${esc(e.cidade || '')}/${esc(e.uf || '')}</div>`).join('')}
         </div></div>
+        ${pode('clientes.editar') ? '<div class="card mb-3"><div class="card-header py-2"><i class="bi bi-door-open"></i> Portal do cliente</div><div class="card-body small" id="portal"></div></div>' : ''}
         <div class="card mb-3"><div class="card-header py-2">Áreas de cultivo</div><div class="card-body p-0">${tabelaSimples([{ k: 'tipo_cultivo', l: 'Cultura' }, { k: 'area', l: 'Área', t: 'num' }, { k: 'medida', l: 'Medida' }, { k: 'qtd_pes', l: 'Pés', t: 'num' }], d.areas, { vazio: 'Não informado.' })}</div></div>
         <div class="card mb-3"><div class="card-header py-2">Produtos mais comprados</div><div class="card-body p-0">${tabelaSimples([{ k: 'nome', l: 'Produto' }, { k: 'quantidade', l: 'Qtd', t: 'num' }, { k: 'valor', l: 'Valor', t: 'money' }], d.produtos, { vazio: 'Sem compras.' })}</div></div>
         <div class="card mb-3"><div class="card-header py-2">Oportunidades</div><div class="card-body p-0">${tabelaSimples([{ k: 'titulo', l: 'Título' }, { k: 'estagio', l: 'Estágio', t: 'status' }, { k: 'valor_estimado', l: 'Valor', t: 'money' }], d.oportunidades, { vazio: 'Nenhuma.' })}</div></div>
@@ -199,12 +200,40 @@ async function cliente360(conteudo, id) {
   pagina.querySelectorAll('[data-o]').forEach((x) => x.addEventListener('change', desenharTl));
   desenharTl();
   painelArquivos(pagina.querySelector('#arq'), { cliente_id: id });
+  if (pagina.querySelector('#portal')) portalAcesso(pagina.querySelector('#portal'), id, d.telefones.find((t) => t.whatsapp)?.numero);
   const recarregar = () => cliente360(conteudo, id);
   conteudo.querySelector('[data-a=int]').addEventListener('click', () => novaInteracao(id, recarregar));
   conteudo.querySelector('[data-a=op]').addEventListener('click', () => novaOportunidade(id, recarregar));
   conteudo.querySelector('[data-a=cad]').addEventListener('click', () => abrirCliente(id, recarregar));
 }
 
+
+/** Acesso do cliente ao portal: situação, link de primeiro acesso / nova senha e desativação. */
+async function portalAcesso(el, clienteId, whatsapp) {
+  const a = await get(`/api/portal-acesso/${clienteId}`);
+  const ativo = a.ativo && !a.sem_acesso;
+  el.innerHTML = `<div class="mb-2">${!ativo ? '<span class="badge text-bg-secondary">Sem acesso</span>'
+      : a.tem_senha ? '<span class="badge text-bg-success">Ativo</span>' : '<span class="badge text-bg-warning">Convite enviado</span>'}
+      ${a.ultimo_acesso ? ` · último acesso ${fmt.datetime(a.ultimo_acesso)}` : ''}${a.pedidos_portal ? ` · ${a.pedidos_portal} pedido(s) pelo portal` : ''}
+      ${ativo && !a.tem_senha && a.convite_expira ? `<div class="text-muted">Link vale até ${fmt.datetime(a.convite_expira)}</div>` : ''}</div>
+    <p class="text-muted mb-2">O cliente acompanha pedidos, entregas, boletos e notas, e faz pedido pela tabela da região (cai na fila do vendedor).</p>
+    <div class="d-flex flex-wrap gap-1"><button class="btn btn-sm btn-outline-success" data-convite><i class="bi bi-link-45deg"></i> ${a.tem_senha ? 'Link para nova senha' : 'Gerar link de acesso'}</button>
+      ${ativo ? '<button class="btn btn-sm btn-outline-danger" data-desativar><i class="bi bi-slash-circle"></i> Desativar</button>' : ''}</div><div data-link class="mt-2"></div>`;
+  el.querySelector('[data-convite]').addEventListener('click', async () => {
+    const r = await tentar(() => post(`/api/portal-acesso/${clienteId}/convite`, {}));
+    if (!r) return;
+    const msg = `Olá! Este é o seu acesso ao Portal do Cliente Agroterra, para acompanhar pedidos, entregas e boletos. Crie sua senha pelo link (vale 7 dias): ${r.link}`;
+    el.querySelector('[data-link]').innerHTML = `<div class="input-group input-group-sm"><input class="form-control" readonly value="${esc(r.link)}" aria-label="Link de acesso">
+      <button class="btn btn-outline-secondary" data-copiar title="Copiar"><i class="bi bi-clipboard"></i></button>
+      ${whatsapp ? `<a class="btn btn-outline-success" target="_blank" rel="noopener" title="Enviar por WhatsApp" href="https://wa.me/55${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}"><i class="bi bi-whatsapp"></i></a>` : ''}</div>
+      <div class="form-text">O link anterior deixa de valer. Login: CPF/CNPJ do cliente.</div>`;
+    el.querySelector('[data-copiar]').addEventListener('click', () => navigator.clipboard?.writeText(r.link).then(() => toast('Link copiado.')));
+  });
+  el.querySelector('[data-desativar]')?.addEventListener('click', async () => {
+    if (await confirmar('Desativar o acesso deste cliente ao portal? Ele é desconectado na hora.', { ok: 'Desativar', cls: 'btn-danger' })
+      && await tentar(() => post(`/api/portal-acesso/${clienteId}/desativar`, {}), 'Acesso desativado.')) portalAcesso(el, clienteId, whatsapp);
+  });
+}
 
 // ---------- Tarefas (manuais e automáticas) ----------
 const PRIORIDADE = { alta: ['Alta', 'danger'], normal: ['Normal', 'secondary'], baixa: ['Baixa', 'light'] };

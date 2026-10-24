@@ -480,6 +480,13 @@ async function cardsModulos(perfil, ctx, user) {
            FROM produto_embalagens e JOIN produtos p ON p.id = e.produto_id WHERE p.ativo = 1) t`, ctx.emp,
     );
     out.push(card('Estoque abaixo do mínimo', e.baixo, { icone: 'bi-box2', cor: e.baixo ? 'warning' : 'success', sub: `${e.zerado} sem saldo`, link: '#/estoque' }));
+    const dias = Number(await require('../config').obter('estoque.alerta_validade_dias')) || 90;
+    const lotes = await require('./estoque').lotesComValidade(ctx.emp, dias);
+    const vencidos = lotes.filter((x) => x.situacao === 'vencido');
+    out.push(card('Lotes vencendo', lotes.length - vencidos.length, {
+      icone: 'bi-calendar-x', cor: vencidos.length ? 'danger' : lotes.length ? 'warning' : 'success',
+      sub: `${vencidos.length} vencido(s) · próximos ${dias} dias`, link: '#/estoque',
+    }));
   }
   if (geral || perfil === 'financeiro') {
     const p = await db.get(

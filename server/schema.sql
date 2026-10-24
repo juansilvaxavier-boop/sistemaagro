@@ -1403,3 +1403,32 @@ CREATE TABLE IF NOT EXISTS pedido_rastreio (
 );
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS rastreio_status text;
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS rastreio_atualizado_em text;
+
+-- ============ Comissão paga na folha ============
+ALTER TABLE comissoes ADD COLUMN IF NOT EXISTS folha_competencia text;    -- competência da folha (ou do contas a pagar) em que foi paga
+ALTER TABLE comissoes ADD COLUMN IF NOT EXISTS pago_em text;
+ALTER TABLE comissoes ADD COLUMN IF NOT EXISTS conta_pagar_id integer REFERENCES contas_pagar(id);
+ALTER TABLE lancamentos_vendedor ADD COLUMN IF NOT EXISTS folha_competencia text;
+ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS comissao_competencia text;
+ALTER TABLE contas_pagar ADD COLUMN IF NOT EXISTS comissao_usuario_id integer REFERENCES usuarios(id);
+
+-- ============ Portal do cliente ============
+CREATE TABLE IF NOT EXISTS portal_acessos (
+  cliente_id integer PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  senha_hash text,
+  ativo integer NOT NULL DEFAULT 1,
+  convite_token text,                               -- hash do link de primeiro acesso / nova senha
+  convite_expira text,
+  tentativas integer NOT NULL DEFAULT 0,
+  bloqueado_ate text,
+  ultimo_acesso text,
+  criado_por integer REFERENCES usuarios(id),
+  created_at text NOT NULL DEFAULT sq_datetime('now', 'localtime')
+);
+CREATE TABLE IF NOT EXISTS portal_sessoes (
+  token text PRIMARY KEY,
+  cliente_id integer NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+  expira text NOT NULL,
+  created_at text NOT NULL DEFAULT sq_datetime('now', 'localtime')
+);
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS origem_portal integer DEFAULT 0;

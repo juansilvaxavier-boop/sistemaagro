@@ -151,11 +151,10 @@ async function gerarEventos(empresaId, comp, usuarioId) {
       if (t.suspensao?.dias) await add(c, 'desconto', 'Suspensão', `${t.suspensao.dias} dia(s)`, dia * t.suspensao.dias, 'ocorrencia', null, null);
       if (t.atraso?.horas) await add(c, 'desconto', 'Atrasos', `${t.atraso.horas} h`, hora * t.atraso.horas, 'ocorrencia', null, est);
       if (t.atestado?.dias) await add(c, 'provento', 'Dias de atestado (informativo)', `${t.atestado.dias} dia(s)`, 0, 'ocorrencia', null, 'Afastamento abonado; acima de 15 dias segue para o INSS');
+      // Comissões revisadas ainda não pagas (até esta competência) e créditos/descontos do vendedor. PJ e autônomo recebem por contas a pagar.
       if (c.usuario_id) {
-        const com = (await db.get(`SELECT COALESCE(SUM(valor),0) AS v FROM comissoes WHERE usuario_id = ? AND periodo = ?`, c.usuario_id, comp)).v;
-        if (com) await add(c, 'provento', 'Comissões sobre vendas', comp, com, 'comissao', null, 'Somadas das comissões do mês no sistema');
-        for (const l of await db.all(`SELECT * FROM lancamentos_vendedor WHERE vendedor_id = ? AND periodo = ?`, c.usuario_id, comp)) {
-          await add(c, l.tipo_ocorrencia === 'credito' ? 'provento' : 'desconto', l.tipo_ocorrencia === 'credito' ? 'Crédito ao vendedor' : 'Desconto ao vendedor', l.descricao, l.valor, 'comissao', l.id, null);
+        for (const e of await require('./comissao-folha').eventosDoColaborador(empresaId, comp, c.usuario_id)) {
+          await add(c, e.tipo, e.evento, e.referencia, e.valor, 'comissao', null, e.obs);
         }
       }
       for (const b of await db.all(`SELECT * FROM rh_beneficios WHERE colaborador_id = ? AND ativo = 1 AND COALESCE(valor_desconto,0) > 0

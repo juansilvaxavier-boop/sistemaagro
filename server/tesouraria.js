@@ -262,6 +262,8 @@ async function fluxo(empresaId, { de, ate, agrupar = 'dia', incluirAtrasados = f
 
 // ---------- Resultado do mês (DRE gerencial) ----------
 const CATEGORIAS_CUSTO = ['Matéria-prima', 'Embalagem'];
+// Comissões já entram pela tabela de comissões; a conta a pagar de comissão de PJ não conta de novo.
+const FORA_DESPESA = [...CATEGORIAS_CUSTO, 'Comissões'];
 
 async function dre(empresaId, ano) {
   const meses = Array.from({ length: 12 }, (_, i) => `${ano}-${String(i + 1).padStart(2, '0')}`);
@@ -282,7 +284,7 @@ async function dre(empresaId, ano) {
   const despesas = await db.all(
     `SELECT COALESCE(categoria, 'Outros') AS categoria, COALESCE(competencia, substr(vencimento,1,7)) AS mes, SUM(valor) AS v FROM contas_pagar
       WHERE empresa_id = ? AND status <> 'cancelado' AND COALESCE(competencia, substr(vencimento,1,7)) BETWEEN ? AND ?
-        AND COALESCE(categoria, 'Outros') NOT IN ('${CATEGORIAS_CUSTO.join("','")}') AND compra_id IS NULL
+        AND COALESCE(categoria, 'Outros') NOT IN ('${FORA_DESPESA.join("','")}') AND compra_id IS NULL
       GROUP BY 1, 2`, empresaId, `${ano}-01`, `${ano}-12`,
   );
   const imp = Number(await C.obter('dre.impostos_pct')) || 0;

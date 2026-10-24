@@ -313,8 +313,18 @@ async function folha(conteudo) {
   const pagina = titulo(conteudo, 'Folha: Eventos do Mês', 'bi-cash-stack', `<input type="month" class="form-control form-control-sm" id="comp" value="${hoje().slice(0, 7)}" style="width:auto">`);
   const compEl = conteudo.querySelector('#comp');
   const carregar = async () => {
-    const d = await get(`/api/rh/folha?competencia=${compEl.value}`);
+    const [d, cm] = await Promise.all([get(`/api/rh/folha?competencia=${compEl.value}`), get(`/api/rh/folha/comissoes?competencia=${compEl.value}`)]);
     const aberta = !d.fechada;
+    const DEST = { folha: ['Na folha', 'success'], contas_pagar: ['Contas a pagar', 'info'] };
+    const blocoComissoes = cm.linhas.length || cm.aguardando_revisao.n ? `<div class="card mb-3"><div class="card-header d-flex flex-wrap gap-2 align-items-center"><i class="bi bi-percent"></i> Comissões ${aberta ? 'que esta folha vai pagar' : 'pagas nesta competência'}
+        <span class="ms-auto small text-muted">Total ${fmt.money(cm.linhas.reduce((a, l) => a + l.liquido, 0))}</span></div>
+      ${cm.aguardando_revisao.n ? `<div class="alert alert-warning py-2 m-2 small"><i class="bi bi-hourglass-split"></i> ${cm.aguardando_revisao.n} comissão(ões) (${fmt.money(cm.aguardando_revisao.valor)}) ainda <b>aguardam a revisão do Financeiro</b> e ficam para a próxima folha. <a href="#/financeiro/comissoes">Revisar comissões</a></div>` : ''}
+      ${cm.linhas.length ? `<div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Vendedor</th><th>Pagamento</th><th>Períodos</th><th class="num">Comissões</th><th class="num">Créditos</th><th class="num">Descontos</th><th class="num">Líquido</th></tr></thead><tbody>
+        ${cm.linhas.map((l) => `<tr><td>${esc(l.nome)}${l.sem_cadastro ? ' <span class="badge text-bg-warning" title="Usuário sem cadastro de colaborador">sem cadastro</span>' : ''}</td>
+          <td><span class="badge text-bg-${DEST[l.destino][1]}">${DEST[l.destino][0]}</span>${l.vinculo && l.destino !== 'folha' ? ` <span class="small text-muted">${esc(l.vinculo)}</span>` : ''}</td>
+          <td class="small">${esc(l.periodos || '—')} · ${l.comissoes}</td><td class="num">${fmt.money(l.valor)}</td><td class="num text-success">${fmt.money(l.creditos)}</td><td class="num text-danger">${fmt.money(l.descontos)}</td><td class="num fw-semibold">${fmt.money(l.liquido)}</td></tr>`).join('')}
+      </tbody></table></div>` : ''}
+      <div class="small text-muted px-3 py-2">CLT: entram como evento ao <b>Gerar eventos automáticos</b>. PJ, autônomo e sem cadastro: o <b>fechamento</b> lança a conta a pagar. Ao fechar, as comissões ficam marcadas como pagas; reabrir desfaz.</div></div>` : '';
     pagina.innerHTML = `<div class="alert alert-light border small"><i class="bi bi-info-circle"></i> Aqui o DP reúne os eventos variáveis do mês (horas extras, faltas, comissões, descontos de benefícios, prêmios)
       para enviar à contabilidade. O cálculo de INSS, IRRF, FGTS e do líquido fica com a contabilidade. Valores de horas são estimativas pelo divisor da carga horária de cada contrato (44 h → 220, 40 h → 200).</div>
       <div class="kpis mb-3">${kpi('Salários base', fmt.money(d.totais.salarios), { icone: 'bi-wallet2' })}${kpi('Proventos variáveis', fmt.money(d.totais.proventos), { icone: 'bi-plus-circle', cor: 'success' })}
@@ -324,6 +334,7 @@ async function folha(conteudo) {
         <button class="btn btn-sm btn-outline-success" data-exportar><i class="bi bi-file-earmark-excel"></i> Exportar para a contabilidade</button>
         ${aberta ? '<button class="btn btn-sm btn-outline-secondary ms-auto" data-fechar><i class="bi bi-lock"></i> Fechar competência</button>' : (pode('rh.gerir') ? '<button class="btn btn-sm btn-outline-danger ms-auto" data-reabrir><i class="bi bi-unlock"></i> Reabrir</button>' : '')}
       </div>
+      ${blocoComissoes}
       <div class="card"><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Colaborador</th><th>Cargo</th><th>Contrato</th><th class="num">Salário</th><th>Eventos</th><th class="num">Proventos</th><th class="num">Descontos</th></tr></thead><tbody>
       ${d.linhas.map((l) => `<tr><td><b>${esc(l.nome)}</b>${l.admitido_no_mes ? ' <span class="badge text-bg-success">admitido</span>' : ''}${l.desligado_no_mes ? ' <span class="badge text-bg-secondary">desligado</span>' : ''}</td>
         <td class="small">${esc(l.cargo || '')}</td><td class="small">${esc(l.tipo_contrato || '')}</td><td class="num">${fmt.money(l.salario)}</td>
@@ -356,7 +367,10 @@ async function folha(conteudo) {
     pagina.querySelector('[data-exportar]').addEventListener('click', () => tentar(() => baixar(`/api/rh/folha/exportar?competencia=${comp}`, `eventos_folha_${comp}.xlsx`)));
     pagina.querySelector('[data-fechar]')?.addEventListener('click', async () => {
       if (await confirmar(`Fechar a competência ${comp.split('-').reverse().join('/')}? Depois disso não dá para lançar ocorrências nem eventos neste mês.`, { ok: 'Fechar' })
-        && await tentar(() => post('/api/rh/folha/fechar', { competencia: comp }), 'Competência fechada.')) carregar();
+        ) {
+        const r = await tentar(() => post('/api/rh/folha/fechar', { competencia: comp }));
+        if (r) { toast(`Competência fechada. Comissões de ${r.comissoes.vendedores} vendedor(es) marcadas como pagas${r.comissoes.contas_pagar ? `; ${r.comissoes.contas_pagar} conta(s) a pagar lançada(s) para PJ/autônomos` : ''}.`); carregar(); }
+      }
     });
     pagina.querySelector('[data-reabrir]')?.addEventListener('click', async () => {
       const motivo = await pedirTexto('Motivo da reabertura', { titulo: 'Reabrir competência' });

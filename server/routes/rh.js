@@ -453,6 +453,13 @@ r.get('/folha', exigeFolha, async (req, res) => {
     salarios: r2(colabs.reduce((a, c) => a + (c.salario || 0), 0)), proventos: r2(linhas.reduce((a, l) => a + l.proventos, 0)), descontos: r2(linhas.reduce((a, l) => a + l.descontos, 0)),
   } });
 });
+/** Comissões que esta folha paga: por vendedor, com o destino (folha ou contas a pagar) e as que ainda esperam revisão. */
+r.get('/folha/comissoes', exigeFolha, async (req, res) => {
+  const comp = req.query.competencia;
+  if (!/^\d{4}-\d{2}$/.test(comp || '')) throw new ErroNegocio('Competência inválida.');
+  const fechada = await RH.competenciaFechada(req.empresaId, comp);
+  res.json({ ...(await require('../comissao-folha').apurar(req.empresaId, comp, { incluirPagasNa: fechada ? comp : null })), fechada });
+});
 r.post('/folha/gerar', exigeFolha, async (req, res) => res.json(await RH.gerarEventos(req.empresaId, req.body?.competencia, req.user.id)));
 r.post('/folha/eventos', exigeFolha, async (req, res) => {
   const b = req.body || {};
@@ -484,15 +491,22 @@ r.post('/folha/fechar', exigeFolha, async (req, res) => {
   const comp = req.body?.competencia;
   if (!/^\d{4}-\d{2}$/.test(comp || '')) throw new ErroNegocio('Competência inválida.');
   if (await RH.competenciaFechada(req.empresaId, comp)) throw new ErroNegocio('Competência já fechada.');
-  await db.run('INSERT INTO rh_fechamentos (empresa_id, competencia, fechado_por, observacao) VALUES (?, ?, ?, ?)', req.empresaId, comp, req.user.id, req.body?.observacao || null);
-  await registrar('fechar_folha', 'rh_fechamentos', comp, null, { competencia: comp });
-  res.json({ ok: true });
+  const com = await db.tx(async () => {
+    await db.run('INSERT INTO rh_fechamentos (empresa_id, competencia, fechado_por, observacao) VALUES (?, ?, ?, ?)', req.empresaId, comp, req.user.id, req.body?.observacao || null);
+    // Comissões entram como pagas na folha (CLT) ou viram contas a pagar (PJ / sem cadastro).
+    return require('../comissao-folha').aoFechar(req.empresaId, comp, req.user.id);
+  });
+  await registrar('fechar_folha', 'rh_fechamentos', comp, null, { competencia: comp, comissoes: com });
+  res.json({ ok: true, comissoes: com });
 });
 r.post('/folha/reabrir', A.exige('rh.gerir'), async (req, res) => {
   const comp = req.body?.competencia;
   const motivo = String(req.body?.motivo || '').trim();
   if (!motivo) throw new ErroNegocio('Informe o motivo da reabertura.');
-  await db.run('DELETE FROM rh_fechamentos WHERE empresa_id = ? AND competencia = ?', req.empresaId, comp);
+  await db.tx(async () => {
+    await require('../comissao-folha').aoReabrir(req.empresaId, comp);
+    await db.run('DELETE FROM rh_fechamentos WHERE empresa_id = ? AND competencia = ?', req.empresaId, comp);
+  });
   await registrar('reabrir_folha', 'rh_fechamentos', comp, null, { competencia: comp, motivo });
   res.json({ ok: true });
 });

@@ -3,7 +3,8 @@ const express = require('express');
 const db = require('../db');
 const A = require('../auth');
 const S = require('../services');
-const { responderLista } = require('../lista');
+const { responderLista, responderMemoria } = require('../lista');
+const CFG = require('../config');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -42,9 +43,61 @@ r.get('/resumo', async (req, res) => {
   const vencendo = (await db.get(
     `SELECT COUNT(*) AS n FROM (SELECT embalagem_id, lote, MIN(validade) AS validade, SUM(quantidade) AS s FROM estoque_movimentos
        WHERE empresa_id = ? AND lote IS NOT NULL AND validade IS NOT NULL GROUP BY embalagem_id, lote) x
-      WHERE x.s > 0 AND x.validade <= date('now','localtime','+60 days')`, req.empresaId,
+      WHERE x.s > 0 AND x.validade <= ?`, req.empresaId, S.addDias(S.hoje(), Number(await CFG.obter('estoque.alerta_validade_dias')) || 90),
   )).n;
-  res.json({ ...t, vencendo });
+  const vencidos = (await lotesComValidade(req.empresaId, 0)).length;
+  const parados = (await produtosParados(req.empresaId, Number(await CFG.obter('estoque.dias_parado')) || 120)).length;
+  res.json({ ...t, vencendo, vencidos, parados, dias_validade: Number(await CFG.obter('estoque.alerta_validade_dias')) || 90 });
+});
+
+/** Lotes com saldo e validade até hoje + dias (vencidos incluídos), com custo e valor parado. */
+async function lotesComValidade(empresaId, dias) {
+  const hoje = S.hoje();
+  const rows = await db.all(
+    `SELECT x.*, p.id AS produto_id, p.codigo, p.nome AS produto, g.nome AS grupo, e.descricao AS embalagem, e.unidade, COALESCE(x.custo_lote, e.custo, 0) AS custo
+       FROM (SELECT embalagem_id, lote, MIN(validade) AS validade, SUM(quantidade) AS saldo, MIN(created_at) AS entrada,
+               SUM(CASE WHEN quantidade > 0 AND custo_unitario IS NOT NULL THEN quantidade * custo_unitario END)
+                 / NULLIF(SUM(CASE WHEN quantidade > 0 AND custo_unitario IS NOT NULL THEN quantidade END), 0) AS custo_lote
+             FROM estoque_movimentos WHERE empresa_id = ? AND lote IS NOT NULL AND embalagem_id IS NOT NULL GROUP BY embalagem_id, lote) x
+       JOIN produto_embalagens e ON e.id = x.embalagem_id JOIN produtos p ON p.id = e.produto_id LEFT JOIN grupos_produto g ON g.id = p.grupo_id
+      WHERE x.saldo > 0 AND x.validade IS NOT NULL AND x.validade <= ?`, empresaId, S.addDias(hoje, dias),
+  );
+  return rows.map((x) => {
+    const d = S.diasEntre(hoje, x.validade);
+    return { ...x, dias_para_vencer: d, situacao: d < 0 ? 'vencido' : d <= 30 ? 'vence_30' : 'vence_depois', valor: S.r2(x.saldo * x.custo) };
+  }).sort((a, b) => a.validade.localeCompare(b.validade));
+}
+
+/** Embalagens com saldo e sem saída (venda, consumo ou amostra) há mais de N dias. */
+async function produtosParados(empresaId, dias) {
+  const hoje = S.hoje();
+  const rows = await db.all(
+    `SELECT t.*, (SELECT MAX(created_at) FROM estoque_movimentos m WHERE m.empresa_id = ? AND m.embalagem_id = t.embalagem_id AND m.quantidade < 0 AND m.origem IN ('venda','consumo','amostra')) AS ultima_saida,
+        (SELECT MIN(created_at) FROM estoque_movimentos m WHERE m.empresa_id = ? AND m.embalagem_id = t.embalagem_id AND m.quantidade > 0) AS primeira_entrada,
+        (SELECT MAX(pe.created_at) FROM pedido_itens i JOIN pedidos pe ON pe.id = i.pedido_id WHERE i.embalagem_id = t.embalagem_id AND pe.empresa_id = ? AND pe.etapa NOT IN ('venda','cancelado')) AS ultimo_pedido
+       FROM (${SALDOS_SQL}) t WHERE t.saldo > 0`, empresaId, empresaId, empresaId, empresaId, empresaId,
+  );
+  return rows.map((x) => {
+    const ref = [x.ultima_saida, x.ultimo_pedido].filter(Boolean).sort().at(-1) || x.primeira_entrada;
+    const parado = ref ? S.diasEntre(String(ref).slice(0, 10), hoje) : null;
+    return { ...x, ultima_venda: [x.ultima_saida, x.ultimo_pedido].filter(Boolean).sort().at(-1) || null, dias_parado: parado, nunca_vendido: !x.ultima_saida && !x.ultimo_pedido ? 1 : 0, valor: S.r2(x.valor_estoque || 0) };
+  }).filter((x) => x.dias_parado != null && x.dias_parado >= dias).sort((a, b) => b.valor - a.valor);
+}
+
+r.get('/regras', async (req, res) => res.json(await CFG.todas('estoque.')));
+r.put('/regras', A.exige('estoque.movimentar'), async (req, res) => {
+  for (const c of await CFG.todas('estoque.')) if (req.body?.[c.chave] !== undefined) await CFG.definir(c.chave, req.body[c.chave], req.user.id);
+  res.json(await CFG.todas('estoque.'));
+});
+
+r.get('/validade', async (req, res) => {
+  const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || Number(await CFG.obter('estoque.alerta_validade_dias')) || 90, 0), 730);
+  await responderMemoria(req, res, await lotesComValidade(req.empresaId, dias), { titulo: 'Lotes vencidos e vencendo', exatos: ['situacao', 'embalagem_id'] });
+});
+
+r.get('/parados', async (req, res) => {
+  const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || Number(await CFG.obter('estoque.dias_parado')) || 120, 1), 1095);
+  await responderMemoria(req, res, await produtosParados(req.empresaId, dias), { titulo: 'Produtos parados' });
 });
 
 r.get('/lotes/:embalagemId', async (req, res) => {
@@ -122,3 +175,4 @@ r.put('/minimo/:embalagemId', A.exige('estoque.movimentar'), async (req, res) =>
 
 module.exports = r;
 module.exports.SALDOS_SQL = SALDOS_SQL;
+module.exports.lotesComValidade = lotesComValidade;
