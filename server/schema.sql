@@ -1204,7 +1204,7 @@ ALTER TABLE estoque_movimentos ADD COLUMN IF NOT EXISTS compra_id integer REFERE
 
 -- ============ Integrações externas ============
 -- Uma linha por provedor e empresa. "segredos" guarda as credenciais criptografadas (AES-256-GCM, server/integracoes/cofre.js).
-CREATE TABLE IF NOT EXISTS integracoes (
+CREATE TABLE IF NOT EXISTS integracao_contas (
   provedor text NOT NULL,                           -- correios | rodonaves | braspress | cora | invoicy | nfe_entrada
   empresa_id integer NOT NULL REFERENCES empresas(id),
   modo text NOT NULL DEFAULT 'desligada',           -- desligada | simulacao | homologacao | producao

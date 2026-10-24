@@ -122,7 +122,7 @@ const ADAPTADORES = {
 const parse = (t) => { try { return t ? JSON.parse(t) : {}; } catch { return {}; } };
 
 async function linha(provedor, empresaId) {
-  return db.get('SELECT * FROM integracoes WHERE provedor = ? AND empresa_id = ?', provedor, empresaId);
+  return db.get('SELECT * FROM integracao_contas WHERE provedor = ? AND empresa_id = ?', provedor, empresaId);
 }
 
 /** Configuração completa (com segredos) para uso interno. */
@@ -193,20 +193,20 @@ async function salvar(provedor, empresaId, body, usuarioId) {
     if (faltam.length) throw new ErroNegocio(`Para usar em ${MODOS[modo].toLowerCase()}, preencha: ${faltam.map((c) => c.l).join(', ')}.`);
   }
   await db.run(
-    `INSERT INTO integracoes (provedor, empresa_id, modo, config, segredos, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), ?)
+    `INSERT INTO integracao_contas (provedor, empresa_id, modo, config, segredos, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, datetime('now','localtime'), ?)
        ON CONFLICT (provedor, empresa_id) DO UPDATE SET modo = EXCLUDED.modo, config = EXCLUDED.config, segredos = EXCLUDED.segredos,
          updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by`,
     provedor, empresaId, modo, JSON.stringify(config), cofre.cifrar(segredos), usuarioId || null,
   );
   // A auditoria registra o que mudou, nunca os segredos.
-  await require('../auditoria').registrar('configurar_integracao', 'integracoes', null, { provedor, modo: atual.modo }, {
+  await require('../auditoria').registrar('configurar_integracao', 'integracao_contas', null, { provedor, modo: atual.modo }, {
     provedor, empresa_id: empresaId, modo, segredos_alterados: Object.keys(body.segredos || {}).filter((k) => body.segredos[k] !== undefined && body.segredos[k] !== ''),
   });
   return publico(provedor, empresaId);
 }
 
 async function salvarEstado(provedor, empresaId, estado) {
-  await db.run('UPDATE integracoes SET estado = ? WHERE provedor = ? AND empresa_id = ?', JSON.stringify(estado), provedor, empresaId);
+  await db.run('UPDATE integracao_contas SET estado = ? WHERE provedor = ? AND empresa_id = ?', JSON.stringify(estado), provedor, empresaId);
 }
 
 async function registrarLog(x) {
@@ -265,14 +265,14 @@ async function testar(provedor, empresaId, usuarioId) {
     ok = true;
     mensagem = r?.mensagem || 'Conexão OK.';
   } catch (e) { mensagem = e.message; }
-  await db.run(`UPDATE integracoes SET ultimo_teste_em = datetime('now','localtime'), ultimo_teste_ok = ?, ultimo_teste_msg = ? WHERE provedor = ? AND empresa_id = ?`,
+  await db.run(`UPDATE integracao_contas SET ultimo_teste_em = datetime('now','localtime'), ultimo_teste_ok = ?, ultimo_teste_msg = ? WHERE provedor = ? AND empresa_id = ?`,
     ok ? 1 : 0, mensagem, provedor, empresaId);
   return { ok, mensagem };
 }
 
 async function ativas(categoria, empresaId) {
   const ids = Object.entries(CATALOGO).filter(([, d]) => d.categoria === categoria).map(([k]) => k);
-  const rows = await db.all(`SELECT provedor FROM integracoes WHERE empresa_id = ? AND modo <> 'desligada'`, empresaId);
+  const rows = await db.all(`SELECT provedor FROM integracao_contas WHERE empresa_id = ? AND modo <> 'desligada'`, empresaId);
   return rows.map((x) => x.provedor).filter((p) => ids.includes(p));
 }
 
