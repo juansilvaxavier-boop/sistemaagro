@@ -25,7 +25,7 @@ const PERFIS = {
 const CATALOGO = [
   ['Geral', [['dashboard', 'Ver o painel do próprio setor'], ['dashboard.todos', 'Ver o painel de qualquer setor'], ['chat', 'Usar o chat interno'],
     ['chamados', 'Abrir e acompanhar chamados internos'], ['chamados.gerir', 'Gerir todos os chamados']]],
-  ['Comercial', [['propostas', 'Propostas comerciais']]],
+  ['Comercial', [['propostas', 'Propostas comerciais'], ['metas', 'Ver metas, campanhas e ranking'], ['metas.gerir', 'Definir metas e criar campanhas']]],
   ['Filas do pedido', [
     ['fila.venda', 'Fila do Vendedor'], ['pedido.criar', 'Criar e editar pedidos'], ['fila.supervisao', 'Fila do Supervisor'],
     ['fila.analise', 'Fila da Análise'], ['fila.diretoria', 'Fila da Diretoria'], ['fila.cobranca', 'Fila Pagamento à vista'],
@@ -45,9 +45,10 @@ const CATALOGO = [
   ['Financeiro', [
     ['financeiro.parcelas', 'Gestão de parcelas'], ['financeiro.lancamentos', 'Descontos e créditos'], ['financeiro.comissoes', 'Revisar comissões'],
     ['financeiro.devolucoes', 'Desconto de devolução'], ['financeiro.negativados', 'Clientes negativados'], ['financeiro.notas', 'Notas fiscais'],
-    ['financeiro.pagar', 'Contas a pagar'],
+    ['financeiro.pagar', 'Contas a pagar'], ['tesouraria', 'Tesouraria: conciliação bancária, fluxo de caixa e resultado do mês'],
+    ['credito.gerir', 'Definir limites de crédito e regras de bloqueio'], ['credito.liberar', 'Liberar crédito de pedido bloqueado'],
   ]],
-  ['Relatórios', [['relatorios.vendas', 'Relatórios de vendas'], ['relatorios.financeiro', 'Relatórios financeiros'], ['relatorios.estoque', 'Relatórios de estoque']]],
+  ['Relatórios', [['analises', 'Análises: curva ABC, recompra atrasada e previsão de demanda'], ['relatorios.vendas', 'Relatórios de vendas'], ['relatorios.financeiro', 'Relatórios financeiros'], ['relatorios.estoque', 'Relatórios de estoque']]],
   ['RH e DP', [
     ['rh', 'Ver colaboradores, férias, ponto e solicitações (sem salários)'], ['rh.gerir', 'Gerir RH: fichas, salários, férias, ocorrências, benefícios e exames'],
     ['rh.folha', 'Eventos da folha e fechamento do mês'],
@@ -68,17 +69,17 @@ const CATALOGO = [
 const PERMISSOES = {
   admin: ['*'],
   diretoria: ['*'],
-  vendedor: ['dashboard', 'chat', 'chamados', 'propostas', 'fila.venda', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico', 'crm', 'arquivos', 'relatorios.vendas', 'lgpd.dados'],
+  vendedor: ['dashboard', 'chat', 'chamados', 'propostas', 'metas', 'fila.venda', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico', 'crm', 'arquivos', 'relatorios.vendas', 'lgpd.dados'],
   supervisor: [
-    'dashboard', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
+    'dashboard', 'chat', 'chamados', 'propostas', 'metas', 'analises', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
     'blacklist', 'serasa', 'crm', 'compras.solicitar', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
   gerente: [
     'dashboard', 'dashboard.todos', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
-    'blacklist', 'serasa', 'crm', 'crm.automacoes', 'compras.solicitar', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
+    'blacklist', 'serasa', 'crm', 'crm.automacoes', 'compras.solicitar', 'metas', 'metas.gerir', 'analises', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
   analista: [
-    'dashboard', 'chat', 'chamados', 'fila.analise', 'clientes', 'clientes.editar', 'clientes.historico', 'blacklist', 'blacklist.editar',
+    'dashboard', 'chat', 'chamados', 'fila.analise', 'credito.gerir', 'clientes', 'clientes.editar', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
   producao: ['dashboard', 'chat', 'chamados', 'fila.producao', 'arquivos', 'estoque', 'estoque.movimentar', 'relatorios.estoque', 'compras.solicitar', 'compras.receber'],
@@ -86,11 +87,11 @@ const PERMISSOES = {
   expedicao: ['dashboard', 'chat', 'chamados', 'fila.expedicao', 'fila.transito', 'cadastros.transportadora', 'arquivos', 'estoque', 'estoque.movimentar', 'etiquetas', 'relatorios.estoque', 'compras.solicitar', 'compras.receber'],
   rh: ['dashboard', 'chat', 'chamados', 'rh', 'rh.gerir', 'rh.folha', 'cadastros.colaborador', 'cadastros.listas', 'lgpd.dados', 'arquivos', 'compras.solicitar'],
   compras: [
-    'dashboard', 'chat', 'chamados', 'compras.solicitar', 'compras.comprar', 'compras.receber', 'cadastros.fornecedor', 'cadastros.listas', 'estoque', 'estoque.movimentar',
+    'dashboard', 'chat', 'chamados', 'compras.solicitar', 'compras.comprar', 'compras.receber', 'cadastros.fornecedor', 'cadastros.listas', 'estoque', 'estoque.movimentar', 'analises',
     'relatorios.estoque',
   ],
   financeiro: [
-    'dashboard', 'chat', 'chamados', 'financeiro.pagar', 'cadastros.fornecedor', 'compras.solicitar', 'compras.comprar', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
+    'dashboard', 'chat', 'chamados', 'financeiro.pagar', 'cadastros.fornecedor', 'compras.solicitar', 'compras.comprar', 'tesouraria', 'credito.gerir', 'analises', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'cobranca', 'financeiro.parcelas', 'financeiro.lancamentos', 'financeiro.comissoes',
     'financeiro.devolucoes', 'financeiro.negativados', 'financeiro.notas', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],

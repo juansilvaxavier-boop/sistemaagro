@@ -127,6 +127,7 @@ r.get('/:id', async (req, res) => {
          FROM pedidos WHERE cliente_id = ? AND id <> ? AND etapa <> 'cancelado'`, p.cliente_id, id,
     ),
     acoes: W.acoesDisponiveis(p, req.user),
+    rastreio: await require('../rastreio').eventos(id),
     comissoes_padrao: await S.comissoesPadrao(p),
     comissoes_definidas: p.comissoes_definidas_em
       ? { em: p.comissoes_definidas_em, por: (await db.get('SELECT nome FROM usuarios WHERE id = ?', p.comissoes_definidas_por))?.nome }
@@ -134,6 +135,16 @@ r.get('/:id', async (req, res) => {
   };
   // Situação de crédito do cliente: para quem decide crédito e aprovação.
   if (['fila.analise', 'fila.diretoria', 'financeiro.parcelas'].some((x) => A.can(req.user, x))) {
+    const CR = require('../credito');
+    const andamento = (await db.get(`SELECT 1 AS x FROM pedidos WHERE id = ? AND etapa IN ${CR.EM_ANDAMENTO}`, id)) ? 0 : p.valor_total;
+    const sc = await CR.doCliente(p.cliente_id, andamento);
+    const forma = p.forma_id ? await db.get('SELECT tipo FROM formas_pagamento WHERE id = ?', p.forma_id) : null;
+    dados.credito_situacao = sc && {
+      limite: sc.limite, exposicao: sc.exposicao, disponivel: sc.disponivel, status: sc.status, bloqueios: forma?.tipo === 'a_vista' ? [] : sc.bloqueios,
+      sugerido: sc.sugerido, a_vista: forma?.tipo === 'a_vista',
+      liberado: p.credito_liberado_em ? { em: p.credito_liberado_em, justificativa: p.credito_justificativa, por: (await db.get('SELECT nome FROM usuarios WHERE id = ?', p.credito_liberado_por))?.nome } : null,
+      pode_liberar: A.can(req.user, 'credito.liberar') && ['venda', 'supervisao', 'analise'].includes(p.etapa),
+    };
     dados.credito = await db.get(
       `SELECT c.limite_credito,
           IFNULL((SELECT SUM(${S.SALDO_PARCELA_SQL}) FROM parcelas p WHERE p.cliente_id = c.id AND ${S.ABERTA_SQL}), 0) AS em_aberto,
@@ -155,20 +166,22 @@ const camposCabecalho = ['cliente_id', 'forma_id', 'condicao_id', 'observacao', 
 
 async function salvarItens(pedidoId, itens, formaId) {
   await db.run('DELETE FROM pedido_itens WHERE pedido_id = ?', pedidoId);
+  // Preço de tabela pela tabela regional vigente para a UF de entrega.
+  const ped = await db.get('SELECT cliente_id, endereco_entrega_id FROM pedidos WHERE id = ?', pedidoId);
+  const P = require('../precos');
+  const t = await P.tabelaVigente(await P.ufDe(ped.cliente_id, ped.endereco_entrega_id));
   for (const it of itens) {
     const prod = await db.get('SELECT * FROM produtos WHERE id = ? AND ativo = 1', it.produto_id);
     if (!prod) throw new ErroNegocio('Produto inválido no pedido.');
     const qtd = Number(it.quantidade);
     if (!(qtd > 0)) throw new ErroNegocio(`Quantidade inválida para ${prod.nome}.`);
     const emb = it.embalagem_id ? await db.get('SELECT * FROM produto_embalagens WHERE id = ? AND produto_id = ?', it.embalagem_id, prod.id) : null;
-    const tabela =
-      (await db.get('SELECT valor FROM produto_precos WHERE produto_id = ? AND IFNULL(embalagem_id,0) = ? AND forma_id = ?', prod.id, emb?.id || 0, formaId || 0))?.valor ??
-      (await db.get('SELECT valor FROM produto_precos WHERE produto_id = ? AND IFNULL(embalagem_id,0) = ? AND forma_id IS NULL', prod.id, emb?.id || 0))?.valor ?? 0;
+    const tabela = (await P.preco({ produtoId: prod.id, embalagemId: emb?.id, formaId, tabela: t })).valor;
     const brinde = it.brinde ? 1 : 0;
     const unit = brinde ? 0 : S.r2(it.valor_unitario ?? tabela);
     await db.insert('pedido_itens', {
       pedido_id: pedidoId, produto_id: prod.id, embalagem_id: emb?.id, quantidade: qtd, unidade: emb?.unidade || prod.unidade,
-      valor_tabela: tabela, custo_embalagem: emb?.custo || 0, valor_unitario: unit, valor_total: S.r2(qtd * unit), brinde,
+      valor_tabela: tabela, custo_embalagem: emb?.custo || 0, valor_unitario: unit, valor_total: S.r2(qtd * unit), brinde, tabela_preco_id: t?.id || null,
     });
   }
 }
@@ -354,6 +367,15 @@ r.put('/:id/expedicao', async (req, res) => {
   const campos = p.etapa === 'expedicao' ? ['data_embarque', 'data_entrega_prevista', 'transportadora_id'] : ['transportadora_id', 'data_embarque', 'data_entrega'];
   await db.update('pedidos', p.id, b, campos);
   res.json({ ok: true });
+});
+
+// ---------- Rastreio ----------
+r.post('/rastreio/atualizar', A.exige('fila.transito', 'fila.expedicao'), async (req, res) => {
+  res.json(await require('../rastreio').atualizarTodos(req.empresaId, { usuarioId: req.user.id }));
+});
+r.post('/:id/rastreio', async (req, res) => {
+  const p = await carregar(req, Number(req.params.id));
+  res.json(await require('../rastreio').rastrearPedido(p.id, { usuarioId: req.user.id }));
 });
 
 // ---------- Etiqueta de envio (Correios e transportadora) ----------

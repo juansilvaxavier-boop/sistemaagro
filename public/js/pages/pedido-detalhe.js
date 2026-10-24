@@ -92,7 +92,7 @@ function resumo(d) {
   const p = d.pedido;
   const end = d.enderecos.find((e) => e.id === p.endereco_entrega_id);
   const tel = d.telefones.map((t) => `${esc(t.numero)}${t.whatsapp ? ' <i class="bi bi-whatsapp text-success"></i>' : ''}`).join(' · ');
-  return `<div class="row g-3">
+  return `${bannerCredito(d)}<div class="row g-3">
     <div class="col-md-6"><div class="card h-100"><div class="card-header py-1">Cliente</div><div class="card-body small">
       <div class="fw-semibold">${esc(d.cliente.nome)}</div>
       <div>${fmt.doc(d.cliente.documento)} ${d.cliente.inscricao_estadual ? '· IE ' + esc(d.cliente.inscricao_estadual) : ''} ${d.cliente.inscricao_produtor ? '· Produtor ' + esc(d.cliente.inscricao_produtor) : ''}</div>
@@ -185,6 +185,14 @@ function painelEtapa(d) {
       <div class="small text-muted mt-2">NF ${esc(d.notas[0]?.numero || '-')} · Prazo de produção ${fmt.date(p.prazo_producao)} · Supervisor ${esc(p.supervisor || '-')}</div></form>` });
   }
   if (!atua && d.serasa.length && (pode('serasa') || pode('fila.diretoria'))) out.push(serasaAba);
+  if (p.codigo_rastreio || d.rastreio?.length) {
+    out.push({ id: 'rastreio', label: '<i class="bi bi-geo"></i> Rastreio', html: `<div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+      <span>Código <b>${esc(p.codigo_rastreio || '-')}</b>${p.rastreio_atualizado_em ? ` · consultado em ${fmt.datetime(p.rastreio_atualizado_em)}` : ''}</span>
+      ${p.etapa === 'transito' ? '<button type="button" class="btn btn-sm btn-outline-primary ms-auto" data-rastrear><i class="bi bi-arrow-repeat"></i> Consultar agora</button>' : ''}</div>
+      ${d.rastreio?.length ? `<ul class="timeline">${d.rastreio.map((e) => `<li class="${e.entregue ? 't-pagamento' : 't-pedido'}"><div class="small text-muted">${fmt.datetime(e.data)}${e.local ? ` · ${esc(e.local)}` : ''}</div>
+        <div class="fw-semibold">${e.entregue ? '<i class="bi bi-check-circle-fill text-success"></i> ' : ''}${esc(e.descricao)}</div></li>`).join('')}</ul>`
+        : '<div class="vazio py-3">Nenhum evento ainda. A consulta é automática todo dia para os pedidos em trânsito.</div>'}` });
+  }
   return out;
 }
 
@@ -223,6 +231,17 @@ function formFrete(d, editavel) {
     ${campo('frete_motivo_ignorar', 'Motivo para ignorar', { col: 'col-md-7', value: p.frete_motivo_ignorar || '', attrs: dis })}
     ${editavel ? '<div class="col-md-2 d-flex align-items-end"><button class="btn btn-sm btn-success w-100" type="submit">Salvar frete</button></div>' : ''}
   </div></form>`;
+}
+
+/** Situação de crédito para quem decide (Análise, Diretoria, Financeiro): limite, exposição, bloqueios e liberação. */
+function bannerCredito(d) {
+  const c = d.credito_situacao;
+  if (!c || c.a_vista) return '';
+  if (c.liberado) return `<div class="alert alert-info py-2 small"><i class="bi bi-unlock"></i> Crédito liberado por ${esc(c.liberado.por || '')} em ${fmt.datetime(c.liberado.em)}: ${esc(c.liberado.justificativa)}</div>`;
+  const resumo = `Limite ${c.limite ? fmt.money(c.limite) : 'não definido'} · exposição com este pedido ${fmt.money(c.exposicao)}${c.disponivel != null ? ` · disponível ${fmt.money(c.disponivel)}` : ''}${c.sugerido?.valor ? ` · sugerido ${fmt.money(c.sugerido.valor)}` : ''}`;
+  if (!c.bloqueios.length) return `<div class="small text-muted mb-2"><i class="bi bi-shield-check text-success"></i> Crédito OK · ${resumo}</div>`;
+  return `<div class="alert alert-danger py-2 small d-flex flex-wrap gap-2 align-items-center"><div class="flex-grow-1"><i class="bi bi-shield-lock"></i> <b>Crédito bloqueado:</b> ${esc(c.bloqueios.join('; '))}<br>${resumo}</div>
+    ${c.pode_liberar ? '<button type="button" class="btn btn-sm btn-outline-danger" data-liberar-credito><i class="bi bi-unlock"></i> Liberar crédito deste pedido</button>' : '<span class="text-muted">A Análise só aprova com liberação da Diretoria.</span>'}</div>`;
 }
 
 // ---------- Diretoria ----------
@@ -415,6 +434,14 @@ function ligarEventos(m, d, recarregar) {
   const form = (nome, fn) => el.querySelector(`[data-form="${nome}"]`)?.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     if (await tentar(() => fn(ev.target), 'Salvo.')) recarregar();
+  });
+  el.querySelector('[data-rastrear]')?.addEventListener('click', async () => {
+    const r = await tentar(() => post(`/api/pedidos/${p.id}/rastreio`));
+    if (r) { toast(r.concluido ? 'Entrega confirmada pelo rastreio: pedido concluído.' : `Rastreio atualizado: ${r.status || 'sem eventos'}.`); recarregar(); }
+  });
+  el.querySelector('[data-liberar-credito]')?.addEventListener('click', async () => {
+    const justificativa = await pedirTexto('Por que liberar o crédito deste pedido?', { titulo: 'Liberar crédito', min: 10 });
+    if (justificativa && await tentar(() => post(`/api/credito/pedidos/${p.id}/liberar`, { justificativa }), 'Crédito liberado.')) recarregar();
   });
   form('supervisao', (f) => put(`/api/pedidos/${p.id}/supervisao`, lerForm(f)));
   form('frete', (f) => put(`/api/pedidos/${p.id}/frete`, lerForm(f)));

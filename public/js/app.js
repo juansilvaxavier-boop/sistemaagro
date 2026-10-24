@@ -32,6 +32,13 @@ const MENU = [
       },
       { href: '#/propostas', l: 'Propostas', i: 'bi-file-earmark-text', p: 'propostas' },
       {
+        l: 'Metas e campanhas', i: 'bi-bullseye', abas: [
+          { href: '#/metas', l: 'Metas', i: 'bi-bullseye', p: 'metas' },
+          { href: '#/metas/ranking', l: 'Ranking', i: 'bi-trophy', p: 'metas' },
+          { href: '#/metas/campanhas', l: 'Campanhas', i: 'bi-megaphone', p: 'metas' },
+        ],
+      },
+      {
         l: 'Clientes', i: 'bi-people', abas: [
           { href: '#/clientes', l: 'Cadastro', i: 'bi-people', p: 'clientes' },
           { href: '#/historico-compra', l: 'Histórico de compra', i: 'bi-clock-history', p: 'clientes.historico' },
@@ -49,9 +56,17 @@ const MENU = [
           { href: '#/financeiro/parcelas', l: 'Parcelas', i: 'bi-list-check', p: 'financeiro.parcelas' },
           { href: '#/cobranca', l: 'Cobrança', i: 'bi-telephone-outbound', p: 'cobranca' },
           { href: '#/financeiro/negativados', l: 'Negativados', i: 'bi-person-x', p: 'financeiro.negativados' },
+          { href: '#/credito', l: 'Limites de crédito', i: 'bi-shield-check', p: 'credito' },
         ],
       },
       { href: '#/pagar', l: 'Contas a pagar', i: 'bi-credit-card-2-back', p: 'financeiro.pagar' },
+      {
+        l: 'Tesouraria', i: 'bi-bank', abas: [
+          { href: '#/tesouraria', l: 'Fluxo de caixa', i: 'bi-graph-up', p: 'tesouraria' },
+          { href: '#/tesouraria/resultado', l: 'Resultado do mês', i: 'bi-clipboard-data', p: 'tesouraria' },
+          { href: '#/tesouraria/conciliacao', l: 'Conciliação bancária', i: 'bi-bank2', p: 'tesouraria' },
+        ],
+      },
       {
         l: 'Notas fiscais', i: 'bi-receipt', abas: [
           { href: '#/financeiro/notas', l: 'Notas de saída', i: 'bi-file-earmark-text', p: 'financeiro.notas' },
@@ -94,6 +109,13 @@ const MENU = [
       },
       { href: '#/relatorios', l: 'Relatórios', i: 'bi-bar-chart-line', p: 'relatorios' },
       {
+        l: 'Análises', i: 'bi-bar-chart-steps', abas: [
+          { href: '#/analises', l: 'Curva ABC', i: 'bi-bar-chart-steps', p: 'analises' },
+          { href: '#/analises/demanda', l: 'Previsão de demanda', i: 'bi-graph-up-arrow', p: 'analises' },
+          { href: '#/analises/recompra', l: 'Recompra atrasada', i: 'bi-arrow-repeat', p: 'analises' },
+        ],
+      },
+      {
         l: 'Pessoas e acesso', i: 'bi-person-lock', abas: [
           // Quem tem RH cadastra colaboradores pelo RH; a aba aqui fica para quem só cuida de cadastros.
           { href: '#/cadastros/colaboradores', l: 'Colaboradores', i: 'bi-person-vcard', p: 'cadastros.colaborador', se: () => !pode('rh') },
@@ -104,6 +126,7 @@ const MENU = [
       {
         l: 'Cadastros', i: 'bi-collection', abas: [
           { href: '#/cadastros/produtos', l: 'Produtos', i: 'bi-box', p: 'cadastros.produto' },
+          { href: '#/tabelas-preco', l: 'Tabelas de preço', i: 'bi-tags', p: 'cadastros.produto' },
           { href: '#/cadastros/formas', l: 'Formas de pagamento', i: 'bi-credit-card', p: 'cadastros.forma' },
           { href: '#/cadastros/transportadoras', l: 'Transportadoras', i: 'bi-truck-front', p: 'cadastros.transportadora' },
           { href: '#/cadastros/fornecedores', l: 'Fornecedores', i: 'bi-shop', p: 'cadastros.fornecedor' },
@@ -152,6 +175,18 @@ const SUBTITULOS = {
   '#/estoque': 'Saldos por produto e embalagem, lotes, movimentações e inventário.',
   '#/crm': 'Oportunidades, tarefas e interações com os clientes.',
   '#/crm/tarefas': 'Suas tarefas do CRM, inclusive as criadas pelas automações.',
+  '#/crm/safra': 'Quando cada cliente vai plantar ou adubar, pelo calendário da safra e pelas áreas cadastradas.',
+  '#/metas': 'Metas do mês por empresa, equipe e vendedor, com realizado e projeção de fechamento.',
+  '#/metas/ranking': 'Posição de cada vendedor no mês pelo % da meta de valor.',
+  '#/metas/campanhas': 'Campanhas de vendas com período, produto, meta individual e prêmio.',
+  '#/credito': 'Limite, exposição e situação de crédito de cada cliente, com limite sugerido e automático.',
+  '#/tesouraria': 'Saldo realizado e previsto pelas parcelas a receber e contas a pagar.',
+  '#/tesouraria/resultado': 'Resultado gerencial: receita, custos, comissões, fretes e despesas por mês.',
+  '#/tesouraria/conciliacao': 'Extrato do banco (OFX) casado com as parcelas e as contas a pagar.',
+  '#/tabelas-preco': 'Preços por estado e safra, com vigência, ajuste geral e preço por embalagem.',
+  '#/analises': 'Quais clientes e produtos fazem 80% do faturamento ou da margem.',
+  '#/analises/demanda': 'Quanto deve vender nos próximos meses e quanto comprar para não faltar.',
+  '#/analises/recompra': 'Clientes que já passaram do tempo normal entre uma compra e outra.',
   '#/compras': 'Pedidos de compra dos setores, cotação com fornecedores e acompanhamento.',
   '#/compras/pedidos': 'Pedidos de compra: aprovação, envio ao fornecedor e situação da entrega.',
   '#/compras/receber': 'Conferência da mercadoria com a nota do fornecedor: entra no estoque e gera a conta a pagar.',
@@ -209,7 +244,15 @@ const ROTAS = [
   [/^#\/meu-rh$/, () => import('./pages/meu-rh.js')],
   [/^#\/crm$/, () => import('./pages/crm.js')],
   [/^#\/crm\/cliente\/(\d+)$/, () => import('./pages/crm.js'), 'cliente'],
-  [/^#\/crm\/(tarefas|automacoes)$/, () => import('./pages/crm.js')],
+  [/^#\/crm\/(tarefas|automacoes|safra)$/, () => import('./pages/crm.js')],
+  [/^#\/metas$/, () => import('./pages/metas.js')],
+  [/^#\/metas\/(ranking|campanhas)$/, () => import('./pages/metas.js')],
+  [/^#\/credito$/, () => import('./pages/credito.js')],
+  [/^#\/tesouraria$/, () => import('./pages/tesouraria.js')],
+  [/^#\/tesouraria\/(resultado|conciliacao)$/, () => import('./pages/tesouraria.js')],
+  [/^#\/tabelas-preco$/, () => import('./pages/tabelas-preco.js')],
+  [/^#\/analises$/, () => import('./pages/analises.js')],
+  [/^#\/analises\/(demanda|recompra)$/, () => import('./pages/analises.js')],
   [/^#\/compras$/, () => import('./pages/compras.js')],
   [/^#\/compras\/(pedidos|receber|reposicao)$/, () => import('./pages/compras.js')],
   [/^#\/cobranca$/, () => import('./pages/cobranca.js')],

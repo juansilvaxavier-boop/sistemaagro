@@ -24,9 +24,10 @@ export default async function (conteudo, { modo, params }) {
     { id: 'tar', label: '<i class="bi bi-check2-square"></i> Tarefas', html: '<div id="crm-tar"></div>' },
     { id: 'clientes', label: '<i class="bi bi-people"></i> Clientes', html: '<div id="crm-cli"></div>' },
     { id: 'inativos', label: '<i class="bi bi-hourglass-bottom"></i> Sem compra (reativação)', html: '<div class="mb-2 d-flex gap-2 align-items-center small">Sem comprar há pelo menos <select class="form-select form-select-sm w-auto" id="dias-inat"><option>90</option><option selected>180</option><option>365</option></select> dias</div><div id="crm-inat"></div>' },
+    { id: 'safra', label: '<i class="bi bi-calendar3"></i> Calendário da safra', html: '<div id="crm-safra"></div>' },
     ...(pode('crm.automacoes') ? [{ id: 'aut', label: '<i class="bi bi-robot"></i> Automações', html: '<div id="crm-aut"></div>' }] : []),
   ], 'crm');
-  const abrir = { tarefas: 'tar', automacoes: 'aut' }[params?.[0]];
+  const abrir = { tarefas: 'tar', automacoes: 'aut', safra: 'safra' }[params?.[0]];
   if (abrir) pagina.querySelector(`[data-bs-target$="-${abrir}"]`)?.click();
 
   const funil = pagina.querySelector('#crm-funil');
@@ -75,6 +76,12 @@ export default async function (conteudo, { modo, params }) {
   });
 
   tarefas(pagina.querySelector('#crm-tar'));
+  // O calendário só carrega quando a aba é aberta.
+  const abaSafra = pagina.querySelector('[data-bs-target$="-safra"]');
+  let safraPronta = false;
+  const abrirSafra = () => { if (!safraPronta) { safraPronta = true; safra(pagina.querySelector('#crm-safra')); } };
+  abaSafra?.addEventListener('shown.bs.tab', abrirSafra);
+  if (params?.[0] === 'safra') abrirSafra();
   if (pode('crm.automacoes')) automacoes(pagina.querySelector('#crm-aut'));
 
   new DataTable(pagina.querySelector('#crm-cli'), {
@@ -426,4 +433,72 @@ function editar(r, gatilhos, aoSalvar) {
     } }],
   });
   return m;
+}
+
+// ---------- Calendário da safra ----------
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const SIT_SAFRA = { oferecer: ['Hora de oferecer', 'warning'], aberta: ['Janela aberta', 'success'], proxima: ['Próxima', 'secondary'] };
+
+function safra(el) {
+  const gerir = pode('crm.automacoes');
+  el.innerHTML = `<div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+      <span class="small">Janelas de plantio e adubação dos clientes nos próximos</span>
+      <select class="form-select form-select-sm w-auto" data-dias aria-label="Horizonte"><option>60</option><option selected>120</option><option>180</option><option>365</option></select><span class="small">dias</span>
+      ${gerir ? '<button class="btn btn-sm btn-outline-secondary ms-auto" data-cal><i class="bi bi-calendar3"></i> Ajustar calendário</button>' : ''}</div>
+    <p class="small text-muted">Cruza as áreas de cultivo do cadastro do cliente com o calendário. "Hora de oferecer" = dentro da antecedência configurada; a automação "Calendário da safra" cria a tarefa para o vendedor.</p>
+    <div data-t></div>`;
+  let dias = 120;
+  const t = new DataTable(el.querySelector('[data-t]'), {
+    url: () => `/api/crm/safra/janelas?dias=${dias}`, title: 'Calendário da safra', sort: 'aviso_em', dir: 'asc',
+    columns: [
+      { k: 'situacao', l: 'Situação', filter: { options: Object.entries(SIT_SAFRA).map(([k, [l]]) => [k, l]) }, render: (v, r) => `<span class="badge text-bg-${SIT_SAFRA[v][1]}">${SIT_SAFRA[v][0]}</span>${r.comprou_na_janela ? ' <i class="bi bi-check-circle text-success" title="Já comprou para esta janela"></i>' : ''}` },
+      { k: 'cliente', l: 'Cliente', render: (v, r) => `<a href="#/crm/cliente/${r.cliente_id}">${esc(v)}</a>` }, { k: 'vendedor', l: 'Vendedor' }, { k: 'uf', l: 'UF' },
+      { k: 'cultura', l: 'Cultura' }, { k: 'area', l: 'Área', t: 'num', render: (v, r) => (v ? `${fmt.num(v)} ${esc(r.medida || 'ha')}` : '—') }, { k: 'atividade', l: 'Atividade' },
+      { k: 'aviso_em', l: 'Oferecer a partir de', t: 'date' }, { k: 'inicio', l: 'Janela', t: 'date', render: (v, r) => `${fmt.date(v)} a ${fmt.date(r.fim)}` }, { k: 'ultima_compra', l: 'Última compra', t: 'date' },
+    ],
+  });
+  el.querySelector('[data-dias]').addEventListener('change', (e) => { dias = Number(e.target.value); t.reload(); });
+  el.querySelector('[data-cal]')?.addEventListener('click', () => calendario(() => t.reload()));
+}
+
+async function calendario(aoMudar) {
+  const linhas = await get('/api/crm/safra/calendario');
+  const culturas = (state.opcoes.listas?.cultura || []).map((c) => [c.valor, c.valor]);
+  const ufs = ['', 'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
+  const selMes = (nome, v) => `<select class="form-select form-select-sm" data-k="${nome}">${MESES.map((m, i) => `<option value="${i + 1}" ${i + 1 === v ? 'selected' : ''}>${m}</option>`).join('')}</select>`;
+  const linhaHtml = (c) => `<tr data-id="${c.id || ''}"><td><select class="form-select form-select-sm" data-k="cultura">${culturas.map(([v]) => `<option ${v === c.cultura ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></td>
+    <td><input class="form-control form-control-sm" data-k="atividade" value="${esc(c.atividade || '')}" maxlength="60"></td>
+    <td><select class="form-select form-select-sm" data-k="uf">${ufs.map((u) => `<option value="${u}" ${u === (c.uf || '') ? 'selected' : ''}>${u || 'Todos'}</option>`).join('')}</select></td>
+    <td>${selMes('mes_inicio', c.mes_inicio || 1)}</td><td>${selMes('mes_fim', c.mes_fim || 1)}</td>
+    <td><input type="number" class="form-control form-control-sm" data-k="antecedencia_dias" min="0" max="180" value="${c.antecedencia_dias ?? 45}"></td>
+    <td><input type="checkbox" class="form-check-input" data-k="ativo" ${c.ativo !== 0 ? 'checked' : ''} aria-label="Ativo"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" data-rem title="Excluir"><i class="bi bi-trash"></i></button></td></tr>`;
+  const removidos = [];
+  modal({
+    title: 'Calendário da safra', size: 'xl',
+    body: `<p class="small text-muted">Uma linha por cultura e atividade. Linha com UF vale só para os clientes daquele estado e substitui a geral da mesma atividade.</p>
+      <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Cultura</th><th>Atividade</th><th>UF</th><th>De</th><th>Até</th><th>Antecedência (dias)</th><th>Ativa</th><th></th></tr></thead>
+      <tbody data-linhas>${linhas.map(linhaHtml).join('')}</tbody></table></div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-add><i class="bi bi-plus"></i> Adicionar linha</button>`,
+    onShow: ({ body }) => {
+      const tb = body.querySelector('[data-linhas]');
+      const ligar = (tr) => tr.querySelector('[data-rem]').addEventListener('click', () => { if (tr.dataset.id) removidos.push(tr.dataset.id); tr.remove(); });
+      tb.querySelectorAll('tr').forEach(ligar);
+      body.querySelector('[data-add]').addEventListener('click', () => {
+        tb.insertAdjacentHTML('beforeend', linhaHtml({ cultura: culturas[0]?.[0], atividade: 'Plantio', mes_inicio: 9, mes_fim: 11, antecedencia_dias: 45 }));
+        ligar(tb.lastElementChild);
+      });
+    },
+    buttons: [{ label: 'Salvar calendário', onClick: async ({ body }) => {
+      for (const id of removidos) await del(`/api/crm/safra/calendario/${id}`);
+      for (const tr of body.querySelectorAll('[data-linhas] tr')) {
+        const d = Object.fromEntries([...tr.querySelectorAll('[data-k]')].map((x) => [x.dataset.k, x.type === 'checkbox' ? (x.checked ? 1 : 0) : x.value]));
+        const orig = linhas.find((l) => String(l.id) === tr.dataset.id);
+        if (orig && ['cultura', 'atividade', 'uf', 'mes_inicio', 'mes_fim', 'antecedencia_dias', 'ativo'].every((k) => String(orig[k] ?? '') === String(d[k] ?? ''))) continue;
+        if (tr.dataset.id) await put(`/api/crm/safra/calendario/${tr.dataset.id}`, d); else await post('/api/crm/safra/calendario', d);
+      }
+      toast('Calendário salvo.');
+      aoMudar?.();
+    } }],
+  });
 }

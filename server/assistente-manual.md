@@ -52,6 +52,7 @@ Ficam em Comercial → Propostas Comerciais (#/propostas). Para criar uma, use "
 ## CRM e cobrança
 - **CRM** (#/crm): oportunidades por estágio, tarefas, interações e a visão 360° do cliente (#/crm/cliente/ID).
 - **Tarefas do CRM** (#/crm/tarefas): as tarefas da pessoa, manuais e automáticas. Filtros Abertas, Para hoje, Automáticas e Concluídas; supervisor e gerente podem ver as da equipe. Ao concluir uma tarefa com cliente, dá para registrar a interação (ligação, visita, WhatsApp...) que vai para a linha do tempo do cliente. "Reagendar" muda a data e a prioridade.
+- **Calendário da safra** (#/crm/safra): quando cada cliente vai plantar ou adubar, pelas áreas de cultivo do cadastro e pelo calendário de cada cultura (ajustável em "Ajustar calendário"). A automação "Calendário da safra" cria a tarefa para o vendedor antes da janela.
 - **Automações do CRM** (#/crm/automacoes, permissão "Configurar automações do CRM"; Gerente, Diretoria e Administrador): regras que criam tarefas sozinhas todo dia de manhã. Gatilhos: cliente sem comprar há N dias, pós-venda N dias após a entrega, primeira compra (boas-vindas), recompra da safra (1 ano da última compra), oportunidade parada, fechamento previsto chegando, proposta sem retorno, cliente com parcela vencida e aniversário do cliente. Cada regra define os dias, o título da tarefa com variáveis ({cliente}, {pedido}, {valor}, {data}...), o prazo, a prioridade, quem recebe (vendedor do cliente, supervisor da equipe ou um usuário fixo), a equipe, o valor mínimo e o máximo de tarefas por dia. "Simular" mostra quantas tarefas seriam criadas sem criar; "Executar" roda na hora. A mesma situação nunca gera tarefa repetida. Parcela vencida e aniversário começam desligadas.
 - **Cobrança** (#/cobranca): carteira de inadimplentes, agenda de contatos, registro de ações e acordos.
 
@@ -66,6 +67,23 @@ Ficam em Comercial → Propostas Comerciais (#/propostas). Para criar uma, use "
 
 ## Estoque e expedição
 - **Controle de Estoque** (#/estoque): saldos, entradas, saídas, inventário e lotes. O botão "Repor estoque" leva à sugestão de compra.
+
+## Metas, preços e crédito
+- **Metas** (#/metas): metas do mês por empresa, equipe e vendedor (valor vendido, volume, pedidos e clientes novos), com realizado, % e projeção. Quem tem "Definir metas" (Gerente, Diretoria) usa "Definir metas" e "Copiar do mês anterior". O vendedor vê a própria meta; o supervisor, a equipe. O painel mostra o card "Meta do mês".
+- **Ranking** (#/metas/ranking): posição dos vendedores pelo % da meta de valor. Dos colegas fora da abrangência aparece só o percentual.
+- **Campanhas** (#/metas/campanhas): período, produto ou grupo, equipe, meta individual e prêmio, com placar.
+- **Tabelas de preço** (#/tabelas-preco, Cadastros): preço por estado (UF) e safra. O pedido e a proposta usam a tabela vigente para a UF de entrega; itens sem preço próprio seguem o preço base com o ajuste %. "Reajustar tudo" aplica um % e "Copiar" cria a tabela da próxima safra.
+- **Limites de crédito** (#/credito, Contas a receber): limite, exposição (parcelas em aberto + pedidos em andamento), disponível, situação e limite sugerido. Venda a prazo acima do limite, ou de cliente com parcela vencida há mais de 15 dias, é barrada na Análise; só a Diretoria libera, com justificativa, pelo botão "Liberar crédito deste pedido". "Aplicar limite sugerido aos sem limite" e o limite automático (recalculado todo dia) poupam o cadastro manual.
+
+## Tesouraria
+- **Fluxo de caixa** (#/tesouraria): realizado e previsto por dia, semana ou mês. O saldo de partida vem do último extrato importado ou do "Saldo em conta" informado.
+- **Resultado do mês** (#/tesouraria/resultado): receita, devoluções, impostos, custo, comissões, fretes, despesas por categoria e resultado operacional de cada mês do ano.
+- **Conciliação bancária** (#/tesouraria/conciliacao): "Importar extrato (OFX)" do banco. Créditos casam com parcelas a receber e débitos com contas a pagar; pares seguros são baixados sozinhos. Nos pendentes: "Conciliar" (escolher a sugestão), "Lançar como despesa paga" (tarifas) ou "Ignorar" (transferências entre contas).
+
+## Análises
+- **Curva ABC** (#/analises): clientes ou produtos que fazem 80% (A), 15% (B) e 5% (C) do faturamento ou da margem.
+- **Previsão de demanda** (#/analises/demanda): previsão dos próximos meses por produto, cobertura do estoque e quanto comprar; "Solicitar compra dos marcados" gera a solicitação.
+- **Recompra atrasada** (#/analises/recompra): clientes que passaram do tempo normal entre compras.
 
 ## Compras
 - **Solicitações** (#/compras): qualquer setor com permissão pede a compra em "Nova solicitação": departamento, urgência, data de necessidade, justificativa e os itens (produto do estoque ou outro item com descrição, categoria e unidade). Quem solicita vê só as próprias solicitações e é avisado quando ela vira pedido de compra ou é recusada.
@@ -116,6 +134,9 @@ Produtos, formas de pagamento, transportadoras, fornecedores, colaboradores, usu
 - **"Como peço férias?"**: Meu RH → Nova solicitação → Férias.
 - **"Como falo com outro setor?"**: pelo chat (canto inferior direito), pelas mensagens do pedido ou abrindo um chamado interno.
 - **"Como mando um print no chat?"**: abra a conversa e cole com Ctrl+V na caixa de mensagem, arraste o arquivo para a conversa ou clique no clipe. Dá para enviar até 5 arquivos (imagens, PDF, planilhas, documentos) de até 4 MB; imagens grandes são reduzidas sozinhas.
+- **"Por que a Análise não consegue aprovar o pedido?"**: o crédito do cliente está bloqueado (acima do limite ou com parcela vencida). A Diretoria libera no próprio pedido, ou ajuste o limite em Limites de crédito.
+- **"Por que o preço de tabela mudou?"**: o pedido usa a tabela de preço da UF de entrega e da safra vigente (Cadastros → Tabelas de preço).
+- **"Como sei se o pedido foi entregue?"**: aba Rastreio do pedido. Com a integração dos Correios ligada, a entrega é confirmada sozinha.
 - **"Como peço uma compra?"**: Operação → Compras → Nova solicitação. Acompanhe a situação na mesma tela.
 - **"Por que meu pedido de compra não foi aprovado direto?"**: ele passou do limite de aprovação; a Diretoria aprova em Compras → Pedidos de compra.
 - **"De onde vieram essas tarefas no CRM?"**: das automações do CRM (o nome da regra aparece na tarefa). Quem tem a permissão ajusta ou desliga em CRM → Automações.

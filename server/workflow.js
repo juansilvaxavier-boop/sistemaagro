@@ -108,6 +108,7 @@ async function validarPedidoCompleto(p) {
 }
 
 async function validarAnalise(p) {
+  await require('./credito').validarPedido(p);
   const consulta = await db.get(`SELECT id FROM consultas_serasa WHERE cliente_id = ? AND created_at >= datetime('now','localtime','-30 days')`, p.cliente_id);
   if (!consulta) throw new S.ErroNegocio('Faça a consulta Serasa do cliente antes de aprovar.');
   if (p.tipo_entrega === 'transportadora' && !p.frete_ignorado && !(p.transportadora_id && p.frete_valor != null)) {

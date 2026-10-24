@@ -251,6 +251,49 @@ r.post('/automacoes/executar', gestor, async (req, res) => {
   res.json(await AUT.executar({ regraId: id }));
 });
 
+// ---------- Calendário da safra ----------
+r.get('/safra/janelas', async (req, res) => {
+  const SF = require('../safra');
+  const horizonte = Math.min(Math.max(parseInt(req.query.dias, 10) || 120, 15), 365);
+  const e = escopoClientes(req.user);
+  // A abrangência do CRM usa parâmetros: incorpora os valores no SQL só como números.
+  const filtro = e.params.length ? E.clientes(req.user, 'c') : e.sql;
+  const rows = await SF.janelas({ horizonte, filtroSql: filtro });
+  await require('../lista').responderMemoria(req, res, rows, { titulo: 'Calendário da safra', exatos: ['situacao'] });
+});
+r.get('/safra/calendario', async (req, res) => {
+  await require('../safra').garantirPadroes();
+  res.json(await db.all('SELECT * FROM calendario_safra ORDER BY cultura, mes_inicio, atividade'));
+});
+function linhaCalendario(b) {
+  const mi = Number(b.mes_inicio);
+  const mf = Number(b.mes_fim);
+  if (!String(b.cultura || '').trim() || !String(b.atividade || '').trim()) throw new ErroNegocio('Informe a cultura e a atividade.');
+  if (!(mi >= 1 && mi <= 12 && mf >= 1 && mf <= 12)) throw new ErroNegocio('Meses de início e fim inválidos.');
+  const ant = Number(b.antecedencia_dias ?? 45);
+  if (!(ant >= 0 && ant <= 180)) throw new ErroNegocio('Antecedência de 0 a 180 dias.');
+  const uf = b.uf ? String(b.uf).toUpperCase() : null;
+  if (uf && !/^[A-Z]{2}$/.test(uf)) throw new ErroNegocio('UF inválida.');
+  return { cultura: String(b.cultura).trim(), atividade: String(b.atividade).trim(), uf, mes_inicio: mi, mes_fim: mf, antecedencia_dias: ant, ativo: b.ativo === undefined ? 1 : b.ativo ? 1 : 0 };
+}
+r.post('/safra/calendario', A.exige('crm.automacoes'), async (req, res) => {
+  const d = linhaCalendario(req.body || {});
+  await require('../listas').exigir('cultura', d.cultura, { rotulo: 'Cultura' });
+  res.status(201).json({ id: await db.insert('calendario_safra', d) });
+});
+r.put('/safra/calendario/:id', A.exige('crm.automacoes'), async (req, res) => {
+  const c = await db.get('SELECT * FROM calendario_safra WHERE id = ?', Number(req.params.id));
+  if (!c) throw new ErroNegocio('Linha não encontrada.', 404);
+  await db.update('calendario_safra', c.id, linhaCalendario({ ...c, ...req.body }));
+  res.json({ ok: true });
+});
+r.delete('/safra/calendario/:id', A.exige('crm.automacoes'), async (req, res) => {
+  const c = await db.get('SELECT id FROM calendario_safra WHERE id = ?', Number(req.params.id));
+  if (!c) throw new ErroNegocio('Linha não encontrada.', 404);
+  await db.remove('calendario_safra', c.id);
+  res.json({ ok: true });
+});
+
 // ---------- Clientes sem compra (reativação) ----------
 r.get('/inativos', async (req, res) => {
   const dias = Math.max(parseInt(req.query.dias, 10) || 180, 1);

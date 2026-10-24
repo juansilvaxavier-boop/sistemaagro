@@ -177,12 +177,31 @@ async function cronBackup(req, res) {
   res.json({ ok: true, ...b });
 }
 
-/** Agendador diário das automações do CRM (tarefas automáticas). */
+/**
+ * Rotina diária (Vercel Cron): automações do CRM, limites de crédito automáticos, rastreio dos pedidos em trânsito
+ * e consulta dos boletos em aberto no banco. Cada parte roda mesmo que outra falhe.
+ */
 async function cronCrm(req, res) {
   const segredo = process.env.CRON_SECRET;
   if (!segredo || req.headers.authorization !== `Bearer ${segredo}`) return res.status(401).json({ erro: 'Não autorizado.' });
-  const resumo = await db.comUsuario({ usuarioNome: 'Agendador', rota: 'cron' }, () => require('../crm-automacoes').executar());
-  res.json({ ok: true, geradas: resumo.reduce((a, x) => a + x.geradas, 0), regras: resumo.map((x) => ({ id: x.id, nome: x.nome, geradas: x.geradas })) });
+  const out = {};
+  const parte = async (nome, fn) => { try { out[nome] = await fn(); } catch (e) { out[nome] = { erro: e.message }; } };
+  await db.comUsuario({ usuarioNome: 'Agendador', rota: 'cron' }, async () => {
+    await parte('crm', async () => {
+      const resumo = await require('../crm-automacoes').executar();
+      return { geradas: resumo.reduce((a, x) => a + x.geradas, 0), regras: resumo.map((x) => ({ id: x.id, nome: x.nome, geradas: x.geradas })) };
+    });
+    await parte('credito', () => require('../credito').atualizarAutomaticos());
+    await parte('rastreio', () => require('../rastreio').atualizarTodos());
+    const empresas = await db.all('SELECT id FROM empresas');
+    await parte('boletos', async () => {
+      const B = require('../integracoes/boletos');
+      const r = { consultados: 0, baixados: 0 };
+      for (const e of empresas) { const x = await B.sincronizarAbertos(e.id); r.consultados += x.consultados; r.baixados += x.baixados; }
+      return r;
+    });
+  });
+  res.json({ ok: true, ...out, geradas: out.crm?.geradas ?? 0 });
 }
 
 module.exports = r;

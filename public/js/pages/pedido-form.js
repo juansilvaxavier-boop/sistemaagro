@@ -1,11 +1,14 @@
 // Criação e edição do pedido de venda (etapa Vendedor).
-import { get, post, put, esc, fmt, state, titulo, campo, opcoes, buscaCliente, toast, erro, ROTULOS, h } from '../core.js';
+import { get, post, put, esc, fmt, state, titulo, campo, opcoes, buscaCliente, toast, erro, ROTULOS, h, qs } from '../core.js';
 import { abrirCliente } from './clientes.js';
 
+// Preços pela tabela regional da UF de entrega: o cache depende do cliente e do endereço.
 const cachePrecos = {};
+const ctxPreco = { cliente_id: null, endereco_id: null };
 async function precosDo(produtoId) {
-  if (!cachePrecos[produtoId]) cachePrecos[produtoId] = await get(`/api/cadastros/produtos/${produtoId}/precos`);
-  return cachePrecos[produtoId];
+  const k = `${produtoId}|${ctxPreco.cliente_id || ''}|${ctxPreco.endereco_id || ''}`;
+  if (!cachePrecos[k]) cachePrecos[k] = await get(`/api/cadastros/produtos/${produtoId}/precos${qs(ctxPreco)}`);
+  return cachePrecos[k];
 }
 
 export default async function (conteudo, { params: [id] }) {
@@ -41,7 +44,7 @@ export default async function (conteudo, { params: [id] }) {
       ${campo('origem_venda', 'De onde veio a venda', { type: 'select', col: 'col-md-5', required: true, options: [['', 'Selecione…'], ...o.listas.origem_venda.map((x) => [x.valor, x.valor]).concat(ped?.origem_venda && !o.listas.origem_venda.some((x) => x.valor === ped.origem_venda) ? [[ped.origem_venda, ped.origem_venda]] : [])], value: ped?.origem_venda || '' })}
       <div class="col-12 small text-muted" id="sugestao-lavoura"></div>
     </div></div></div>
-    <div class="card mb-3"><div class="card-header py-2 d-flex align-items-center">Itens do pedido
+    <div class="card mb-3"><div class="card-header py-2 d-flex align-items-center gap-2">Itens do pedido <span class="small text-muted" id="t-tabela"></span>
       <button type="button" class="btn btn-sm btn-outline-success ms-auto" id="btn-add-item"><i class="bi bi-plus-lg"></i> Adicionar item</button></div>
       <div class="card-body p-0"><div class="table-responsive"><table class="table table-sm itens-pedido mb-0">
         <thead><tr><th>Grupo</th><th style="min-width:200px">Produto</th><th style="min-width:130px">Embalagem</th><th style="width:90px">Qtd</th><th>Un</th>
@@ -68,6 +71,7 @@ export default async function (conteudo, { params: [id] }) {
     const sel = $('[name=endereco_entrega_id]');
     sel.innerHTML = cliente.enderecos.map((e) => `<option value="${e.id}">${esc(`${e.logradouro || ''}, ${e.numero || 'S/N'} - ${e.cidade}/${e.uf}${e.zona_rural ? ' (rural)' : ''}`)}</option>`).join('') || '<option value="">Cliente sem endereço</option>';
     if (enderecoId) sel.value = enderecoId;
+    await trocarRegiao();
     // Sugestões automáticas: cultura e área do cadastro/último pedido; origem "recompra" para quem já comprou.
     const sug = [];
     const ult = cliente.ultimo_pedido;
@@ -90,6 +94,13 @@ export default async function (conteudo, { params: [id] }) {
     $('#cli-alerta').innerHTML = bl.bloqueio ? `<span class="text-danger"><i class="bi bi-shield-x"></i> Bloqueado: ${esc(bl.bloqueio.motivo)}</span>`
       : bl.alertas.length ? `<span class="text-warning"><i class="bi bi-shield-exclamation"></i> Alerta: ${esc(bl.alertas[0].motivo)}</span>` : '';
   };
+  // Cliente ou endereço novo pode mudar a tabela de preço regional: atualiza o valor de tabela dos itens.
+  async function trocarRegiao() {
+    ctxPreco.cliente_id = Number($('[name=cliente_id]').value) || null;
+    ctxPreco.endereco_id = Number($('[name=endereco_entrega_id]').value) || null;
+    for (const tr of f.querySelectorAll('#itens tr')) await aplicarPreco(tr, false);
+  }
+  $('[name=endereco_entrega_id]').addEventListener('change', () => trocarRegiao().catch(erro));
   buscaCliente($('#cli-busca'), (c) => carregarCliente(c.id).catch(erro));
   $('#btn-novo-cli').addEventListener('click', () => abrirCliente(null, (novoId) => carregarCliente(novoId)));
   $('#btn-ver-cli').addEventListener('click', () => { if (cliente) abrirCliente(cliente.id, () => carregarCliente(cliente.id, $('[name=endereco_entrega_id]').value)); });
@@ -164,12 +175,14 @@ export default async function (conteudo, { params: [id] }) {
     const formaId = Number($('[name=forma_id]').value) || null;
     const preco = d.precos.find((p) => p.embalagem_id === embId && p.forma_id === formaId) || d.precos.find((p) => p.embalagem_id === embId && !p.forma_id);
     const valor = preco?.valor || 0;
+    const anterior = tr.dataset.tabela;
     tr.dataset.tabela = valor;
+    $('#t-tabela').innerHTML = d.tabela ? `· <i class="bi bi-tag"></i> Tabela ${esc(d.tabela.nome)}${d.tabela.safra ? ` (safra ${esc(d.tabela.safra)})` : ''}${d.uf ? ` · ${esc(d.uf)}` : ''}` : (d.uf ? `· Tabela base · ${esc(d.uf)}` : '');
     tr.querySelector('[data-c=valor_tabela]').textContent = fmt.money(valor);
     tr.querySelector('[data-c=custo]').textContent = fmt.money(emb?.custo || 0);
     tr.querySelector('[data-c=unidade]').textContent = emb?.unidade || o.produtos.find((p) => p.id === Number(pid))?.unidade || '';
     const unit = tr.querySelector('[data-c=valor_unitario]');
-    if (sobrescreverUnit || unit.value === '') unit.value = valor || '';
+    if (sobrescreverUnit || unit.value === '' || (anterior !== undefined && Number(unit.value) === Number(anterior))) unit.value = valor || '';
     tr.dataset.brindes = JSON.stringify(d.brindes);
     recalcular();
   }

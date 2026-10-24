@@ -511,6 +511,29 @@ async function cardsModulos(perfil, ctx, user) {
     const c = await db.get(`SELECT COUNT(*) AS n, COALESCE(SUM(valor_total),0) AS v FROM compras WHERE empresa_id = ? AND status = 'aprovacao'`, ctx.emp);
     if (c.n || geral) out.push(money('Compras para aprovar', c.v, { icone: 'bi-bag-check', cor: c.n ? 'warning' : 'secondary', sub: `${c.n} pedido(s) de compra`, link: '#/compras/pedidos' }));
   }
+  if (can(user, 'metas') && ['vendedor', 'supervisor', 'gerente', 'diretoria', 'admin'].includes(perfil)) {
+    // Meta de valor do mês corrente: do vendedor, da equipe do supervisor ou da empresa.
+    const M = require('../metas');
+    const periodo = S.hoje().slice(0, 7);
+    const real = await M.realizado(ctx.emp, `${periodo}-01`, M.fimDoMes(periodo));
+    let escopo = 'empresa';
+    let alvo = 0;
+    let feito = M.soma(Object.values(real)).valor;
+    if (perfil === 'vendedor') { escopo = 'vendedor'; alvo = ctx.uid; feito = real[ctx.uid]?.valor || 0; }
+    if (perfil === 'supervisor') {
+      const eq = await db.get('SELECT id FROM equipes WHERE supervisor_id = ? ORDER BY id LIMIT 1', ctx.uid);
+      if (eq) {
+        escopo = 'equipe'; alvo = eq.id;
+        feito = M.soma((await db.all('SELECT id FROM usuarios WHERE equipe_id = ?', eq.id)).map((x) => real[x.id])).valor;
+      }
+    }
+    const meta = (await db.get(`SELECT meta FROM metas WHERE empresa_id = ? AND periodo = ? AND escopo = ? AND alvo_id = ? AND indicador = 'valor'`, ctx.emp, periodo, escopo, alvo))?.meta;
+    if (meta) {
+      const pct = S.r2((feito / meta) * 100);
+      const proj = M.fracaoDoMes(periodo) > 0 ? S.r2((feito / M.fracaoDoMes(periodo) / meta) * 100) : pct;
+      out.push(card('Meta do mês', `${pct.toLocaleString('pt-BR')}%`, { tipo: 'texto', icone: 'bi-bullseye', cor: proj >= 100 ? 'success' : proj >= 80 ? 'warning' : 'danger', sub: `${feito.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} de ${meta.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} · projeção ${proj.toLocaleString('pt-BR')}%`, link: '#/metas' }));
+    }
+  }
   if (['vendedor', 'supervisor', 'gerente'].includes(perfil) && can(user, 'crm')) {
     const t = await db.get(
       `SELECT COUNT(*) FILTER (WHERE vencimento <= date('now','localtime') OR vencimento IS NULL) AS hoje, COUNT(*) FILTER (WHERE vencimento < date('now','localtime')) AS atrasadas,

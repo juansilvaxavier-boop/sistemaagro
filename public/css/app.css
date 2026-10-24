@@ -634,3 +634,13 @@ code { color: var(--texto-2); background: var(--superficie-3); padding: 1px 6px;
 .automacao.inativa { opacity: .62; }
 .automacao.inativa:hover { opacity: 1; }
 .tarefas .list-group-item { padding-block: .6rem; }
+
+/* Metas */
+.meta-barra { display: flex; align-items: center; gap: .5rem; min-width: 120px; }
+.meta-barra .progress { position: relative; flex: 1; height: .5rem; overflow: visible; }
+.meta-proj { position: absolute; top: -3px; width: 2px; height: calc(100% + 6px); background: var(--bs-body-color); opacity: .55; transform: translateX(-1px); }
+.tabela-metas td { min-width: 150px; }
+/* Resultado do mês */
+.dre td, .dre th { white-space: nowrap; font-size: .82rem; }
+.dre .dre-final td { border-top: 2px solid var(--bs-border-color); }
+tr.clicavel { cursor: pointer; }

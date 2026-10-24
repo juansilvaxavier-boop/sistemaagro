@@ -54,4 +54,39 @@ async function responderLista(req, res, opts) {
   res.json(resultado);
 }
 
-module.exports = { responderLista, enviarXlsx };
+/**
+ * Mesma resposta de responderLista para linhas já calculadas em memória (telas com valores calculados):
+ * f_<coluna> (contém ou igual), ordenação, paginação e exportação.
+ */
+async function responderMemoria(req, res, linhas, { titulo, exatos = [] } = {}) {
+  let rows = linhas;
+  const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  for (const [k, v] of Object.entries(req.query)) {
+    if (!k.startsWith('f_') || v === '') continue;
+    const col = k.slice(2);
+    rows = exatos.includes(col) ? rows.filter((r) => String(r[col] ?? '') === String(v)) : rows.filter((r) => norm(r[col]).includes(norm(v)));
+  }
+  const sort = req.query.sort;
+  if (sort) {
+    const dir = req.query.dir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const x = a[sort];
+      const y = b[sort];
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'pt-BR')) * dir;
+    });
+  }
+  mascararLinhas(req.user, rows);
+  if (req.query.export === 'xlsx') {
+    const colunas = colunasExport(req) || Object.keys(rows[0] || {}).map((k) => ({ k, l: k }));
+    return enviarXlsx(res, { titulo: req.query.title || titulo, colunas, linhas: rows });
+  }
+  if (req.query.all) return res.json({ rows, total: rows.length });
+  const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 500);
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  res.json({ rows: rows.slice((page - 1) * pageSize, page * pageSize), total: rows.length, page, pageSize });
+}
+
+module.exports = { responderLista, responderMemoria, enviarXlsx };

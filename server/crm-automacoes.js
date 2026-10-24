@@ -12,6 +12,7 @@ const dataBR = (v) => (v ? String(v).slice(0, 10).split('-').reverse().join('/')
 const moeda = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const SEM_BLOQUEIO = `NOT EXISTS (SELECT 1 FROM blacklist b WHERE b.cliente_id = c.id AND b.ativo = 1 AND b.tipo = 'bloqueio') AND c.anonimizado_em IS NULL`;
 const ESTAGIOS = { prospeccao: 'Prospecção', qualificacao: 'Qualificação', proposta: 'Proposta', negociacao: 'Negociação' };
+const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '_');
 const modDias = (n) => `-${Math.max(0, Number(n) || 0)} days`;
 
 /**
@@ -124,6 +125,21 @@ const GATILHOS = {
         GROUP BY c.id`, modDias(r.dias), modDias(Number(r.dias) + 60),
     ).then((l) => l.map((x) => ({ ...x, chave: `parc:${x.cliente_id}:${x.data}` }))),
   },
+  calendario_safra: {
+    nome: 'Calendário da safra', dias: 0, rotuloDias: 'Dias de antecedência (0 = os do calendário)',
+    ajuda: 'Clientes com área da cultura cadastrada: avisa antes da janela de plantio/adubação do calendário da safra, se ainda não compraram para ela.',
+    titulo: 'Oferecer adubação para {cultura} de {cliente} ({area}): {atividade} a partir de {data}', prazo: 3,
+    variaveis: ['cliente', 'vendedor', 'cultura', 'atividade', 'area', 'data'],
+    buscar: async (r) => {
+      const hoje = S.hoje();
+      const lista = await require('./safra').janelas({ horizonte: Math.max(Number(r.dias) || 0, 200), hoje });
+      return lista.filter((j) => !j.comprou_na_janela && hoje <= j.fim && hoje >= (Number(r.dias) > 0 ? S.addDias(j.inicio, -Number(r.dias)) : j.aviso_em))
+        .map((j) => ({
+          ...j, data: j.inicio, area: j.area ? `${Number(j.area).toLocaleString('pt-BR')} ${j.medida || 'ha'}` : 'área não informada', valor: j.area || 0,
+          chave: `saf:${j.cliente_id}:${norm(j.cultura)}:${norm(j.atividade)}:${j.inicio.slice(0, 7)}`,
+        }));
+    },
+  },
   aniversario: {
     nome: 'Aniversário do cliente', dias: 0, rotuloDias: 'Dias de antecedência',
     ajuda: 'Clientes pessoa física com data de nascimento: lembra N dias antes (0 = no dia).',
@@ -152,8 +168,10 @@ const GATILHOS = {
 const PADROES = [
   ['sem_compra', 1, 30], ['pos_venda', 1, 50], ['cliente_novo', 1, 50], ['recompra_safra', 1, 50],
   ['oportunidade_parada', 1, 50], ['fechamento_previsto', 1, 50], ['proposta_sem_retorno', 1, 50],
-  ['parcela_vencida', 0, 50], ['aniversario', 0, 50],
+  ['parcela_vencida', 0, 50], ['aniversario', 0, 50], ['calendario_safra', 1, 50],
 ];
+// Regras incluídas em versões posteriores: criadas uma vez nas instalações que já tinham as padrão.
+const NOVAS = ['calendario_safra'];
 
 let semeado = false;
 async function garantirPadroes() {
@@ -166,7 +184,16 @@ async function garantirPadroes() {
         await db.insert('crm_automacoes', { nome: d.nome, gatilho: g, ativa, dias: d.dias, titulo: d.titulo, prazo_dias: d.prazo, limite, prioridade: g === 'fechamento_previsto' ? 'alta' : 'normal' }, null, { auditoria: false });
       }
       await db.run(`INSERT INTO configuracoes (chave, valor) VALUES ('crm.automacoes_semeadas', '1') ON CONFLICT (chave) DO NOTHING`);
+      for (const g of NOVAS) await db.run(`INSERT INTO configuracoes (chave, valor) VALUES (?, '1') ON CONFLICT (chave) DO NOTHING`, `crm.automacao_semeada.${g}`);
     });
+  } else {
+    for (const g of NOVAS) {
+      if (await db.get('SELECT 1 AS x FROM configuracoes WHERE chave = ?', `crm.automacao_semeada.${g}`)) continue;
+      const [, ativa, limite] = PADROES.find((x) => x[0] === g);
+      const d = GATILHOS[g];
+      await db.insert('crm_automacoes', { nome: d.nome, gatilho: g, ativa, dias: d.dias, titulo: d.titulo, prazo_dias: d.prazo, limite, prioridade: 'normal' }, null, { auditoria: false });
+      await db.run(`INSERT INTO configuracoes (chave, valor) VALUES (?, '1') ON CONFLICT (chave) DO NOTHING`, `crm.automacao_semeada.${g}`);
+    }
   }
   semeado = true;
 }

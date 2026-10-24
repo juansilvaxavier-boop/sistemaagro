@@ -10,6 +10,10 @@ const PADROES = {
   'comissao.vendedor_fora_pct': { valor: 0, rotulo: 'Vendedor: % sugerido quando o pedido está fora da política (a Diretoria decide)', tipo: 'pct' },
   'comissao.tolerancia_desconto_pct': { valor: 0, rotulo: 'Desconto máximo sobre a tabela para o pedido ficar dentro da política (%)', tipo: 'pct' },
   'comissao.gerentes': { valor: [], rotulo: 'Gerentes que recebem sobre toda venda (vazio = todos os usuários com perfil Gerente)', tipo: 'usuarios' },
+  'credito.dias_atraso_bloqueio': { valor: 15, rotulo: 'Bloquear venda a prazo quando o cliente tiver parcela vencida há mais de (dias; 0 = não bloqueia)', tipo: 'valor' },
+  'credito.sem_limite': { valor: 'liberar', rotulo: 'Cliente sem limite definido', tipo: 'opcao', opcoes: [['liberar', 'Liberar (só alerta)'], ['bloquear', 'Bloquear a venda a prazo']] },
+  'credito.meses_cobertura': { valor: 3, rotulo: 'Limite sugerido: meses de compra média que o limite cobre', tipo: 'valor' },
+  'dre.impostos_pct': { valor: 0, rotulo: 'Impostos sobre a venda (% da receita bruta) no resultado do mês', tipo: 'pct' },
   'compras.aprovacao_acima': { valor: 5000, rotulo: 'Pedido de compra acima deste valor precisa de aprovação (R$; 0 = todos precisam)', tipo: 'valor' },
 };
 
@@ -25,7 +29,7 @@ async function todas(prefixo = '') {
   return Object.entries(PADROES).filter(([chave]) => chave.startsWith(prefixo)).map(([chave, p]) => {
     let valor = p.valor;
     if (salvas[chave] != null) { try { valor = JSON.parse(salvas[chave]); } catch { valor = salvas[chave]; } }
-    return { chave, rotulo: p.rotulo, tipo: p.tipo, valor, padrao: p.valor };
+    return { chave, rotulo: p.rotulo, tipo: p.tipo, opcoes: p.opcoes, valor, padrao: p.valor };
   });
 }
 
@@ -41,6 +45,12 @@ async function definir(chave, valor, usuarioId) {
     v = Number(String(valor).replace(',', '.'));
     if (!(v >= 0)) throw new ErroNegocio(`${p.rotulo}: informe um valor maior ou igual a zero.`);
   }
+  if (p.tipo === 'opcao' && !p.opcoes.some(([o]) => o === valor)) throw new ErroNegocio(`${p.rotulo}: opção inválida.`);
+  if (p.tipo === 'valor_opcional') {
+    v = valor === '' || valor == null ? null : Number(String(valor).replace(',', '.'));
+    if (v !== null && !Number.isFinite(v)) throw new ErroNegocio(`${p.rotulo}: valor inválido.`);
+  }
+  if (p.tipo === 'texto') v = valor ? String(valor).slice(0, 200) : null;
   if (p.tipo === 'usuarios') v = [...new Set((Array.isArray(valor) ? valor : []).map(Number).filter((n) => n > 0))];
   await db.run(
     `INSERT INTO configuracoes (chave, valor, updated_at, updated_by) VALUES (?, ?, datetime('now','localtime'), ?)

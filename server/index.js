@@ -49,6 +49,11 @@ function criarApp() {
   api.use('/estoque', require('./routes/estoque'));
   api.use('/pagar', require('./routes/pagar'));
   api.use('/compras', require('./routes/compras'));
+  api.use('/metas', require('./routes/metas'));
+  api.use('/precos', require('./routes/precos'));
+  api.use('/credito', require('./routes/credito'));
+  api.use('/tesouraria', require('./routes/tesouraria'));
+  api.use('/analises', require('./routes/analises'));
   api.use('/chamados', require('./routes/chamados'));
   api.use('/propostas', require('./routes/propostas'));
   api.use('/rh', require('./routes/rh'));

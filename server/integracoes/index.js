@@ -125,11 +125,42 @@ async function linha(provedor, empresaId) {
   return db.get('SELECT * FROM integracao_contas WHERE provedor = ? AND empresa_id = ?', provedor, empresaId);
 }
 
+// A tela Administração → Integrações (tabela "integracoes") guarda as credenciais por chave própria.
+// Enquanto ela for a tela em uso, as credenciais ativas de lá alimentam estes adaptadores.
+const LEGADO = {
+  correios: { chave: 'frete_correios', config: { usuario: 'usuario', cartao_postagem: 'numero_cartao_postagem' }, segredos: { codigo_acesso: 'senha' } },
+  braspress: { chave: 'frete_braspress', config: { usuario: 'usuario', cnpj_remetente: 'cnpj_remetente' }, segredos: { senha: 'senha' } },
+  rodonaves: { chave: 'frete_rodonaves', config: { usuario: 'codigo_cliente' }, segredos: { senha: 'api_key' } },
+  cora: { chave: 'boleto_cora', config: { client_id: 'client_id' }, segredos: { certificado: 'certificado', chave_privada: 'chave_privada' } },
+  invoicy: { chave: 'nfe_emissao_invocy', config: {}, segredos: { chave_acesso: 'api_token' } },
+  nfe_entrada: { chave: 'nfe_consulta', config: {}, segredos: { api_key: 'api_key' } },
+};
+async function legado(provedor) {
+  const m = LEGADO[provedor];
+  if (!m) return null;
+  const r = await db.get('SELECT * FROM integracoes WHERE chave = ? AND ativo = 1', m.chave).catch(() => null);
+  if (!r?.credenciais) return null;
+  let c;
+  try { c = JSON.parse(r.credenciais); } catch { return null; }
+  return {
+    modo: r.ambiente === 'producao' ? 'producao' : 'homologacao',
+    config: Object.fromEntries(Object.entries(m.config).map(([k, x]) => [k, c[x]]).filter(([, v]) => v)),
+    segredos: Object.fromEntries(Object.entries(m.segredos).map(([k, x]) => [k, c[x]]).filter(([, v]) => v)),
+  };
+}
+
 /** Configuração completa (com segredos) para uso interno. */
 async function carregar(provedor, empresaId) {
   const def = CATALOGO[provedor];
   if (!def) throw new ErroNegocio('Integração desconhecida.', 404);
   const l = await linha(provedor, empresaId);
+  if (!l || l.modo === 'desligada') {
+    const lg = await legado(provedor);
+    if (lg) {
+      const padrao = Object.fromEntries(def.campos.filter((c) => c.padrao !== undefined && !c.segredo).map((c) => [c.k, c.padrao]));
+      return { provedor, empresaId, def, modo: lg.modo, config: { ...padrao, ...parse(l?.config), ...lg.config }, segredos: lg.segredos, estado: parse(l?.estado), linha: l, legado: true };
+    }
+  }
   const padrao = Object.fromEntries(def.campos.filter((c) => c.padrao !== undefined && !c.segredo).map((c) => [c.k, c.padrao]));
   return {
     provedor, empresaId, def, modo: l?.modo || 'desligada', config: { ...padrao, ...parse(l?.config) }, segredos: cofre.decifrar(l?.segredos),
@@ -272,12 +303,15 @@ async function testar(provedor, empresaId, usuarioId) {
 
 async function ativas(categoria, empresaId) {
   const ids = Object.entries(CATALOGO).filter(([, d]) => d.categoria === categoria).map(([k]) => k);
-  const rows = await db.all(`SELECT provedor FROM integracao_contas WHERE empresa_id = ? AND modo <> 'desligada'`, empresaId);
-  return rows.map((x) => x.provedor).filter((p) => ids.includes(p));
+  const out = [];
+  for (const p of ids) if ((await modo(p, empresaId)) !== 'desligada') out.push(p);
+  return out;
 }
 
 async function modo(provedor, empresaId) {
-  return (await linha(provedor, empresaId))?.modo || 'desligada';
+  const m = (await linha(provedor, empresaId))?.modo;
+  if (m && m !== 'desligada') return m;
+  return (await legado(provedor))?.modo || 'desligada';
 }
 
 module.exports = { MODOS, CATALOGO, ADAPTADORES, carregar, publico, salvar, executar, testar, ativas, modo, erroApi, registrarLog };

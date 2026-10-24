@@ -3,6 +3,8 @@
 // Saída: [{ servico, valor, prazo_dias, codigo }].
 const { erroApi } = require('./index');
 
+const S_hoje = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+const addDias = (iso, n) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const dig = (v) => String(v || '').replace(/\D/g, '');
 const numBR = (v) => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/\./g, '').replace(',', '.')));
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -71,6 +73,29 @@ const correios = {
     }
     return out;
   },
+};
+
+/** Rastreio de objeto (SRO): eventos do mais novo para o mais antigo; entregue = evento BDE/BDI/BDR tipo 01. */
+correios.rastrear = async (ctx, codigo, { embarque, prazo } = {}) => {
+  if (ctx.simulacao) {
+    // Exemplo coerente com a data de embarque: postado → em trânsito → saiu para entrega → entregue.
+    const base = (embarque || S_hoje()).slice(0, 10);
+    const passos = [[0, 'Objeto postado', false], [1, 'Objeto em trânsito - por favor aguarde', false], [Math.max(2, (prazo || 4) - 1), 'Objeto saiu para entrega ao destinatário', false], [prazo || 4, 'Objeto entregue ao destinatário', true]];
+    const hoje = S_hoje();
+    return passos.map(([d, descricao, entregue]) => ({ data: `${addDias(base, d)} 10:00:00`, descricao, local: entregue ? 'Destino' : 'Centro de distribuição', entregue }))
+      .filter((e) => e.data.slice(0, 10) <= hoje).reverse();
+  }
+  const token = await tokenCorreios(ctx);
+  const r = await ctx.http({ url: `${ctx.base(CORREIOS)}/srorastro/v1/objetos/${encodeURIComponent(codigo)}?resultado=T`, bearer: token });
+  ctx.ultimoStatus = r.status;
+  if (r.status >= 300) throw erroApi(r, 'Correios (rastreio)');
+  const obj = r.json?.objetos?.[0];
+  if (obj?.mensagem && !obj?.eventos) throw new Error(obj.mensagem);
+  return (obj?.eventos || []).map((e) => ({
+    data: String(e.dtHrCriado || '').replace('T', ' ').slice(0, 19), descricao: e.descricao || e.codigo,
+    local: [e.unidade?.endereco?.cidade, e.unidade?.endereco?.uf].filter(Boolean).join('/') || null,
+    entregue: ['BDE', 'BDI', 'BDR'].includes(e.codigo) && String(e.tipo) === '01',
+  }));
 };
 
 // ---------- Rodonaves ----------

@@ -74,25 +74,23 @@ r.get('/:id', async (req, res) => {
 const CAMPOS = ['cliente_id', 'vendedor_id', 'oportunidade_id', 'forma_id', 'condicao_id', 'validade', 'prazo_entrega', 'tipo_entrega',
   'frete_valor', 'condicoes_comerciais', 'observacao', 'cultura', 'area_ha', 'origem_venda'];
 
-async function precoTabela(produtoId, embalagemId, formaId) {
-  return (await db.get('SELECT valor FROM produto_precos WHERE produto_id = ? AND COALESCE(embalagem_id,0) = ? AND forma_id = ?', produtoId, embalagemId || 0, formaId || 0))?.valor
-    ?? (await db.get('SELECT valor FROM produto_precos WHERE produto_id = ? AND COALESCE(embalagem_id,0) = ? AND forma_id IS NULL', produtoId, embalagemId || 0))?.valor ?? 0;
-}
-
 async function salvarItens(propostaId, itens, formaId) {
   await db.run('DELETE FROM proposta_itens WHERE proposta_id = ?', propostaId);
+  // Preço de tabela pela tabela regional vigente para a UF do cliente.
+  const P = require('../precos');
+  const t = await P.tabelaVigente(await P.ufDe((await db.get('SELECT cliente_id FROM propostas WHERE id = ?', propostaId)).cliente_id));
   for (const it of itens) {
     const prod = await db.get('SELECT * FROM produtos WHERE id = ? AND ativo = 1', it.produto_id);
     if (!prod) throw new ErroNegocio('Produto inválido na proposta.');
     const qtd = Number(it.quantidade);
     if (!(qtd > 0)) throw new ErroNegocio(`Quantidade inválida para ${prod.nome}.`);
     const emb = it.embalagem_id ? await db.get('SELECT * FROM produto_embalagens WHERE id = ? AND produto_id = ?', it.embalagem_id, prod.id) : null;
-    const tabela = await precoTabela(prod.id, emb?.id, formaId);
+    const tabela = (await P.preco({ produtoId: prod.id, embalagemId: emb?.id, formaId, tabela: t })).valor;
     const brinde = it.brinde ? 1 : 0;
     const unit = brinde ? 0 : S.r2(it.valor_unitario ?? tabela);
     await db.insert('proposta_itens', {
       proposta_id: propostaId, produto_id: prod.id, embalagem_id: emb?.id, quantidade: qtd, unidade: emb?.unidade || prod.unidade,
-      valor_tabela: tabela, custo_embalagem: emb?.custo || 0, valor_unitario: unit, valor_total: S.r2(qtd * unit), brinde,
+      valor_tabela: tabela, custo_embalagem: emb?.custo || 0, valor_unitario: unit, valor_total: S.r2(qtd * unit), brinde, tabela_preco_id: t?.id || null,
     }, null, { auditoria: false });
   }
 }

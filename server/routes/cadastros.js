@@ -360,10 +360,14 @@ r.get('/opcoes', async (req, res) => {
   });
 });
 
+// Com cliente (e endereço), os preços já vêm pela tabela regional vigente para a UF de entrega.
 r.get('/produtos/:id/precos', async (req, res) => {
+  const P = require('../precos');
+  const uf = req.query.uf ? String(req.query.uf).toUpperCase() : await P.ufDe(req.query.cliente_id, req.query.endereco_id);
+  const pr = await P.precosDoProduto(Number(req.params.id), uf);
   res.json({
     embalagens: await db.all('SELECT * FROM produto_embalagens WHERE produto_id = ? ORDER BY quantidade', req.params.id),
-    precos: await db.all('SELECT * FROM produto_precos WHERE produto_id = ?', req.params.id),
+    precos: pr.precos, tabela: pr.tabela, uf,
     brindes: await db.all('SELECT b.*, p.nome AS brinde_nome FROM produto_brindes b JOIN produtos p ON p.id = b.brinde_produto_id WHERE b.produto_id = ?', req.params.id),
   });
 });

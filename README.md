@@ -196,6 +196,21 @@ vencida e aniversário. Cada regra tem dias, título com variáveis, prazo, prio
 equipe, valor mínimo e limite por dia; *Simular* mostra o resultado sem criar. Uma chave única por regra impede tarefa repetida. Na aba
 *Tarefas*, concluir uma tarefa pode registrar a interação na linha do tempo do cliente. Regras em `server/crm-automacoes.js`.
 
+### Gestão comercial e financeira
+
+| Função | Onde | O que faz |
+|---|---|---|
+| **Metas e campanhas** | *Comercial → Metas e campanhas* | Metas do mês por empresa, equipe e vendedor (valor, volume, pedidos e clientes novos) com realizado, % e projeção de fechamento; copiar do mês anterior com reajuste; ranking mensal; campanhas por período, produto/grupo e equipe, com meta individual, prêmio e placar. Card "Meta do mês" no painel. Permissões *Ver metas* e *Definir metas*. |
+| **Tabelas de preço por região e safra** | *Gestão → Cadastros → Tabelas de preço* | Tabela por UF (ou Brasil inteiro) e safra, com vigência, prioridade, ajuste % sobre o preço base e preço próprio por embalagem (com margem sobre o custo); reajuste em lote e cópia para a próxima safra. O pedido e a proposta usam a tabela vigente para a UF de entrega, e a política comercial compara com ela. Regras em `server/precos.js`. |
+| **Limite de crédito automático** | *Financeiro → Contas a receber → Limites de crédito* | Exposição = parcelas em aberto + pedidos em andamento. Venda a prazo acima do limite ou de cliente com parcela vencida há mais de 15 dias (ajustável em *Regras de bloqueio*) não passa da Análise sem liberação da Diretoria, com justificativa no histórico. Limite sugerido (média mensal comprada × meses de cobertura, ajustado por score Serasa e atrasos; zero com blacklist ou negativação), aplicação em lote e limite automático recalculado todo dia. Regras em `server/credito.js`. |
+| **Tesouraria** | *Financeiro → Tesouraria* | **Fluxo de caixa** realizado + previsto por dia, semana ou mês, com saldo de partida do extrato ou informado e menor saldo do período. **Resultado do mês** (DRE gerencial): receita das notas, devoluções, impostos (% configurável), custo dos produtos, comissões, fretes e despesas por categoria. **Conciliação bancária**: importação de OFX sem duplicar, casamento com parcelas e contas a pagar pelo valor e pela data, baixa automática dos pares seguros, lançamento de tarifas como despesa e ignorar com motivo. Regras em `server/tesouraria.js`. |
+| **Calendário da safra** | *CRM → Calendário da safra* | Janelas de plantio e adubação por cultura (e UF), já preenchidas e ajustáveis, cruzadas com as áreas de cultivo dos clientes. Nova automação do CRM "Calendário da safra" cria a tarefa para o vendedor dentro da antecedência, se o cliente ainda não comprou para a janela. |
+| **Rastreio automático** | Aba *Rastreio* do pedido e botão *Atualizar rastreios* na fila Em trânsito | Consulta o código de rastreio nos Correios (pela integração; também em modo simulação), grava os eventos e, quando a entrega é confirmada, conclui o pedido sozinho. Roda todo dia. Transportadoras sem API de rastreio continuam com a entrega manual. |
+| **Análises** | *Gestão → Análises* | **Curva ABC** de clientes e produtos por faturamento ou margem (3 a 24 meses); **previsão de demanda** por embalagem (sazonalidade do ano anterior com tendência + média recente) comparada com disponível e compras, gerando a solicitação de compra; **recompra atrasada**: clientes que passaram do intervalo habitual entre compras. |
+
+A rotina diária (`/api/cron/crm`, Vercel Cron às 06h30, protegida por `CRON_SECRET`) roda as automações do CRM, recalcula os limites
+automáticos, consulta os rastreios e os boletos em aberto.
+
 ### RH e DP
 
 | Tela | O que faz |

@@ -1,4 +1,4 @@
-import { DataTable, state, titulo, abas, pode, fmt, esc, btnAcao, ROTULOS } from '../core.js';
+import { DataTable, state, titulo, abas, pode, fmt, esc, btnAcao, ROTULOS, post, tentar, toast } from '../core.js';
 import { abrirPedido } from './pedido-detalhe.js';
 
 const C = {
@@ -94,7 +94,8 @@ const PROGRESSAO = ['numero', 'data', 'documento', 'cliente', 'valor', 'vendedor
 export default async function (conteudo, { params: [etapa] }) {
   const info = state.me.etapas[etapa];
   if (!info) { conteudo.innerHTML = '<div class="vazio">Etapa inválida.</div>'; return; }
-  const extra = etapa === 'venda' && pode('pedido.criar') ? '<a href="#/pedido/novo" class="btn btn-success btn-sm"><i class="bi bi-plus-lg"></i> Novo pedido</a>' : '';
+  const extra = etapa === 'venda' && pode('pedido.criar') ? '<a href="#/pedido/novo" class="btn btn-success btn-sm"><i class="bi bi-plus-lg"></i> Novo pedido</a>'
+    : etapa === 'transito' && pode('fila.transito') ? '<button class="btn btn-outline-primary btn-sm" data-rastrear-todos><i class="bi bi-geo"></i> Atualizar rastreios</button>' : '';
   const pagina = titulo(conteudo, info.label, info.icone, extra);
   const listaAbas = etapa === 'transito'
     ? [{ id: 'pedidos', label: 'Pedidos em trânsito', html: '<div id="t-pedidos"></div>' }, { id: 'entregues', label: 'Pedidos entregues', html: '<div id="t-entregues"></div>' }]
@@ -120,6 +121,13 @@ export default async function (conteudo, { params: [etapa] }) {
       painel: camposFiltro('transito'), chave: 'fila-entregues',
     }));
   }
+  conteudo.querySelector('[data-rastrear-todos]')?.addEventListener('click', async () => {
+    const r = await tentar(() => post('/api/pedidos/rastreio/atualizar'));
+    if (r) {
+      toast(`${r.consultados} pedido(s) consultado(s), ${r.entregues} entregue(s).${r.sem_integracao ? ` ${r.sem_integracao} sem rastreio integrado.` : ''}`);
+      tabelas.forEach((t) => t.reload());
+    }
+  });
   const etapas = Object.entries(state.me.etapas).map(([k, v]) => [k, v.label]);
   tabelas.push(new DataTable(pagina.querySelector('#t-prog'), {
     url: '/api/pedidos/progressao',

@@ -1,7 +1,7 @@
 // Propostas comerciais: orçamento com preço de tabela, impressão para o cliente, aceite e conversão em pedido.
 import {
   get, post, put, del, esc, fmt, state, titulo, campo, opcoes, buscaCliente, toast, erro, tentar, ROTULOS, h, DataTable, modal, pode,
-  pedirTexto, confirmar, kpi, tabelaSimples,
+  pedirTexto, confirmar, kpi, tabelaSimples, qs,
 } from '../core.js';
 
 export const STATUS = {
@@ -12,10 +12,13 @@ const bdg = (v) => { const [l, c] = STATUS[v] || [v, 'secondary']; return `<span
 const hoje = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 10);
 const somaDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
+// Preços pela tabela regional da UF de entrega: o cache depende do cliente e do endereço.
 const cachePrecos = {};
+const ctxPreco = { cliente_id: null, endereco_id: null };
 async function precosDo(produtoId) {
-  if (!cachePrecos[produtoId]) cachePrecos[produtoId] = await get(`/api/cadastros/produtos/${produtoId}/precos`);
-  return cachePrecos[produtoId];
+  const k = `${produtoId}|${ctxPreco.cliente_id || ''}|${ctxPreco.endereco_id || ''}`;
+  if (!cachePrecos[k]) cachePrecos[k] = await get(`/api/cadastros/produtos/${produtoId}/precos${qs(ctxPreco)}`);
+  return cachePrecos[k];
 }
 
 export default async function (conteudo, { modo, params }) {
@@ -174,7 +177,13 @@ async function formulario(conteudo, id) {
       <button type="submit" class="btn btn-success" data-depois="enviar"><i class="bi bi-send"></i> Salvar e marcar como enviada</button></div></form>`;
   const f = pagina.querySelector('#form-prop');
   const $ = (s) => f.querySelector(s);
-  buscaCliente($('#cli-busca'), (c) => { $('[name=cliente_id]').value = c.id; });
+  // O cliente define a UF e, com ela, a tabela de preço regional.
+  const trocarCliente = async (id) => {
+    ctxPreco.cliente_id = id || null;
+    for (const tr of tbody.querySelectorAll('tr')) await aplicarPreco(tr, false);
+  };
+  ctxPreco.cliente_id = prop?.cliente_id || null;
+  buscaCliente($('#cli-busca'), (c) => { $('[name=cliente_id]').value = c.id; trocarCliente(c.id).catch(erro); });
 
   const condicoes = (valor) => {
     const lista = o.condicoes.filter((c) => c.forma_id === Number($('[name=forma_id]').value));
@@ -223,10 +232,12 @@ async function formulario(conteudo, id) {
     const embId = Number(tr.querySelector('[data-c=embalagem_id]').value) || null;
     const formaId = Number($('[name=forma_id]').value) || null;
     const preco = d.precos.find((x) => x.embalagem_id === embId && x.forma_id === formaId) || d.precos.find((x) => x.embalagem_id === embId && !x.forma_id);
+    const anterior = tr.dataset.tabela;
     tr.dataset.tabela = preco?.valor || 0;
     tr.querySelector('[data-c=tabela]').textContent = fmt.money(preco?.valor || 0);
+    tr.querySelector('[data-c=tabela]').title = d.tabela ? `Tabela ${d.tabela.nome}${d.uf ? ` · ${d.uf}` : ''}` : 'Tabela base';
     const unit = tr.querySelector('[data-c=valor_unitario]');
-    if (sobrescrever || unit.value === '') unit.value = preco?.valor || '';
+    if (sobrescrever || unit.value === '' || (anterior !== undefined && Number(unit.value) === Number(anterior))) unit.value = preco?.valor || '';
     recalcular();
   }
   function recalcular() {

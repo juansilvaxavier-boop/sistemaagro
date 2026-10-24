@@ -116,10 +116,9 @@ r.put('/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
-r.post('/:id/pagar', async (req, res) => {
-  const c = await carregar(req);
+/** Baixa (total ou parcial) de uma conta a pagar. Usado pela tela e pela conciliação bancária. */
+async function pagarConta(c, b = {}) {
   if (c.status !== 'a_pagar') throw new ErroNegocio('Conta não está em aberto.');
-  const b = req.body || {};
   const juros = S.r2(b.juros ?? c.juros);
   const desconto = S.r2(b.desconto ?? c.desconto);
   const devido = S.r2(c.valor + juros - desconto - (c.valor_pago || 0));
@@ -132,6 +131,12 @@ r.post('/:id/pagar', async (req, res) => {
     juros, desconto, valor_pago: total, data_pagamento: b.data_pagamento || S.hoje(), status: quitou ? 'pago' : 'a_pagar',
     forma_pagamento: b.forma_pagamento || c.forma_pagamento, banco_id: b.banco_id || c.banco_id,
   });
+  return { quitou };
+}
+
+r.post('/:id/pagar', async (req, res) => {
+  const c = await carregar(req);
+  const { quitou } = await pagarConta(c, req.body || {});
   res.json({ ok: true, quitou });
 });
 
@@ -163,3 +168,4 @@ module.exports = r;
 module.exports.STATUS_SQL = STATUS_SQL;
 module.exports.SALDO_SQL = SALDO_SQL;
 module.exports.lancarContas = lancarContas;
+module.exports.pagarConta = pagarConta;
