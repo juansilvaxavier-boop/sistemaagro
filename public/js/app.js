@@ -116,6 +116,7 @@ const MENU = [
           { href: '#/auditoria', l: 'Auditoria', i: 'bi-journal-text', p: 'auditoria' },
           { href: '#/backups', l: 'Backups', i: 'bi-database-check', p: 'backup' },
           { href: '#/importacao', l: 'Importar dados', i: 'bi-cloud-upload', p: 'importacao' },
+          { href: '#/integracoes', l: 'Integrações', i: 'bi-plug', p: 'integracoes' },
         ],
       },
     ],
@@ -184,6 +185,7 @@ const SUBTITULOS = {
   '#/auditoria': 'Quem fez o quê e quando, com antes e depois de cada alteração.',
   '#/backups': 'Cópias de segurança do banco de dados.',
   '#/importacao': 'Carga dos dados do sistema anterior, com conferência e opção de desfazer.',
+  '#/integracoes': 'Credenciais de APIs externas: consulta de NF-e, cotação de frete, boleto e emissão de nota fiscal.',
   '#/privacidade': 'Termo de uso, política de privacidade e direitos do titular (LGPD).',
   '#/perfil': 'Sua foto, dados de contato e preferências.',
 };
@@ -222,6 +224,7 @@ const ROTAS = [
   [/^#\/relatorios\/([\w-]+)$/, () => import('./pages/relatorios.js')],
   [/^#\/perfil$/, () => import('./pages/perfil.js')],
   [/^#\/(auditoria|backups|privacidade|importacao)$/, () => import('./pages/seguranca.js')],
+  [/^#\/integracoes$/, () => import('./pages/integracoes.js')],
 ];
 
 const $ = (s) => document.querySelector(s);

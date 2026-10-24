@@ -1004,6 +1004,19 @@ CREATE TABLE IF NOT EXISTS configuracoes (
   updated_by integer REFERENCES usuarios(id)
 );
 
+-- Credenciais e parâmetros de integrações com APIs externas (NF-e, frete, boleto bancário).
+CREATE TABLE IF NOT EXISTS integracoes (
+  chave text PRIMARY KEY,
+  ativo integer NOT NULL DEFAULT 0,
+  ambiente text NOT NULL DEFAULT 'homologacao',
+  credenciais text,                                  -- JSON com os campos de cada integração (tokens, usuário, senha...)
+  status text,                                        -- null | 'ok' | 'erro'
+  status_mensagem text,
+  status_testado_em text,
+  updated_at text DEFAULT sq_datetime('now', 'localtime'),
+  updated_by integer REFERENCES usuarios(id)
+);
+
 -- Colaborador: vínculo, ponto, carga horária, documentos e equipe
 ALTER TABLE colaboradores ADD COLUMN IF NOT EXISTS bate_ponto integer DEFAULT 1;
 ALTER TABLE colaboradores ADD COLUMN IF NOT EXISTS carga_horaria integer;          -- horas por semana
