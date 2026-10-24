@@ -75,6 +75,7 @@ async function seed() {
     const expedidor = await u('Lucas Pereira', 'expedicao', 'expedicao');
     const financeiro = await u('Marina Costa', 'financeiro', 'financeiro');
     const rhUser = await u('Patrícia Nunes', 'rh', 'rh');
+    const comprador = await u('Rafael Moura', 'compras', 'compras');
     const todos = await db.all('SELECT id, perfil FROM usuarios');
     for (const x of todos) {
       await db.run('INSERT INTO usuario_empresas VALUES (?, ?)', x.id, emp1);
@@ -499,12 +500,68 @@ async function seed() {
       await db.run('UPDATE propostas SET valor_produtos = ?, valor_desconto = ?, valor_total = ? WHERE id = ?', S.r2(soma), desc, S.r2(soma - desc), prid);
     }
 
+    // ---------- Compras ----------
+    {
+      const mp = fornecedores['Matéria-prima'];
+      const prodA = produtos[0];
+      const prodB = produtos[1];
+      const sol = async (solicitante, departamento, urgencia, status, itens, dias, justificativa) => {
+        const id = await db.insert('compra_solicitacoes', {
+          numero: await db.nextSeq('compra_solicitacao', 1), empresa_id: emp1, solicitante_id: solicitante, departamento, urgencia, status, justificativa,
+          necessidade_em: S.addDias(hojeIso, 7), created_at: ts(S.addDias(hojeIso, -dias), 9),
+        });
+        const ids = [];
+        for (const it of itens) ids.push(await db.insert('compra_solicitacao_itens', { solicitacao_id: id, ...it }));
+        return { id, itens: ids };
+      };
+      await sol(producao, 'Produção', 'urgente', 'aberta', [{ produto_id: prodA.id, embalagem_id: prodA.embs[0].id, descricao: `${prodA.nome} · reposição`, categoria: 'Matéria-prima', unidade: prodA.embs[0].un, quantidade: 200 }], 1,
+        'Estoque abaixo do mínimo para a produção da semana.');
+      const s2 = await sol(expedidor, 'Logística', 'normal', 'cotacao', [
+        { descricao: 'Palete de madeira PBR 1,00 x 1,20 m', categoria: 'Material de consumo', unidade: 'UN', quantidade: 120 },
+        { descricao: 'Filme stretch 500 mm x 25 micras', categoria: 'Embalagem', unidade: 'ROLO', quantidade: 40 },
+      ], 3, 'Reposição de material da doca de expedição.');
+      for (const [k, f] of [fornecedores['Embalagem'][0], fornecedores['Manutenção'][0]].entries()) {
+        const precos = k === 0 ? [42.5, 31.9] : [45, 29.5];
+        const q = await db.insert('compra_cotacoes', {
+          solicitacao_id: s2.id, fornecedor_id: f, frete: k === 0 ? 180 : 0, prazo_entrega_dias: 5 + k * 3, parcelas: 1, prazo_pagamento_dias: 28,
+          total: S.r2(120 * precos[0] + 40 * precos[1] + (k === 0 ? 180 : 0)), usuario_id: comprador,
+        });
+        for (const [i, item] of s2.itens.entries()) await db.insert('compra_cotacao_itens', { cotacao_id: q, item_id: item, preco_unitario: precos[i] });
+      }
+      const compra = async (status, fornecedor, itens, extra = {}) => {
+        const valor = S.r2(itens.reduce((a, i) => a + i.quantidade * i.preco_unitario, 0));
+        const id = await db.insert('compras', {
+          numero: await db.nextSeq('compra', 1), empresa_id: emp1, fornecedor_id: fornecedor, status, comprador_id: comprador, categoria: 'Matéria-prima', parcelas: 2, prazo_pagamento_dias: 28,
+          valor_itens: valor, valor_total: valor, created_at: ts(S.addDias(hojeIso, -int(2, 10)), 10), ...extra,
+        });
+        for (const i of itens) await db.insert('compra_itens', { compra_id: id, ...i });
+        return id;
+      };
+      const itemMp = (prod, q, fator = 1) => ({ produto_id: prod.id, embalagem_id: prod.embs[0].id, descricao: `${prod.nome} · ${prod.embs[0].un}`, unidade: prod.embs[0].un, quantidade: q, preco_unitario: S.r2(prod.embs[0].custo * fator) });
+      await compra('aprovacao', mp[0], [itemMp(prodA, 300), itemMp(prodB, 150)]);
+      await compra('enviada', mp[1 % mp.length], [itemMp(prodB, 80, 0.98)], { aprovador_id: diretor, aprovado_em: ts(S.addDias(hojeIso, -6), 15), enviada_em: ts(S.addDias(hojeIso, -6), 16), previsao_entrega: S.addDias(hojeIso, -1) });
+      await compra('rascunho', mp[0], [itemMp(prodA, 50, 1.02)]);
+      // Histórico: compras recebidas nos últimos meses (para o painel de compras).
+      for (let k = 1; k <= 8; k++) {
+        const dia = S.addDias(hojeIso, -k * 21);
+        const prod = pick(produtos);
+        const forn = k % 3 === 0 ? fornecedores['Embalagem'][0] : pick(mp);
+        const itens = [itemMp(prod, int(40, 200), 0.95 + k / 100)];
+        const id = await compra('recebida', forn, itens.map((i) => ({ ...i, quantidade_recebida: i.quantidade })), {
+          aprovador_id: diretor, aprovado_em: ts(S.addDias(dia, -5), 14), enviada_em: ts(S.addDias(dia, -5), 15), previsao_entrega: dia,
+          categoria: k % 3 === 0 ? 'Embalagem' : 'Matéria-prima', created_at: ts(S.addDias(dia, -6), 10),
+        });
+        const valor = S.r2(itens[0].quantidade * itens[0].preco_unitario);
+        await db.insert('compra_recebimentos', { compra_id: id, nota_fiscal: String(int(10000, 99999)), data: dia, valor, usuario_id: producao, created_at: ts(dia, 11) });
+      }
+    }
+
     // ---------- RH e DP ----------
     const DEPTO = { admin: 'TI', diretoria: 'Diretoria', supervisor: 'Comercial', gerente: 'Comercial', vendedor: 'Comercial', analista: 'Crédito', producao: 'Produção',
-      faturamento: 'Faturamento', expedicao: 'Logística', financeiro: 'Financeiro', rh: 'RH' };
+      faturamento: 'Faturamento', expedicao: 'Logística', financeiro: 'Financeiro', rh: 'RH', compras: 'Compras' };
     const CARGO = { admin: 'Analista de sistemas', diretoria: 'Diretor geral', supervisor: 'Supervisor de vendas', gerente: 'Gerente comercial', vendedor: 'Vendedor externo', analista: 'Analista de crédito',
-      producao: 'Encarregado de produção', faturamento: 'Assistente de faturamento', expedicao: 'Encarregado de expedição', financeiro: 'Analista financeiro', rh: 'Analista de RH' };
-    const SAL = { admin: 6200, diretoria: 18000, supervisor: 7200, gerente: 11000, vendedor: 3400, analista: 4600, producao: 3900, faturamento: 3100, expedicao: 3300, financeiro: 5200, rh: 4800 };
+      producao: 'Encarregado de produção', faturamento: 'Assistente de faturamento', expedicao: 'Encarregado de expedição', financeiro: 'Analista financeiro', rh: 'Analista de RH', compras: 'Comprador' };
+    const SAL = { admin: 6200, diretoria: 18000, supervisor: 7200, gerente: 11000, vendedor: 3400, analista: 4600, producao: 3900, faturamento: 3100, expedicao: 3300, financeiro: 5200, rh: 4800, compras: 4400 };
     const colabDe = {};
     for (const x of await db.all('SELECT id, nome, perfil, email, equipe_id FROM usuarios ORDER BY id')) {
       const adm = S.addDias(hojeIso, -int(120, 2400));

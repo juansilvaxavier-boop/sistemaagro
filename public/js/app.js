@@ -27,7 +27,7 @@ const MENU = [
           { href: '#/fila/expedicao', l: 'Expedição', i: 'bi-box-seam', p: 'fila.expedicao', etapa: 'expedicao' },
           { href: '#/fila/transito', l: 'Em trânsito', i: 'bi-truck', p: 'fila.transito', etapa: 'transito' },
           { href: '#/fila/devolucao', l: 'Devolução', i: 'bi-arrow-return-left', p: 'fila.devolucao', etapa: 'devolucao' },
-          { href: '#/mensagens', l: 'Mensagens', i: 'bi-bell' },
+          { href: '#/mensagens', l: 'Mensagens', i: 'bi-bell', se: () => pode('fila') || pode('pedido') },
         ],
       },
       { href: '#/propostas', l: 'Propostas', i: 'bi-file-earmark-text', p: 'propostas' },
@@ -39,7 +39,7 @@ const MENU = [
           { href: '#/arquivos', l: 'Arquivos', i: 'bi-folder2-open', p: 'arquivos' },
         ],
       },
-      { href: '#/crm', l: 'CRM', i: 'bi-diagram-3', p: 'crm' },
+      { href: '#/crm', l: 'CRM', i: 'bi-diagram-3', p: 'crm', etapa: 'crm_tarefas' },
     ],
   },
   {
@@ -67,7 +67,19 @@ const MENU = [
       },
     ],
   },
-  { grupo: 'Operação', itens: [{ href: '#/estoque', l: 'Estoque', i: 'bi-boxes', p: 'estoque' }] },
+  {
+    grupo: 'Operação', itens: [
+      { href: '#/estoque', l: 'Estoque', i: 'bi-boxes', p: 'estoque' },
+      {
+        l: 'Compras', i: 'bi-bag', abas: [
+          { href: '#/compras', l: 'Solicitações', i: 'bi-inbox', p: 'compras', etapa: 'compras_solicitacoes' },
+          { href: '#/compras/pedidos', l: 'Pedidos de compra', i: 'bi-bag-check', p: 'compras', se: () => pode('compras.comprar') || pode('compras.aprovar'), etapa: 'compras_aprovacao' },
+          { href: '#/compras/receber', l: 'Receber mercadoria', i: 'bi-truck', p: 'compras.receber', etapa: 'compras_receber' },
+          { href: '#/compras/reposicao', l: 'Reposição de estoque', i: 'bi-arrow-repeat', p: 'compras', se: () => pode('estoque') },
+        ],
+      },
+    ],
+  },
   {
     grupo: 'Gestão', itens: [
       {
@@ -115,7 +127,7 @@ const abasDe = (item) => (item.abas || [item]).filter(liberado);
 /** Todas as telas liberadas (uma por aba), para a busca e o assistente. */
 const telasLiberadas = () => MENU.flatMap((g) => g.itens.flatMap((it) => abasDe(it).map((a) => ({ ...a, grupo: it.abas ? it.l : g.grupo, area: it }))));
 // Telas fora do menu, mas de uma área (o título e a barra de abas da área aparecem nelas).
-const ROTAS_DA_AREA = [[/^#\/pedido\//, 'Pedidos'], [/^#\/crm\/cliente\//, 'CRM'], [/^#\/cobranca\/cliente\//, 'Contas a receber'], [/^#\/relatorios\//, 'Relatórios'], [/^#\/propostas\//, 'Propostas']];
+const ROTAS_DA_AREA = [[/^#\/pedido\//, 'Pedidos'], [/^#\/crm\//, 'CRM'], [/^#\/cobranca\/cliente\//, 'Contas a receber'], [/^#\/relatorios\//, 'Relatórios'], [/^#\/propostas\//, 'Propostas']];
 
 // Descrição curta de cada tela, mostrada abaixo do título.
 const SUBTITULOS = {
@@ -138,6 +150,11 @@ const SUBTITULOS = {
   '#/financeiro/notas': 'Notas fiscais de saída emitidas, canceladas e cartas de correção.',
   '#/estoque': 'Saldos por produto e embalagem, lotes, movimentações e inventário.',
   '#/crm': 'Oportunidades, tarefas e interações com os clientes.',
+  '#/crm/tarefas': 'Suas tarefas do CRM, inclusive as criadas pelas automações.',
+  '#/compras': 'Pedidos de compra dos setores, cotação com fornecedores e acompanhamento.',
+  '#/compras/pedidos': 'Pedidos de compra: aprovação, envio ao fornecedor e situação da entrega.',
+  '#/compras/receber': 'Conferência da mercadoria com a nota do fornecedor: entra no estoque e gera a conta a pagar.',
+  '#/compras/reposicao': 'Itens abaixo do estoque mínimo com a quantidade sugerida para comprar.',
   '#/cobranca': 'Carteira em atraso, agenda de contatos, ações e acordos.',
   '#/arquivos': 'Documentos anexados a clientes e pedidos.',
   '#/mensagens': 'Avisos trocados entre os setores sobre os pedidos.',
@@ -190,6 +207,9 @@ const ROTAS = [
   [/^#\/meu-rh$/, () => import('./pages/meu-rh.js')],
   [/^#\/crm$/, () => import('./pages/crm.js')],
   [/^#\/crm\/cliente\/(\d+)$/, () => import('./pages/crm.js'), 'cliente'],
+  [/^#\/crm\/(tarefas|automacoes)$/, () => import('./pages/crm.js')],
+  [/^#\/compras$/, () => import('./pages/compras.js')],
+  [/^#\/compras\/(pedidos|receber|reposicao)$/, () => import('./pages/compras.js')],
   [/^#\/cobranca$/, () => import('./pages/cobranca.js')],
   [/^#\/cobranca\/cliente\/(\d+)$/, () => import('./pages/cobranca.js'), 'cliente'],
   [/^#\/arquivos$/, () => import('./pages/arquivos.js')],
@@ -479,6 +499,11 @@ export async function atualizarContadores() {
     const c = await get('/api/pedidos/contagem');
     if (pode('chamados')) c.chamados = (await get('/api/chamados/contagem')).para_mim;
     if (pode('rh')) c.rh_solicitacoes = (await get('/api/rh/solicitacoes?f_status=aberta&pageSize=1')).total;
+    if (pode('crm')) c.crm_tarefas = (await get('/api/crm/contagem')).para_hoje;
+    if (pode('compras')) {
+      const k = await get('/api/compras/contagem');
+      Object.assign(c, { compras_solicitacoes: k.solicitacoes, compras_aprovacao: k.aprovacao, compras_receber: k.receber });
+    }
     ultimosContadores = c;
     pintarContadores();
     const m = await get('/api/mensagens/nao-lidas');
@@ -523,6 +548,31 @@ function conectarEventos() {
     toast(d.texto, 'info', 'RH');
     avisar('RH', d.texto, pode('rh') ? '/#/rh/solicitacoes' : '/#/meu-rh');
     atualizarContadores();
+  });
+  fonte.addEventListener('crm_tarefas', (e) => {
+    const d = JSON.parse(e.data);
+    const texto = `${d.n} nova(s) tarefa(s) automática(s) do CRM para você.`;
+    toast(texto, 'info', 'CRM');
+    avisar('CRM', texto, '/#/crm/tarefas');
+    atualizarContadores();
+  });
+  fonte.addEventListener('compras', (e) => {
+    const d = JSON.parse(e.data);
+    const fmtV = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const [texto, url] = {
+      solicitacao: [`Solicitação de compra ${d.numero} (${d.urgencia}) de ${d.por}.`, '/#/compras'],
+      solicitacao_recusada: [`Sua solicitação de compra ${d.numero} foi recusada: ${d.motivo}`, '/#/compras'],
+      solicitacao_atendida: [`Sua solicitação ${d.numero} virou o pedido de compra ${d.compra}.`, '/#/compras'],
+      aprovacao: [`Pedido de compra ${d.numero} (${fmtV(d.valor)}) aguarda sua aprovação.`, '/#/compras/pedidos'],
+      aprovada: [`Pedido de compra ${d.numero} aprovado.`, '/#/compras/pedidos'],
+      reprovada: [`Pedido de compra ${d.numero} devolvido: ${d.motivo}`, '/#/compras/pedidos'],
+      a_receber: [`Pedido de compra ${d.numero} aprovado: aguarde a mercadoria.`, '/#/compras/receber'],
+      conta_compra: [`Recebimento da compra ${d.numero} lançou ${fmtV(d.valor)} em contas a pagar.`, '/#/pagar'],
+    }[d.tipo] || ['Compras atualizadas.', '/#/compras'];
+    toast(texto, 'info', 'Compras');
+    avisar('Compras', texto, url);
+    atualizarContadores();
+    window.dispatchEvent(new CustomEvent('compras-atualizadas', { detail: d }));
   });
   fonte.addEventListener('chat_lida', (e) => chat.lidas(JSON.parse(e.data)));
 }

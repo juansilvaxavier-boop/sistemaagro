@@ -3,7 +3,7 @@ import {
   get, post, put, esc, fmt, titulo, DataTable, modal, campo, opcoes, lerForm, preencherForm, toast, tentar, state, btnAcao, pedirTexto, confirmar, kpi,
 } from '../core.js';
 
-export const CATEGORIAS = ['Matéria-prima', 'Embalagem', 'Frete', 'Folha', 'Impostos', 'Aluguel', 'Energia', 'Manutenção', 'Serviços', 'Outros'];
+export const CATEGORIAS = ['Matéria-prima', 'Embalagem', 'Material de consumo', 'Frete', 'Folha', 'Impostos', 'Aluguel', 'Energia', 'Manutenção', 'Serviços', 'Outros'];
 const STATUS = {
   a_pagar: ['A pagar', 'primary'], vence_hoje: ['Vence hoje', 'warning'], vencida: ['Vencida', 'danger'], pago: ['Pago', 'success'], cancelado: ['Cancelado', 'secondary'],
 };

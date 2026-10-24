@@ -177,6 +177,15 @@ async function cronBackup(req, res) {
   res.json({ ok: true, ...b });
 }
 
+/** Agendador diário das automações do CRM (tarefas automáticas). */
+async function cronCrm(req, res) {
+  const segredo = process.env.CRON_SECRET;
+  if (!segredo || req.headers.authorization !== `Bearer ${segredo}`) return res.status(401).json({ erro: 'Não autorizado.' });
+  const resumo = await db.comUsuario({ usuarioNome: 'Agendador', rota: 'cron' }, () => require('../crm-automacoes').executar());
+  res.json({ ok: true, geradas: resumo.reduce((a, x) => a + x.geradas, 0), regras: resumo.map((x) => ({ id: x.id, nome: x.nome, geradas: x.geradas })) });
+}
+
 module.exports = r;
 module.exports.cronBackup = cronBackup;
+module.exports.cronCrm = cronCrm;
 module.exports.gerarBackup = gerarBackup;

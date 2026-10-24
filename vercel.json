@@ -17,6 +17,10 @@
     {
       "path": "/api/cron/backup",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/crm",
+      "schedule": "30 9 * * *"
     }
   ],
   "regions": [

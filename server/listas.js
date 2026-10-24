@@ -21,11 +21,11 @@ const CARGOS = [
   ['Assistente de faturamento', 'Faturamento'], ['Analista fiscal', 'Faturamento'], ['Encarregado de produção', 'Produção'], ['Operador de produção', 'Produção'],
   ['Auxiliar de produção', 'Produção'], ['Técnico de qualidade', 'Produção'], ['Encarregado de expedição', 'Logística'], ['Auxiliar de expedição', 'Logística'],
   ['Conferente', 'Logística'], ['Motorista', 'Logística'], ['Engenheiro agrônomo', 'Agronomia'], ['Técnico agrícola', 'Agronomia'],
-  ['Assistente administrativo', 'Administrativo'], ['Recepcionista', 'Administrativo'], ['Analista de sistemas', 'TI'], ['Analista de RH', 'RH'], ['Assistente de DP', 'RH'],
+  ['Comprador', 'Compras'], ['Assistente de compras', 'Compras'], ['Assistente administrativo', 'Administrativo'], ['Recepcionista', 'Administrativo'], ['Analista de sistemas', 'TI'], ['Analista de RH', 'RH'], ['Assistente de DP', 'RH'],
   ['Estagiário', 'Administrativo'], ['Jovem aprendiz', 'Administrativo'],
 ];
 const PADROES = {
-  departamento: ['Comercial', 'Diretoria', 'Crédito', 'Financeiro', 'Faturamento', 'Produção', 'Logística', 'Agronomia', 'Administrativo', 'RH', 'TI'],
+  departamento: ['Comercial', 'Diretoria', 'Crédito', 'Financeiro', 'Faturamento', 'Produção', 'Logística', 'Compras', 'Agronomia', 'Administrativo', 'RH', 'TI'],
   cultura: ['Soja', 'Milho', 'Café', 'Cana-de-açúcar', 'Algodão', 'Feijão', 'Trigo', 'Arroz', 'Sorgo', 'Citros', 'Batata', 'Tomate', 'Hortaliças', 'Frutas',
     'Banana', 'Uva', 'Cacau', 'Mandioca', 'Eucalipto', 'Pastagem', 'Outras'],
   origem_venda: ['Cliente da carteira (recompra)', 'Prospecção ativa do vendedor', 'Prospecção automática (campanha/CRM)', 'Tráfego pago (Google/Meta)',

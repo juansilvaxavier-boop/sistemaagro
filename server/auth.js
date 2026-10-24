@@ -18,6 +18,7 @@ const PERFIS = {
   expedicao: 'Expedição',
   financeiro: 'Financeiro',
   rh: 'RH / DP',
+  compras: 'Compras',
 };
 
 // Todas as permissões que podem ser liberadas individualmente para um usuário.
@@ -35,7 +36,11 @@ const CATALOGO = [
     ['clientes', 'Ver clientes'], ['clientes.editar', 'Cadastrar e editar clientes'], ['clientes.historico', 'Histórico de compra'],
     ['blacklist', 'Ver blacklist'], ['blacklist.editar', 'Incluir e excluir da blacklist'], ['serasa', 'Consultar Serasa'],
   ]],
-  ['Relacionamento', [['crm', 'CRM'], ['cobranca', 'Cobrança'], ['arquivos', 'Arquivos e documentos']]],
+  ['Relacionamento', [['crm', 'CRM'], ['crm.automacoes', 'Configurar automações do CRM (tarefas automáticas)'], ['cobranca', 'Cobrança'], ['arquivos', 'Arquivos e documentos']]],
+  ['Compras', [
+    ['compras.solicitar', 'Solicitar compras e acompanhar as próprias solicitações'], ['compras.comprar', 'Cotar com fornecedores e emitir pedidos de compra'],
+    ['compras.aprovar', 'Aprovar pedidos de compra e definir o limite de aprovação'], ['compras.receber', 'Receber mercadoria (entrada no estoque e conta a pagar)'],
+  ]],
   ['Estoque e expedição', [['estoque', 'Ver estoque'], ['estoque.movimentar', 'Lançar entradas, saídas e inventário'], ['etiquetas', 'Imprimir etiquetas de envio']]],
   ['Financeiro', [
     ['financeiro.parcelas', 'Gestão de parcelas'], ['financeiro.lancamentos', 'Descontos e créditos'], ['financeiro.comissoes', 'Revisar comissões'],
@@ -65,22 +70,26 @@ const PERMISSOES = {
   vendedor: ['dashboard', 'chat', 'chamados', 'propostas', 'fila.venda', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico', 'crm', 'arquivos', 'relatorios.vendas', 'lgpd.dados'],
   supervisor: [
     'dashboard', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
-    'blacklist', 'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
+    'blacklist', 'serasa', 'crm', 'compras.solicitar', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
   gerente: [
     'dashboard', 'dashboard.todos', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
-    'blacklist', 'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
+    'blacklist', 'serasa', 'crm', 'crm.automacoes', 'compras.solicitar', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
   analista: [
     'dashboard', 'chat', 'chamados', 'fila.analise', 'clientes', 'clientes.editar', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
-  producao: ['dashboard', 'chat', 'chamados', 'fila.producao', 'arquivos', 'estoque', 'estoque.movimentar', 'relatorios.estoque'],
-  faturamento: ['dashboard', 'chat', 'chamados', 'estoque', 'etiquetas', 'fila.faturamento', 'clientes', 'clientes.historico', 'serasa', 'financeiro.notas', 'arquivos', 'relatorios.financeiro', 'lgpd.dados'],
-  expedicao: ['dashboard', 'chat', 'chamados', 'fila.expedicao', 'fila.transito', 'cadastros.transportadora', 'arquivos', 'estoque', 'estoque.movimentar', 'etiquetas', 'relatorios.estoque'],
-  rh: ['dashboard', 'chat', 'chamados', 'rh', 'rh.gerir', 'rh.folha', 'cadastros.colaborador', 'cadastros.listas', 'lgpd.dados', 'arquivos'],
+  producao: ['dashboard', 'chat', 'chamados', 'fila.producao', 'arquivos', 'estoque', 'estoque.movimentar', 'relatorios.estoque', 'compras.solicitar', 'compras.receber'],
+  faturamento: ['dashboard', 'chat', 'chamados', 'estoque', 'etiquetas', 'fila.faturamento', 'clientes', 'clientes.historico', 'serasa', 'financeiro.notas', 'arquivos', 'relatorios.financeiro', 'lgpd.dados', 'compras.solicitar'],
+  expedicao: ['dashboard', 'chat', 'chamados', 'fila.expedicao', 'fila.transito', 'cadastros.transportadora', 'arquivos', 'estoque', 'estoque.movimentar', 'etiquetas', 'relatorios.estoque', 'compras.solicitar', 'compras.receber'],
+  rh: ['dashboard', 'chat', 'chamados', 'rh', 'rh.gerir', 'rh.folha', 'cadastros.colaborador', 'cadastros.listas', 'lgpd.dados', 'arquivos', 'compras.solicitar'],
+  compras: [
+    'dashboard', 'chat', 'chamados', 'compras.solicitar', 'compras.comprar', 'compras.receber', 'cadastros.fornecedor', 'cadastros.listas', 'estoque', 'estoque.movimentar',
+    'relatorios.estoque',
+  ],
   financeiro: [
-    'dashboard', 'chat', 'chamados', 'financeiro.pagar', 'cadastros.fornecedor', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
+    'dashboard', 'chat', 'chamados', 'financeiro.pagar', 'cadastros.fornecedor', 'compras.solicitar', 'compras.comprar', 'fila.cobranca', 'fila.devolucao', 'clientes', 'clientes.historico', 'blacklist', 'blacklist.editar',
     'serasa', 'crm', 'arquivos', 'cobranca', 'financeiro.parcelas', 'financeiro.lancamentos', 'financeiro.comissoes',
     'financeiro.devolucoes', 'financeiro.negativados', 'financeiro.notas', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],

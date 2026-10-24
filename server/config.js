@@ -10,6 +10,7 @@ const PADROES = {
   'comissao.vendedor_fora_pct': { valor: 0, rotulo: 'Vendedor: % sugerido quando o pedido está fora da política (a Diretoria decide)', tipo: 'pct' },
   'comissao.tolerancia_desconto_pct': { valor: 0, rotulo: 'Desconto máximo sobre a tabela para o pedido ficar dentro da política (%)', tipo: 'pct' },
   'comissao.gerentes': { valor: [], rotulo: 'Gerentes que recebem sobre toda venda (vazio = todos os usuários com perfil Gerente)', tipo: 'usuarios' },
+  'compras.aprovacao_acima': { valor: 5000, rotulo: 'Pedido de compra acima deste valor precisa de aprovação (R$; 0 = todos precisam)', tipo: 'valor' },
 };
 
 async function obter(chave) {
@@ -19,9 +20,9 @@ async function obter(chave) {
   try { return JSON.parse(r.valor); } catch { return r.valor; }
 }
 
-async function todas() {
+async function todas(prefixo = '') {
   const salvas = Object.fromEntries((await db.all('SELECT chave, valor FROM configuracoes')).map((x) => [x.chave, x.valor]));
-  return Object.entries(PADROES).map(([chave, p]) => {
+  return Object.entries(PADROES).filter(([chave]) => chave.startsWith(prefixo)).map(([chave, p]) => {
     let valor = p.valor;
     if (salvas[chave] != null) { try { valor = JSON.parse(salvas[chave]); } catch { valor = salvas[chave]; } }
     return { chave, rotulo: p.rotulo, tipo: p.tipo, valor, padrao: p.valor };
@@ -35,6 +36,10 @@ async function definir(chave, valor, usuarioId) {
   if (p.tipo === 'pct') {
     v = Number(String(valor).replace(',', '.'));
     if (!(v >= 0 && v <= 100)) throw new ErroNegocio(`${p.rotulo}: informe um percentual entre 0 e 100.`);
+  }
+  if (p.tipo === 'valor') {
+    v = Number(String(valor).replace(',', '.'));
+    if (!(v >= 0)) throw new ErroNegocio(`${p.rotulo}: informe um valor maior ou igual a zero.`);
   }
   if (p.tipo === 'usuarios') v = [...new Set((Array.isArray(valor) ? valor : []).map(Number).filter((n) => n > 0))];
   await db.run(

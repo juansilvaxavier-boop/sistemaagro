@@ -31,6 +31,7 @@ function criarApp() {
     }
   });
   app.get('/api/cron/backup', (req, res, next) => require('./routes/admin').cronBackup(req, res).catch(next));
+  app.get('/api/cron/crm', (req, res, next) => require('./routes/admin').cronCrm(req, res).catch(next));
   app.use('/api/auth', require('./routes/auth'));
   const api = express.Router();
   api.use(A.autenticado());
@@ -47,6 +48,7 @@ function criarApp() {
   api.use('/chat', require('./routes/chat'));
   api.use('/estoque', require('./routes/estoque'));
   api.use('/pagar', require('./routes/pagar'));
+  api.use('/compras', require('./routes/compras'));
   api.use('/chamados', require('./routes/chamados'));
   api.use('/propostas', require('./routes/propostas'));
   api.use('/rh', require('./routes/rh'));

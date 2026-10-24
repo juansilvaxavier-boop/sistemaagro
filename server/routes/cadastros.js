@@ -326,11 +326,12 @@ r.post('/listas', A.exige('cadastros.listas'), async (req, res) => res.status(20
 r.put('/listas/:id', A.exige('cadastros.listas'), async (req, res) => res.json({ id: await L.salvar(req.params.id, req.body || {}) }));
 
 // ---------- Configurações (regras de comissão) ----------
-r.get('/config', A.exige('config.comissao'), async (req, res) => res.json(await CFG.todas()));
+r.get('/config', A.exige('config.comissao'), async (req, res) => res.json(await CFG.todas('comissao.')));
 r.put('/config', A.exige('config.comissao'), async (req, res) => {
   const b = req.body || {};
+  if (Object.keys(b).some((k) => !k.startsWith('comissao.'))) throw new ErroNegocio('Configuração desconhecida.');
   await db.tx(async () => { for (const [k, v] of Object.entries(b)) await CFG.definir(k, v, req.user.id); });
-  res.json(await CFG.todas());
+  res.json(await CFG.todas('comissao.'));
 });
 
 // ---------- Listas de apoio (combos) ----------

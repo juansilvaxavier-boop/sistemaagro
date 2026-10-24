@@ -64,11 +64,11 @@ function addMeses(iso, n) {
 }
 
 /**
- * Inclusão. "parcelas" divide o valor em N vencimentos mensais;
- * "recorrente" repete o mesmo valor por N meses (aluguel, energia...).
+ * Lança uma conta (ou N parcelas mensais). "parcelas" divide o valor; "recorrente" repete o mesmo valor por N meses.
+ * Usado pela tela de contas a pagar e pelo recebimento de compras.
  */
-r.post('/', async (req, res) => {
-  const b = req.body || {};
+async function lancarContas(dados, { empresaId, usuarioId }) {
+  const b = dados;
   if (!String(b.descricao || '').trim()) throw new ErroNegocio('Informe a descrição.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(b.vencimento || '')) throw new ErroNegocio('Informe o vencimento.');
   const valor = S.r2(b.valor);
@@ -76,7 +76,7 @@ r.post('/', async (req, res) => {
   const n = Math.min(Math.max(parseInt(b.parcelas || b.repeticoes, 10) || 1, 1), 120);
   const recorrente = !!b.recorrente;
   const grupo = n > 1 ? crypto.randomUUID() : null;
-  const ids = await db.tx(async () => {
+  return db.tx(async () => {
     const out = [];
     let restante = valor;
     for (let i = 0; i < n; i++) {
@@ -89,11 +89,15 @@ r.post('/', async (req, res) => {
         descricao: n > 1 && !recorrente ? `${b.descricao} (${i + 1}/${n})` : b.descricao,
         competencia: recorrente ? venc.slice(0, 7) : b.competencia || venc.slice(0, 7),
         vencimento: venc, valor: v, parcela: i + 1, total_parcelas: n, grupo,
-        empresa_id: req.empresaId, usuario_id: req.user.id, status: 'a_pagar',
+        empresa_id: empresaId, usuario_id: usuarioId, status: 'a_pagar', compra_id: b.compra_id, recebimento_id: b.recebimento_id,
       }));
     }
     return out;
   });
+}
+
+r.post('/', async (req, res) => {
+  const ids = await lancarContas(req.body || {}, { empresaId: req.empresaId, usuarioId: req.user.id });
   res.status(201).json({ id: ids[0], ids });
 });
 
@@ -158,3 +162,4 @@ r.post('/:id/cancelar', async (req, res) => {
 module.exports = r;
 module.exports.STATUS_SQL = STATUS_SQL;
 module.exports.SALDO_SQL = SALDO_SQL;
+module.exports.lancarContas = lancarContas;

@@ -1,7 +1,7 @@
 // CRM: visão 360º do cliente, interações, funil de oportunidades, tarefas e clientes sem compra.
 import {
   get, post, put, esc, fmt, titulo, abas, DataTable, modal, campo, opcoes, lerForm, toast, tentar, state, badge, ROTULOS,
-  tabelaSimples, buscaCliente, pedirTexto, erro, qs, pode, humanizar,
+  tabelaSimples, buscaCliente, pedirTexto, erro, qs, pode, humanizar, del, confirmar,
 } from '../core.js';
 import { abrirCliente } from './clientes.js';
 import { painelArquivos } from './arquivos.js';
@@ -21,10 +21,13 @@ export default async function (conteudo, { modo, params }) {
   pagina.innerHTML = abas([
     { id: 'funil', label: '<i class="bi bi-kanban"></i> Funil de oportunidades', html: '<div id="crm-funil"></div>' },
     { id: 'int', label: '<i class="bi bi-chat-square-text"></i> Interações', html: '<div id="crm-int"></div>' },
-    { id: 'tar', label: '<i class="bi bi-check2-square"></i> Minhas tarefas', html: '<div id="crm-tar"></div>' },
+    { id: 'tar', label: '<i class="bi bi-check2-square"></i> Tarefas', html: '<div id="crm-tar"></div>' },
     { id: 'clientes', label: '<i class="bi bi-people"></i> Clientes', html: '<div id="crm-cli"></div>' },
     { id: 'inativos', label: '<i class="bi bi-hourglass-bottom"></i> Sem compra (reativação)', html: '<div class="mb-2 d-flex gap-2 align-items-center small">Sem comprar há pelo menos <select class="form-select form-select-sm w-auto" id="dias-inat"><option>90</option><option selected>180</option><option>365</option></select> dias</div><div id="crm-inat"></div>' },
+    ...(pode('crm.automacoes') ? [{ id: 'aut', label: '<i class="bi bi-robot"></i> Automações', html: '<div id="crm-aut"></div>' }] : []),
   ], 'crm');
+  const abrir = { tarefas: 'tar', automacoes: 'aut' }[params?.[0]];
+  if (abrir) pagina.querySelector(`[data-bs-target$="-${abrir}"]`)?.click();
 
   const funil = pagina.querySelector('#crm-funil');
   const carregarFunil = async () => {
@@ -71,20 +74,8 @@ export default async function (conteudo, { modo, params }) {
     ],
   });
 
-  const tar = pagina.querySelector('#crm-tar');
-  const carregarTarefas = async () => {
-    const rows = await get('/api/crm/tarefas');
-    const hoje = new Date().toISOString().slice(0, 10);
-    tar.innerHTML = `<form class="row g-2 mb-3" id="f-tarefa"><div class="col-md-6"><input class="form-control form-control-sm" name="titulo" placeholder="Nova tarefa" required></div>
-      <div class="col-md-3"><input type="date" class="form-control form-control-sm" name="vencimento"></div><div class="col-md-3"><button class="btn btn-sm btn-success w-100">Adicionar</button></div></form>
-      ${rows.length ? `<ul class="list-group">${rows.map((t) => `<li class="list-group-item d-flex align-items-center gap-2 small ${t.concluida ? 'text-decoration-line-through text-muted' : ''}">
-        <input type="checkbox" class="form-check-input" data-t="${t.id}" ${t.concluida ? 'checked' : ''}>
-        <div class="flex-grow-1">${esc(t.titulo)} ${t.cliente ? `· <a href="#/crm/cliente/${t.cliente_id}">${esc(t.cliente)}</a>` : ''}</div>
-        <span class="${!t.concluida && t.vencimento && t.vencimento < hoje ? 'text-danger fw-semibold' : ''}">${fmt.date(t.vencimento)}</span></li>`).join('')}</ul>` : '<div class="vazio">Nenhuma tarefa.</div>'}`;
-    tar.querySelectorAll('[data-t]').forEach((c) => c.addEventListener('change', async () => { await tentar(() => put(`/api/crm/tarefas/${c.dataset.t}`, { concluida: c.checked ? 1 : 0 })); carregarTarefas(); }));
-    tar.querySelector('#f-tarefa').addEventListener('submit', async (e) => { e.preventDefault(); if (await tentar(() => post('/api/crm/tarefas', lerForm(e.target)), 'Tarefa criada.')) carregarTarefas(); });
-  };
-  carregarTarefas().catch(erro);
+  tarefas(pagina.querySelector('#crm-tar'));
+  if (pode('crm.automacoes')) automacoes(pagina.querySelector('#crm-aut'));
 
   new DataTable(pagina.querySelector('#crm-cli'), {
     url: '/api/clientes', title: 'Clientes CRM', sort: 'nome', dir: 'asc',
@@ -207,3 +198,232 @@ async function cliente360(conteudo, id) {
   conteudo.querySelector('[data-a=cad]').addEventListener('click', () => abrirCliente(id, recarregar));
 }
 
+
+// ---------- Tarefas (manuais e automáticas) ----------
+const PRIORIDADE = { alta: ['Alta', 'danger'], normal: ['Normal', 'secondary'], baixa: ['Baixa', 'light'] };
+const hojeIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 10);
+
+function tarefas(el) {
+  const equipe = state.me.usuario.perfil !== 'vendedor';
+  let ver = 'abertas';
+  let daEquipe = false;
+  el.innerHTML = `<form class="row g-2 mb-3" data-nova>
+      <div class="col-md-5"><input class="form-control form-control-sm" name="titulo" placeholder="Nova tarefa" required></div>
+      <div class="col-md-3"><input class="form-control form-control-sm" data-cli placeholder="Cliente (opcional)" autocomplete="off"></div>
+      <div class="col-md-2"><input type="date" class="form-control form-control-sm" name="vencimento" value="${hojeIso()}"></div>
+      <div class="col-md-2"><button class="btn btn-sm btn-success w-100"><i class="bi bi-plus-lg"></i> Adicionar</button></div></form>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+      <div class="painel-periodos" role="group" aria-label="Mostrar">
+        <button type="button" class="ativo" data-ver="abertas">Abertas</button><button type="button" data-ver="hoje">Para hoje</button>
+        <button type="button" data-ver="auto">Automáticas</button><button type="button" data-ver="feitas">Concluídas</button></div>
+      ${equipe ? '<div class="form-check form-switch small mb-0"><input class="form-check-input" type="checkbox" id="tar-equipe" data-equipe><label class="form-check-label" for="tar-equipe">Da equipe</label></div>' : ''}
+      <span class="ms-auto small text-muted" data-total></span></div>
+    <div data-lista></div>`;
+  let cliente = null;
+  buscaCliente(el.querySelector('[data-cli]'), (c) => { cliente = c.id; });
+  const lista = el.querySelector('[data-lista]');
+  const carregar = async () => {
+    const rows = await get('/api/crm/tarefas' + (daEquipe ? '?todas=1' : ''));
+    const hoje = hojeIso();
+    const filtradas = rows.filter((t) => ({
+      abertas: !t.concluida, hoje: !t.concluida && (!t.vencimento || t.vencimento <= hoje), auto: !t.concluida && t.automacao_id, feitas: !!t.concluida,
+    })[ver]);
+    el.querySelector('[data-total]').textContent = `${filtradas.length} tarefa(s)`;
+    const vinculo = (t) => [
+      t.cliente ? `<a href="#/crm/cliente/${t.cliente_id}">${esc(t.cliente)}</a>` : '',
+      t.pedido ? `<a href="#" data-pedido="${t.pedido_id}">Pedido ${t.pedido}</a>` : '',
+      t.oportunidade ? `<span><i class="bi bi-kanban"></i> ${esc(t.oportunidade)}</span>` : '',
+      t.proposta ? `<a href="#" data-proposta="${t.proposta_id}">Proposta ${t.proposta}</a>` : '',
+    ].filter(Boolean).join(' · ');
+    lista.innerHTML = filtradas.length ? `<ul class="list-group tarefas">${filtradas.map((t) => {
+      const atrasada = !t.concluida && t.vencimento && t.vencimento < hoje;
+      const [pl, pc] = PRIORIDADE[t.prioridade] || PRIORIDADE.normal;
+      return `<li class="list-group-item d-flex gap-2 align-items-start ${t.concluida ? 'text-muted' : ''}">
+        <input type="checkbox" class="form-check-input mt-1" data-t="${t.id}" ${t.concluida ? 'checked' : ''} aria-label="Concluir">
+        <div class="flex-grow-1 min-w-0"><div class="${t.concluida ? 'text-decoration-line-through' : 'fw-semibold'}">${esc(t.titulo)}</div>
+          ${t.descricao ? `<div class="small">${esc(t.descricao)}</div>` : ''}
+          <div class="small text-muted d-flex flex-wrap gap-2">${vinculo(t)}
+            ${t.automacao ? `<span class="badge text-bg-info-subtle text-info-emphasis" title="Criada pela automação"><i class="bi bi-robot"></i> ${esc(t.automacao)}</span>` : ''}
+            ${daEquipe ? `<span><i class="bi bi-person"></i> ${esc(t.responsavel || '')}</span>` : ''}</div></div>
+        <div class="text-end small text-nowrap">${t.prioridade !== 'normal' ? `<span class="badge text-bg-${pc}">${pl}</span><br>` : ''}
+          <span class="${atrasada ? 'text-danger fw-semibold' : ''}">${t.vencimento ? fmt.date(t.vencimento) : 'Sem data'}</span>
+          ${t.concluida ? '' : `<br><button class="btn btn-link btn-sm p-0" data-adiar="${t.id}">Reagendar</button>`}</div></li>`;
+    }).join('')}</ul>` : '<div class="vazio"><i class="bi bi-check2-all"></i>Nenhuma tarefa aqui.</div>';
+    lista.querySelectorAll('[data-t]').forEach((c) => c.addEventListener('change', () => {
+      const t = rows.find((x) => x.id === Number(c.dataset.t));
+      if (!c.checked) return tentar(() => put(`/api/crm/tarefas/${t.id}`, { concluida: 0 })).then(carregar);
+      concluir(t, carregar, () => { c.checked = false; });
+    }));
+    lista.querySelectorAll('[data-pedido]').forEach((a) => a.addEventListener('click', async (e) => {
+      e.preventDefault();
+      (await import('./pedido-detalhe.js')).abrirPedido(Number(a.dataset.pedido));
+    }));
+    lista.querySelectorAll('[data-proposta]').forEach((a) => a.addEventListener('click', async (e) => {
+      e.preventDefault();
+      (await import('./propostas.js')).abrirProposta(Number(a.dataset.proposta));
+    }));
+    lista.querySelectorAll('[data-adiar]').forEach((b) => b.addEventListener('click', () => {
+      const t = rows.find((x) => x.id === Number(b.dataset.adiar));
+      modal({
+        title: 'Reagendar tarefa', size: 'md',
+        body: `<form class="row g-2">${campo('vencimento', 'Nova data', { type: 'date', col: 'col-md-6', value: t.vencimento || hojeIso(), required: true })}
+          ${campo('prioridade', 'Prioridade', { type: 'select', col: 'col-md-6', value: t.prioridade, options: Object.entries(PRIORIDADE).map(([k, [l]]) => [k, l]) })}</form>`,
+        buttons: [{ label: 'Salvar', onClick: async ({ body }) => { await put(`/api/crm/tarefas/${t.id}`, lerForm(body.querySelector('form'))); toast('Tarefa reagendada.'); carregar(); } }],
+      });
+    }));
+  };
+  el.querySelectorAll('[data-ver]').forEach((b) => b.addEventListener('click', () => {
+    ver = b.dataset.ver;
+    el.querySelectorAll('[data-ver]').forEach((x) => x.classList.toggle('ativo', x === b));
+    carregar().catch(erro);
+  }));
+  el.querySelector('[data-equipe]')?.addEventListener('change', (e) => { daEquipe = e.target.checked; carregar().catch(erro); });
+  el.querySelector('[data-nova]').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (await tentar(() => post('/api/crm/tarefas', { ...lerForm(e.target), cliente_id: cliente }), 'Tarefa criada.')) {
+      e.target.reset();
+      e.target.querySelector('[name=vencimento]').value = hojeIso();
+      cliente = null;
+      carregar();
+    }
+  });
+  carregar().catch(erro);
+}
+
+/** Concluir a tarefa; com cliente, já registra a interação (aparece na linha do tempo do CRM). */
+function concluir(t, aoSalvar, aoCancelar) {
+  let salvo = false;
+  modal({
+    title: 'Concluir tarefa', size: 'md',
+    body: `<p class="fw-semibold mb-2">${esc(t.titulo)}</p>${t.cliente_id ? `<form class="row g-2">
+      <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" id="reg-int" checked><label class="form-check-label" for="reg-int">Registrar a interação com ${esc(t.cliente)}</label></div></div>
+      ${campo('tipo', 'Como foi o contato', { type: 'select', col: 'col-md-5', options: TIPOS.map((x) => [x, ROTULOS.tipo_acao[x]]) })}
+      ${campo('descricao', 'Resultado', { type: 'textarea', col: 'col-12' })}</form>` : '<p class="small text-muted mb-0">Marcar como concluída?</p>'}`,
+    onClose: () => { if (!salvo) aoCancelar?.(); },
+    buttons: [{ label: 'Concluir', onClick: async ({ body }) => {
+      const f = body.querySelector('form');
+      const comInt = f && body.querySelector('#reg-int').checked;
+      await put(`/api/crm/tarefas/${t.id}`, { concluida: 1, ...(comInt ? { interacao: lerForm(f) } : {}) });
+      salvo = true;
+      toast(comInt ? 'Tarefa concluída e interação registrada.' : 'Tarefa concluída.');
+      aoSalvar?.();
+    } }],
+  });
+}
+
+// ---------- Automações (regras que criam tarefas sozinhas) ----------
+const RESP = { vendedor: 'Vendedor do cliente / responsável da oportunidade', supervisor: 'Supervisor da equipe do vendedor', usuario: 'Um usuário fixo' };
+
+async function automacoes(el) {
+  const carregar = async () => {
+    const { regras, gatilhos } = await get('/api/crm/automacoes');
+    const g = Object.fromEntries(gatilhos.map((x) => [x.id, x]));
+    el.innerHTML = `<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <div class="small text-muted flex-grow-1">As regras rodam todo dia de manhã e criam as tarefas para o responsável. A mesma situação nunca gera tarefa repetida.</div>
+        <button class="btn btn-sm btn-outline-secondary" data-todas><i class="bi bi-play"></i> Executar agora</button>
+        <button class="btn btn-sm btn-success" data-nova><i class="bi bi-plus-lg"></i> Nova automação</button></div>
+      <div class="row g-3">${regras.map((r) => `<div class="col-md-6 col-xl-4"><div class="card h-100 automacao ${r.ativa ? '' : 'inativa'}"><div class="card-body d-flex flex-column gap-2">
+        <div class="d-flex align-items-start gap-2"><div class="flex-grow-1 min-w-0"><div class="fw-semibold">${esc(r.nome)}</div>
+          <div class="small text-muted">${g[r.gatilho] && g[r.gatilho].nome !== r.nome ? `${esc(g[r.gatilho].nome)} · ` : ''}${esc(g[r.gatilho]?.rotuloDias || 'Dias')}: <b>${r.dias}</b></div></div>
+          <div class="form-check form-switch m-0" title="${r.ativa ? 'Ligada' : 'Desligada'}"><input class="form-check-input" type="checkbox" role="switch" data-ativa="${r.id}" ${r.ativa ? 'checked' : ''} aria-label="Ligar ou desligar ${esc(r.nome)}"></div></div>
+        <div class="small border rounded px-2 py-1 bg-body-tertiary"><i class="bi bi-check2-square"></i> ${esc(r.titulo)}</div>
+        <div class="small text-muted">Para: ${esc(r.responsavel === 'usuario' ? r.responsavel_nome || '—' : RESP[r.responsavel])} · prazo ${r.prazo_dias ? `${r.prazo_dias} dia(s)` : 'no mesmo dia'}
+          ${r.equipe ? ` · equipe ${esc(r.equipe)}` : ''}${r.valor_minimo ? ` · a partir de ${fmt.money(r.valor_minimo)}` : ''}</div>
+        <div class="d-flex gap-3 small mt-auto"><span><b>${r.total_geradas}</b> geradas</span><span><b>${r.abertas}</b> abertas</span><span><b>${r.concluidas}</b> concluídas</span>
+          <span class="ms-auto text-muted" title="Última execução">${r.ultima_execucao ? fmt.datetime(r.ultima_execucao) : 'nunca rodou'}</span></div>
+        <div class="d-flex gap-1 flex-wrap">
+          <button class="btn btn-sm btn-outline-secondary" data-editar="${r.id}"><i class="bi bi-pencil"></i> Editar</button>
+          <button class="btn btn-sm btn-outline-secondary" data-simular="${r.id}"><i class="bi bi-eye"></i> Simular</button>
+          <button class="btn btn-sm btn-outline-success" data-rodar="${r.id}"><i class="bi bi-play"></i> Executar</button>
+          <button class="btn btn-sm btn-outline-danger ms-auto" data-excluir="${r.id}" title="Excluir"><i class="bi bi-trash"></i></button></div>
+      </div></div></div>`).join('')}</div>`;
+    const regra = (id) => regras.find((r) => r.id === Number(id));
+    el.querySelector('[data-nova]').addEventListener('click', () => editar(null, gatilhos, carregar));
+    el.querySelector('[data-todas]').addEventListener('click', async () => {
+      const r = await tentar(() => post('/api/crm/automacoes/executar', {}));
+      if (r) { toast(`${r.reduce((a, x) => a + x.geradas, 0)} tarefa(s) criada(s).`); carregar(); }
+    });
+    el.querySelectorAll('[data-ativa]').forEach((c) => c.addEventListener('change', async () => {
+      if (await tentar(() => put(`/api/crm/automacoes/${c.dataset.ativa}`, { ativa: c.checked ? 1 : 0 }), c.checked ? 'Automação ligada.' : 'Automação desligada.')) carregar();
+      else c.checked = !c.checked;
+    }));
+    el.querySelectorAll('[data-editar]').forEach((b) => b.addEventListener('click', () => editar(regra(b.dataset.editar), gatilhos, carregar)));
+    el.querySelectorAll('[data-simular]').forEach((b) => b.addEventListener('click', async () => {
+      const r = await tentar(() => post(`/api/crm/automacoes/${b.dataset.simular}/simular`));
+      if (!r) return;
+      const reg = regra(b.dataset.simular);
+      modal({
+        title: `Simulação · ${esc(reg.nome)}`, size: 'lg',
+        body: `<p>Hoje esta regra encontraria <b>${r.encontrados}</b> situação(ões) nova(s)${r.pendentes ? ` — ${Math.min(r.encontrados, reg.limite)} entram nesta execução (limite ${reg.limite}) e o restante nas próximas` : ''}.</p>
+          ${r.exemplos.length ? `<h6>Exemplos de tarefas</h6><ul class="small">${r.exemplos.map((x) => `<li>${esc(x.titulo)}${x.responsavel_id ? ` → ${esc(state.opcoes.usuarios.find((u) => u.id === x.responsavel_id)?.nome || '')}` : ' <span class="text-danger">(sem responsável)</span>'}</li>`).join('')}</ul>` : ''}`,
+      });
+    }));
+    el.querySelectorAll('[data-rodar]').forEach((b) => b.addEventListener('click', async () => {
+      const r = await tentar(() => post('/api/crm/automacoes/executar', { id: Number(b.dataset.rodar) }));
+      if (r) { toast(`${r[0].geradas} tarefa(s) criada(s).`); carregar(); }
+    }));
+    el.querySelectorAll('[data-excluir]').forEach((b) => b.addEventListener('click', async () => {
+      if (!(await confirmar(`Excluir a automação "${esc(regra(b.dataset.excluir).nome)}"? As tarefas já criadas continuam.`, { ok: 'Excluir', cls: 'btn-danger' }))) return;
+      if (await tentar(() => del(`/api/crm/automacoes/${b.dataset.excluir}`), 'Automação excluída.')) carregar();
+    }));
+  };
+  await carregar().catch(erro);
+}
+
+function editar(r, gatilhos, aoSalvar) {
+  const o = state.opcoes;
+  const g0 = gatilhos.find((g) => g.id === (r?.gatilho || gatilhos[0].id));
+  const v = r || { gatilho: g0.id, nome: g0.nome, dias: g0.dias, titulo: g0.titulo, prazo_dias: g0.prazo, prioridade: 'normal', responsavel: 'vendedor', limite: 50, ativa: 1 };
+  const m = modal({
+    title: r ? 'Editar automação' : 'Nova automação', size: 'lg',
+    body: `<form class="row g-2">
+      ${campo('gatilho', 'Quando criar a tarefa', { type: 'select', col: 'col-md-6', value: v.gatilho, options: gatilhos.map((g) => [g.id, g.nome]) })}
+      ${campo('nome', 'Nome da automação', { col: 'col-md-6', value: v.nome, required: true })}
+      <div class="col-12 small text-muted" data-ajuda></div>
+      <div class="col-md-4"><label class="form-label" data-rot-dias>Dias</label><input type="number" class="form-control form-control-sm" name="dias" min="0" max="730" step="1" value="${v.dias}" required></div>
+      ${campo('prazo_dias', 'Prazo da tarefa (dias)', { type: 'number', col: 'col-md-4', value: v.prazo_dias, attrs: 'min="0" max="90" step="1"', help: '0 = vence no mesmo dia' })}
+      ${campo('prioridade', 'Prioridade', { type: 'select', col: 'col-md-4', value: v.prioridade, options: Object.entries(PRIORIDADE).map(([k, [l]]) => [k, l]) })}
+      <div class="col-12"><label class="form-label">Título da tarefa</label><input class="form-control form-control-sm" name="titulo" value="${esc(v.titulo)}" maxlength="200" required>
+        <div class="form-text">Clique para inserir: <span data-vars></span></div></div>
+      ${campo('descricao', 'Orientação para quem recebe (opcional)', { type: 'textarea', col: 'col-12', value: v.descricao || '' })}
+      ${campo('responsavel', 'Quem recebe', { type: 'select', col: 'col-md-6', value: v.responsavel, options: Object.entries(RESP) })}
+      ${campo('responsavel_id', 'Usuário (fixo ou reserva quando não houver vendedor)', { type: 'select', col: 'col-md-6', value: v.responsavel_id || '', options: opcoes(o.usuarios, '—') })}
+      ${campo('equipe_id', 'Só clientes da equipe', { type: 'select', col: 'col-md-4', value: v.equipe_id || '', options: opcoes(o.equipes, 'Todas as equipes') })}
+      ${campo('valor_minimo', 'Valor mínimo (R$)', { type: 'number', col: 'col-md-4', value: v.valor_minimo ?? '', attrs: 'min="0" step="any"', help: 'Total comprado, pedido, oportunidade ou valor vencido' })}
+      ${campo('limite', 'Máximo de tarefas por dia', { type: 'number', col: 'col-md-4', value: v.limite, attrs: 'min="1" max="500" step="1"' })}
+      <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="ativa" id="aut-ativa" ${v.ativa ? 'checked' : ''}><label class="form-check-label" for="aut-ativa">Automação ligada</label></div></div>
+    </form>`,
+    onShow: ({ body }) => {
+      const f = body.querySelector('form');
+      const sel = f.querySelector('[name=gatilho]');
+      const mostrar = (trocou) => {
+        const g = gatilhos.find((x) => x.id === sel.value);
+        body.querySelector('[data-ajuda]').textContent = g.ajuda;
+        body.querySelector('[data-rot-dias]').textContent = g.rotuloDias;
+        body.querySelector('[data-vars]').innerHTML = ['dias', ...g.variaveis].map((x) => `<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 me-1" data-var="${x}">{${x}}</button>`).join('');
+        body.querySelectorAll('[data-var]').forEach((b) => b.addEventListener('click', () => {
+          const inp = f.querySelector('[name=titulo]');
+          const pos = inp.selectionStart ?? inp.value.length;
+          inp.value = inp.value.slice(0, pos) + `{${b.dataset.var}}` + inp.value.slice(inp.selectionEnd ?? pos);
+          inp.focus();
+        }));
+        if (trocou) ['nome', 'titulo', 'dias', 'prazo_dias'].forEach((k) => { f.querySelector(`[name=${k}]`).value = { nome: g.nome, titulo: g.titulo, dias: g.dias, prazo_dias: g.prazo }[k]; });
+      };
+      sel.addEventListener('change', () => mostrar(!r));
+      const resp = f.querySelector('[name=responsavel]');
+      const usuario = f.querySelector('[name=responsavel_id]');
+      const req = () => { usuario.required = resp.value === 'usuario'; };
+      resp.addEventListener('change', req);
+      req();
+      mostrar(false);
+    },
+    buttons: [{ label: 'Salvar', onClick: async ({ body }) => {
+      const f = body.querySelector('form');
+      const d = { ...lerForm(f), ativa: f.querySelector('[name=ativa]').checked ? 1 : 0 };
+      if (r) await put(`/api/crm/automacoes/${r.id}`, d); else await post('/api/crm/automacoes', d);
+      toast('Automação salva.');
+      aoSalvar?.();
+    } }],
+  });
+  return m;
+}

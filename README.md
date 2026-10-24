@@ -66,6 +66,8 @@ Não há dados nem senhas de demonstração em produção. O sistema cria a empr
 | `analise` | Análise de crédito | `agro123` |
 | `producao`, `faturamento`, `expedicao`, `financeiro` | Setores | `agro123` |
 | `rh` | RH / DP | `agro123` |
+| `compras` | Compras (comprador) | `agro123` |
+| `gerente` | Gerente comercial (automações do CRM) | `agro123` |
 
 ### Importar dados do sistema anterior
 
@@ -168,6 +170,31 @@ Telas de apoio: **Histórico de Compra de Cliente** (por CPF/CNPJ) e **Cliente (
 | **Fornecedores** | *Cadastros → Fornecedores* | Dados cadastrais com validação de CNPJ/CPF, endereço, dados bancários e PIX, categoria e prazo de pagamento padrão (preenche o vencimento). |
 | **Chamados internos** | *Início → Chamados Internos* e botão *Chamado* no pedido | Abertura para um setor, prioridade com prazo (urgente 1 dia, alta 2, média 5, baixa 10), atribuição, comentários, pedido de informação, solução, avaliação de 1 a 5 e aviso em tempo real. |
 | **Proposta comercial** | *Vendas → Propostas Comerciais* | Orçamento com preço de tabela por forma de pagamento, desconto por item, frete e condições comerciais; impressão em PDF para o cliente; enviada → aceita/recusada (com motivo) → *Gerar pedido* com os mesmos itens e preços; duplicar; atualiza a oportunidade do CRM. |
+
+### Compras
+
+Menu *Operação → Compras*, com as abas abaixo. Perfil novo **Compras** (comprador) e permissões *Solicitar compras*, *Cotar e emitir
+pedidos de compra*, *Aprovar pedidos de compra* e *Receber mercadoria*. Produção, Expedição, Faturamento, Financeiro, RH, Supervisor
+e Gerente já vêm com *Solicitar*; a Diretoria aprova.
+
+| Aba | O que faz |
+|---|---|
+| **Solicitações** | Qualquer setor pede: departamento e itens da lista (produto do estoque ou item avulso com categoria e unidade), urgência, prazo e justificativa. O comprador lança as cotações de cada fornecedor e vê o comparativo (menor preço destacado); *Comprar* gera o pedido de compra com a cotação escolhida. |
+| **Pedidos de compra** | Rascunho → aprovação → aprovado → enviado → recebido. Acima do limite (`compras.aprovacao_acima`, padrão R$ 5.000) vai para aprovação; abaixo é aprovado na hora. Devolução com motivo, cancelamento, impressão para o fornecedor e compra direta sem solicitação. |
+| **Receber mercadoria** | Conferência com a NF do fornecedor, total ou parcial, com lote e validade: entrada no estoque com o custo do pedido (frete e desconto rateados) e lançamento da conta a pagar nas parcelas combinadas. |
+| **Reposição de estoque** | Itens com disponível abaixo do mínimo, descontando o que já está em compra ou solicitado; sugere repor até o dobro do mínimo, com último custo e fornecedor, e gera a solicitação. |
+
+Avisos em tempo real para comprador, aprovador, recebedor, solicitante e Financeiro; painel do perfil Compras e card de compras para
+aprovar no painel da Diretoria.
+
+### Automações do CRM
+
+*CRM → Automações* (permissão *Configurar automações do CRM*): regras que criam tarefas sozinhas, todo dia às 6h30 (Vercel Cron
+`/api/cron/crm`, protegido por `CRON_SECRET`) e, como reserva, na primeira consulta de tarefas do dia. Gatilhos: cliente sem comprar,
+pós-venda após a entrega, primeira compra, recompra da safra, oportunidade parada, fechamento previsto, proposta sem retorno, parcela
+vencida e aniversário. Cada regra tem dias, título com variáveis, prazo, prioridade, responsável (vendedor, supervisor ou usuário fixo),
+equipe, valor mínimo e limite por dia; *Simular* mostra o resultado sem criar. Uma chave única por regra impede tarefa repetida. Na aba
+*Tarefas*, concluir uma tarefa pode registrar a interação na linha do tempo do cliente. Regras em `server/crm-automacoes.js`.
 
 ### RH e DP
 

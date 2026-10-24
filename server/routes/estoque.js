@@ -121,3 +121,4 @@ r.put('/minimo/:embalagemId', A.exige('estoque.movimentar'), async (req, res) =>
 });
 
 module.exports = r;
+module.exports.SALDOS_SQL = SALDOS_SQL;

@@ -1,7 +1,7 @@
 # Manual do Agroterra Sistema
 
 ## Visão geral
-O Agroterra Sistema é o ERP da empresa. Ele cobre vendas, financeiro, estoque, CRM, cobrança, RH e DP, e chamados internos. O menu fica à esquerda, organizado em áreas (Início, Comercial, Financeiro, Operação, Gestão). Cada área agrupa telas relacionadas em abas, mostradas no topo da tela: por exemplo, **Pedidos** reúne todas as filas (Vendedor, Supervisor, Análise, Diretoria, Pagamento à vista, Produção, Faturamento, Expedição, Em trânsito, Devolução) e as mensagens; **Clientes** reúne cadastro, histórico de compra, blacklist e arquivos; **Contas a receber** reúne parcelas, cobrança e negativados; **Comissões** reúne a revisão, os descontos e créditos e as regras. Cada pessoa só vê as áreas e abas que o seu perfil libera, e o menu lembra a última aba usada em cada área. A busca global abre com Ctrl+K (ou ⌘K): ela procura telas, pedidos e clientes. O sino do topo mostra as mensagens dos setores. O chat interno fica na caixinha do canto inferior direito.
+O Agroterra Sistema é o ERP da empresa. Ele cobre vendas, financeiro, estoque, compras, CRM, cobrança, RH e DP, e chamados internos. O menu fica à esquerda, organizado em áreas (Início, Comercial, Financeiro, Operação, Gestão). Cada área agrupa telas relacionadas em abas, mostradas no topo da tela: por exemplo, **Pedidos** reúne todas as filas (Vendedor, Supervisor, Análise, Diretoria, Pagamento à vista, Produção, Faturamento, Expedição, Em trânsito, Devolução) e as mensagens; **Clientes** reúne cadastro, histórico de compra, blacklist e arquivos; **Contas a receber** reúne parcelas, cobrança e negativados; **Comissões** reúne a revisão, os descontos e créditos e as regras; **Compras** reúne solicitações, pedidos de compra, receber mercadoria e reposição de estoque. Cada pessoa só vê as áreas e abas que o seu perfil libera, e o menu lembra a última aba usada em cada área. A busca global abre com Ctrl+K (ou ⌘K): ela procura telas, pedidos e clientes. O sino do topo mostra as mensagens dos setores. O chat interno fica na caixinha do canto inferior direito.
 
 ## Painel inicial
 O Painel (#/dashboard) mostra os indicadores do setor da pessoa. No topo fica o filtro de **Período**: Este mês (padrão), Mês passado, 30 dias, 90 dias, Este ano ou Personalizado (de/até). Abaixo dos gráficos fica o mapa **Vendas pelo Brasil** (estados ou cidades, por valor ou nº de pedidos). Em **Mais filtros** dá para recortar por vendedor, equipe, forma de pagamento e UF de entrega. O período vale para vendas, faturamento, recebimentos, comissões e decisões; filas e saldos (a receber, vencido, pedidos em andamento) mostram a situação de hoje, respeitando os recortes. O filtro fica guardado durante a sessão, inclusive ao trocar de painel.
@@ -14,6 +14,8 @@ O Painel (#/dashboard) mostra os indicadores do setor da pessoa. No topo fica o 
 - **Financeiro**: parcelas, cobrança, contas a pagar, comissões, devoluções e negativados.
 - **Produção**, **Faturamento**, **Expedição**: as filas do seu setor, estoque e etiquetas.
 - **RH / DP**: colaboradores, férias, ponto, solicitações e folha.
+- **Compras**: atende as solicitações de compra, cota com fornecedores, emite os pedidos de compra e recebe a mercadoria.
+- Quase todos os setores podem **solicitar compras**; a Diretoria aprova os pedidos de compra acima do limite.
 
 A abrangência dos dados ("Dados que pode ver") segue o perfil: o vendedor vê só os próprios dados, o supervisor vê os da equipe, e os outros perfis veem todos. Um administrador pode mudar isso em Cadastros → Usuários e Permissões, no campo "Dados que pode ver". Se alguém não encontra um pedido ou um cliente, o motivo provável é a abrangência ou a falta de permissão. Isso é ajustado por quem administra os usuários.
 
@@ -49,6 +51,8 @@ Ficam em Comercial → Propostas Comerciais (#/propostas). Para criar uma, use "
 
 ## CRM e cobrança
 - **CRM** (#/crm): oportunidades por estágio, tarefas, interações e a visão 360° do cliente (#/crm/cliente/ID).
+- **Tarefas do CRM** (#/crm/tarefas): as tarefas da pessoa, manuais e automáticas. Filtros Abertas, Para hoje, Automáticas e Concluídas; supervisor e gerente podem ver as da equipe. Ao concluir uma tarefa com cliente, dá para registrar a interação (ligação, visita, WhatsApp...) que vai para a linha do tempo do cliente. "Reagendar" muda a data e a prioridade.
+- **Automações do CRM** (#/crm/automacoes, permissão "Configurar automações do CRM"; Gerente, Diretoria e Administrador): regras que criam tarefas sozinhas todo dia de manhã. Gatilhos: cliente sem comprar há N dias, pós-venda N dias após a entrega, primeira compra (boas-vindas), recompra da safra (1 ano da última compra), oportunidade parada, fechamento previsto chegando, proposta sem retorno, cliente com parcela vencida e aniversário do cliente. Cada regra define os dias, o título da tarefa com variáveis ({cliente}, {pedido}, {valor}, {data}...), o prazo, a prioridade, quem recebe (vendedor do cliente, supervisor da equipe ou um usuário fixo), a equipe, o valor mínimo e o máximo de tarefas por dia. "Simular" mostra quantas tarefas seriam criadas sem criar; "Executar" roda na hora. A mesma situação nunca gera tarefa repetida. Parcela vencida e aniversário começam desligadas.
 - **Cobrança** (#/cobranca): carteira de inadimplentes, agenda de contatos, registro de ações e acordos.
 
 ## Financeiro
@@ -61,7 +65,14 @@ Ficam em Comercial → Propostas Comerciais (#/propostas). Para criar uma, use "
 - **Contas a Pagar** (#/pagar): contas dos fornecedores, com vencimento, baixa e anexos.
 
 ## Estoque e expedição
-- **Controle de Estoque** (#/estoque): saldos, entradas, saídas, inventário e lotes.
+- **Controle de Estoque** (#/estoque): saldos, entradas, saídas, inventário e lotes. O botão "Repor estoque" leva à sugestão de compra.
+
+## Compras
+- **Solicitações** (#/compras): qualquer setor com permissão pede a compra em "Nova solicitação": departamento, urgência, data de necessidade, justificativa e os itens (produto do estoque ou outro item com descrição, categoria e unidade). Quem solicita vê só as próprias solicitações e é avisado quando ela vira pedido de compra ou é recusada.
+- **Cotação**: o comprador abre a solicitação, lança a cotação de cada fornecedor (preço por item, frete, prazo de entrega, parcelas e 1º vencimento) e vê o comparativo com o menor preço destacado. "Comprar" gera o pedido de compra com a cotação escolhida; também dá para comprar direto informando os preços.
+- **Pedidos de compra** (#/compras/pedidos): rascunho → enviar para aprovação → aprovado → enviado ao fornecedor → recebido. Pedidos acima do limite de aprovação (padrão R$ 5.000, ajustável por quem aprova no botão "Aprovação acima de") vão para a Diretoria; abaixo, são aprovados na hora. Quem aprova pode "Devolver" com o motivo. O pedido de compra pode ser impresso para enviar ao fornecedor. "Compra direta" cria um pedido sem solicitação.
+- **Receber mercadoria** (#/compras/receber): com a nota fiscal do fornecedor, informa a quantidade recebida (pode ser parcial), lote e validade. Os produtos de estoque entram no estoque com o custo do pedido (frete e desconto rateados) e a conta a pagar é lançada nas parcelas do pedido, com o 1º vencimento N dias após o recebimento. O Financeiro é avisado.
+- **Reposição de estoque** (#/compras/reposicao): itens com disponível abaixo do estoque mínimo, já descontando o que está em compra ou solicitado; sugere repor até o dobro do mínimo, mostra o último custo e fornecedor e gera a solicitação de compra.
 - A etiqueta de envio é impressa no detalhe do pedido, na Expedição.
 
 ## Chamados internos
@@ -105,4 +116,7 @@ Produtos, formas de pagamento, transportadoras, fornecedores, colaboradores, usu
 - **"Como peço férias?"**: Meu RH → Nova solicitação → Férias.
 - **"Como falo com outro setor?"**: pelo chat (canto inferior direito), pelas mensagens do pedido ou abrindo um chamado interno.
 - **"Como mando um print no chat?"**: abra a conversa e cole com Ctrl+V na caixa de mensagem, arraste o arquivo para a conversa ou clique no clipe. Dá para enviar até 5 arquivos (imagens, PDF, planilhas, documentos) de até 4 MB; imagens grandes são reduzidas sozinhas.
+- **"Como peço uma compra?"**: Operação → Compras → Nova solicitação. Acompanhe a situação na mesma tela.
+- **"Por que meu pedido de compra não foi aprovado direto?"**: ele passou do limite de aprovação; a Diretoria aprova em Compras → Pedidos de compra.
+- **"De onde vieram essas tarefas no CRM?"**: das automações do CRM (o nome da regra aparece na tarefa). Quem tem a permissão ajusta ou desliga em CRM → Automações.
 - **"Onde vejo as vendas por cidade?"**: no Painel, no card "Vendas pelo Brasil": Estados mostra o mapa colorido por estado e Cidades mostra bolhas por cidade, com ranking ao lado. Segue o período e os filtros do painel.

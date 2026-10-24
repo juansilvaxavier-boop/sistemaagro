@@ -142,7 +142,7 @@ const PAINEIS = {
             WHERE ${f.sql} AND etapa NOT IN ('venda','cancelado') AND ${per.sql} GROUP BY c.id ORDER BY v DESC LIMIT 8`, ...f.params, ...per.params,
         )).map((x) => [x.nome, x.n, x.v]), [null, null, 'moeda']),
         tabela('Minhas tarefas de CRM', ['Tarefa', 'Cliente', 'Vencimento'], (await db.all(
-          `SELECT t.titulo, c.nome, t.vencimento FROM crm_tarefas t LEFT JOIN clientes c ON c.id = t.cliente_id WHERE t.responsavel_id = ? AND t.concluida = 0 ORDER BY t.vencimento LIMIT 8`, ctx.uid,
+          `SELECT t.titulo, c.nome, t.vencimento FROM crm_tarefas t LEFT JOIN clientes c ON c.id = t.cliente_id WHERE t.responsavel_id = ? AND t.concluida = 0 ORDER BY t.vencimento NULLS LAST LIMIT 8`, ctx.uid,
         )).map((x) => [x.titulo, x.nome, x.vencimento]), [null, null, 'date']),
       ],
     };
@@ -413,6 +413,42 @@ PAINEIS.rh = async (ctx) => {
     tabelas: [],
   };
 };
+PAINEIS.compras = async (ctx) => {
+  const t = await db.get(
+    `SELECT
+       (SELECT COUNT(*) FROM compra_solicitacoes WHERE empresa_id = :e AND status IN ('aberta','cotacao')) AS solicitacoes,
+       (SELECT COUNT(*) FROM compra_solicitacoes WHERE empresa_id = :e AND status IN ('aberta','cotacao') AND urgencia IN ('alta','urgente')) AS urgentes,
+       (SELECT COUNT(*) FROM compras WHERE empresa_id = :e AND status = 'aprovacao') AS aprovacao,
+       (SELECT COUNT(*) FROM compras WHERE empresa_id = :e AND status IN ('aprovada','enviada','parcial')) AS a_receber,
+       (SELECT COUNT(*) FROM compras WHERE empresa_id = :e AND status IN ('aprovada','enviada','parcial') AND previsao_entrega < date('now','localtime')) AS atrasadas,
+       (SELECT COALESCE(SUM(r.valor),0) FROM compra_recebimentos r JOIN compras c ON c.id = r.compra_id WHERE c.empresa_id = :e AND r.data >= :de AND r.data < :ate) AS recebido`,
+    { e: ctx.emp, de: ctx.de, ate: ctx.ateFim },
+  );
+  const serie = await serieMensal(ctx, `SELECT substr(r.data,1,7) AS mes, SUM(r.valor) AS v FROM compra_recebimentos r JOIN compras c ON c.id = r.compra_id
+    WHERE c.empresa_id = ? AND r.data >= ? AND r.data < ? GROUP BY mes`, [ctx.emp], 12);
+  const fornecedores = await db.all(
+    `SELECT f.razao_social AS fornecedor, COUNT(DISTINCT c.id) AS pedidos, ROUND(SUM(r.valor)::numeric, 2)::float8 AS valor
+       FROM compra_recebimentos r JOIN compras c ON c.id = r.compra_id JOIN fornecedores f ON f.id = c.fornecedor_id
+      WHERE c.empresa_id = ? AND r.data >= ? AND r.data < ? GROUP BY f.id, f.razao_social ORDER BY valor DESC LIMIT 10`, ctx.emp, ctx.de, ctx.ateFim,
+  );
+  const categorias = await db.all(
+    `SELECT COALESCE(c.categoria, 'Outros') AS nome, ROUND(SUM(r.valor)::numeric, 2)::float8 AS v FROM compra_recebimentos r JOIN compras c ON c.id = r.compra_id
+      WHERE c.empresa_id = ? AND r.data >= ? AND r.data < ? GROUP BY 1 ORDER BY 2 DESC`, ctx.emp, ctx.de, ctx.ateFim,
+  );
+  return {
+    cards: [
+      card('Solicitações para comprar', t.solicitacoes, { icone: 'bi-inbox', cor: t.urgentes ? 'danger' : 'primary', sub: `${t.urgentes} urgentes`, link: '#/compras' }),
+      card('Aguardando aprovação', t.aprovacao, { icone: 'bi-hourglass-split', cor: t.aprovacao ? 'warning' : 'success', link: '#/compras/pedidos' }),
+      card('Pedidos a receber', t.a_receber, { icone: 'bi-truck', cor: t.atrasadas ? 'danger' : 'info', sub: `${t.atrasadas} atrasados`, link: '#/compras/receber' }),
+      money(`Recebido ${ctx.rot}`, t.recebido, { icone: 'bi-bag-check', cor: 'success' }),
+    ],
+    graficos: [
+      { titulo: 'Compras recebidas (12 meses)', tipo: 'bar', ...serieComoGrafico(serie, 'Compras') },
+      { titulo: `Compras por categoria ${ctx.rot}`, tipo: 'doughnut', labels: categorias.map((x) => x.nome), series: [{ nome: 'Valor', dados: categorias.map((x) => x.v) }] },
+    ],
+    tabelas: [tabela(`Maiores fornecedores ${ctx.rot}`, ['Fornecedor', 'Pedidos', 'Valor (R$)'], fornecedores.map((x) => [x.fornecedor, x.pedidos, x.valor]), [null, null, 'moeda'])],
+  };
+};
 PAINEIS.admin = PAINEIS.diretoria;
 PAINEIS.gerente = PAINEIS.diretoria;
 
@@ -471,6 +507,18 @@ async function cardsModulos(perfil, ctx, user) {
     );
     out.push(money('Propostas em aberto', pr.v, { icone: 'bi-file-earmark-text', cor: 'info', sub: `${pr.n} aguardando o cliente`, link: '#/propostas' }));
   }
+  if (geral || (perfil !== 'compras' && can(user, 'compras.aprovar'))) {
+    const c = await db.get(`SELECT COUNT(*) AS n, COALESCE(SUM(valor_total),0) AS v FROM compras WHERE empresa_id = ? AND status = 'aprovacao'`, ctx.emp);
+    if (c.n || geral) out.push(money('Compras para aprovar', c.v, { icone: 'bi-bag-check', cor: c.n ? 'warning' : 'secondary', sub: `${c.n} pedido(s) de compra`, link: '#/compras/pedidos' }));
+  }
+  if (['vendedor', 'supervisor', 'gerente'].includes(perfil) && can(user, 'crm')) {
+    const t = await db.get(
+      `SELECT COUNT(*) FILTER (WHERE vencimento <= date('now','localtime') OR vencimento IS NULL) AS hoje, COUNT(*) FILTER (WHERE vencimento < date('now','localtime')) AS atrasadas,
+              COUNT(*) FILTER (WHERE automacao_id IS NOT NULL) AS automaticas
+         FROM crm_tarefas WHERE responsavel_id = ? AND concluida = 0`, ctx.uid,
+    );
+    out.push(card('Tarefas do CRM para hoje', t.hoje, { icone: 'bi-check2-square', cor: t.atrasadas ? 'danger' : t.hoje ? 'warning' : 'success', sub: `${t.atrasadas} atrasadas · ${t.automaticas} automáticas`, link: '#/crm/tarefas' }));
+  }
   if (can(user, 'chamados')) {
     const c = await db.get(
       `SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE prazo < date('now','localtime')) AS atrasados FROM chamados
@@ -524,7 +572,7 @@ r.get('/mapa', require('../auth').exige('fila.venda', 'relatorios.vendas', 'dash
 });
 
 // Painéis sem relação com pedidos só usam o período.
-const SO_PERIODO = ['rh'];
+const SO_PERIODO = ['rh', 'compras'];
 
 r.get('/', async (req, res) => {
   const proprio = req.user.perfil;

@@ -629,3 +629,8 @@ code { color: var(--texto-2); background: var(--superficie-3); padding: 1px 6px;
 .area-abas a.ativa i { color: var(--agro-texto); }
 .area-abas .contador { font-size: .66rem; font-weight: 700; background: var(--agro-acao); color: var(--agro-acao-texto); padding: 0 6px; border-radius: 99px; line-height: 17px; }
 @media (max-width: 575.98px) { .area-abas { width: 100%; margin-top: -4px; } }
+
+/* CRM: automações e tarefas */
+.automacao.inativa { opacity: .62; }
+.automacao.inativa:hover { opacity: 1; }
+.tarefas .list-group-item { padding-block: .6rem; }

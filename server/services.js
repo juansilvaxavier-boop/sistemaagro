@@ -15,6 +15,10 @@ const FUSO = 'America/Sao_Paulo';
 function hoje() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: FUSO }).format(new Date());
 }
+/** Data e hora agora no fuso de São Paulo, no formato do banco (AAAA-MM-DD HH:MI:SS). */
+function agora() {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: FUSO, dateStyle: 'short', timeStyle: 'medium' }).format(new Date());
+}
 function addDias(iso, dias) {
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d + dias));
@@ -403,7 +407,7 @@ async function registrarDevolucao(dados, usuarioId) {
 }
 
 module.exports = {
-  ErroNegocio, hoje, addDias, diasEntre, r2,
+  ErroNegocio, hoje, agora, addDias, diasEntre, r2,
   STATUS_PARCELA_SQL, SALDO_PARCELA_SQL, ABERTA_SQL,
   situacaoBlacklist, exigirClienteLiberado, simularSerasa, consultarSerasa,
   recalcularPedido, registrarHistorico, garantirComissoes, comissoesPadrao, avaliarPolitica, emitirNota, gerarParcelas,

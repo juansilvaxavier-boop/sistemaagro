@@ -6,6 +6,7 @@ const S = require('../services');
 const { responderLista } = require('../lista');
 const { escopoClientes } = require('./clientes');
 const E = require('../escopo');
+const AUT = require('../crm-automacoes');
 
 const r = express.Router();
 const { ErroNegocio } = S;
@@ -141,7 +142,8 @@ r.put('/oportunidades/:id', async (req, res) => {
   if (b.estagio && !ESTAGIOS.includes(b.estagio)) throw new ErroNegocio('Estágio inválido.');
   if (b.estagio === 'perdida' && !b.motivo_perda && !o.motivo_perda) throw new ErroNegocio('Informe o motivo da perda.');
   if (b.pedido_numero) b.pedido_id = (await db.get('SELECT id FROM pedidos WHERE numero = ? AND cliente_id = ?', b.pedido_numero, o.cliente_id))?.id;
-  await db.update('crm_oportunidades', o.id, b, ['titulo', 'valor_estimado', 'estagio', 'previsao_fechamento', 'safra', 'responsavel_id', 'motivo_perda', 'pedido_id']);
+  b.updated_at = S.agora();
+  await db.update('crm_oportunidades', o.id, b, ['titulo', 'valor_estimado', 'estagio', 'previsao_fechamento', 'safra', 'responsavel_id', 'motivo_perda', 'pedido_id', 'updated_at']);
   if (b.estagio && b.estagio !== o.estagio) {
     await db.insert('crm_interacoes', { cliente_id: o.cliente_id, tipo: 'reuniao', assunto: `Oportunidade "${o.titulo}": ${o.estagio} → ${b.estagio}`, descricao: b.motivo_perda, usuario_id: req.user.id });
   }
@@ -149,27 +151,104 @@ r.put('/oportunidades/:id', async (req, res) => {
 });
 
 // ---------- Tarefas ----------
+const TAREFA_SQL = `SELECT t.*, c.nome AS cliente, u.nome AS responsavel, a.nome AS automacao, pe.numero AS pedido, o.titulo AS oportunidade, pr.numero AS proposta
+  FROM crm_tarefas t LEFT JOIN clientes c ON c.id = t.cliente_id LEFT JOIN usuarios u ON u.id = t.responsavel_id
+  LEFT JOIN crm_automacoes a ON a.id = t.automacao_id LEFT JOIN pedidos pe ON pe.id = t.pedido_id
+  LEFT JOIN crm_oportunidades o ON o.id = t.oportunidade_id LEFT JOIN propostas pr ON pr.id = t.proposta_id`;
+
+// As automações rodam pelo agendador diário; se ele não rodou hoje, rodam na primeira consulta de tarefas.
+const rodarAutomacoes = () => AUT.executarSeNecessario().catch((e) => console.error('automações CRM:', e.message));
+
 r.get('/tarefas', async (req, res) => {
+  await rodarAutomacoes();
   // "Todas" mostra as tarefas de quem está na abrangência do usuário (a equipe, para o supervisor).
   const todas = req.query.todas === '1' && E.abrangencia(req.user) !== 'proprio';
   res.json(await db.all(
-    `SELECT t.*, c.nome AS cliente, u.nome AS responsavel FROM crm_tarefas t LEFT JOIN clientes c ON c.id = t.cliente_id
-       LEFT JOIN usuarios u ON u.id = t.responsavel_id
-      WHERE ${todas ? E.pessoas(req.user, 't.responsavel_id') : 't.responsavel_id = ?'} AND (t.concluida = 0 OR t.vencimento >= date('now','localtime','-7 days'))
-      ORDER BY t.concluida, t.vencimento LIMIT 200`, ...(todas ? [] : [req.user.id]),
+    `${TAREFA_SQL}
+      WHERE ${todas ? E.pessoas(req.user, 't.responsavel_id') : 't.responsavel_id = ?'} AND (t.concluida = 0 OR t.concluida_em >= date('now','localtime','-7 days')
+        OR (t.concluida_em IS NULL AND t.vencimento >= date('now','localtime','-7 days')))
+      ORDER BY t.concluida, t.vencimento NULLS LAST, CASE t.prioridade WHEN 'alta' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END LIMIT 300`, ...(todas ? [] : [req.user.id]),
+  ));
+});
+r.get('/contagem', async (req, res) => {
+  await rodarAutomacoes();
+  res.json(await db.get(
+    `SELECT COUNT(*) FILTER (WHERE vencimento <= date('now','localtime') OR vencimento IS NULL) AS para_hoje,
+            COUNT(*) FILTER (WHERE vencimento < date('now','localtime')) AS atrasadas, COUNT(*) AS abertas
+       FROM crm_tarefas WHERE responsavel_id = ? AND concluida = 0`, req.user.id,
   ));
 });
 r.post('/tarefas', async (req, res) => {
   const b = req.body || {};
   if (b.cliente_id) await exigirCliente(req, b.cliente_id);
   if (!String(b.titulo || '').trim()) throw new ErroNegocio('Informe a tarefa.');
-  res.status(201).json({ id: await db.insert('crm_tarefas', { ...b, responsavel_id: b.responsavel_id || req.user.id }, ['cliente_id', 'titulo', 'vencimento', 'responsavel_id']) });
+  if (b.prioridade && !AUT.PRIORIDADES.includes(b.prioridade)) throw new ErroNegocio('Prioridade inválida.');
+  res.status(201).json({ id: await db.insert('crm_tarefas', { ...b, responsavel_id: b.responsavel_id || req.user.id }, ['cliente_id', 'titulo', 'descricao', 'vencimento', 'responsavel_id', 'prioridade']) });
 });
+/** Atualiza a tarefa. Ao concluir, pode registrar a interação com o cliente (fica na linha do tempo do CRM). */
 r.put('/tarefas/:id', async (req, res) => {
-  const t = await db.get(`SELECT id FROM crm_tarefas t WHERE t.id = ? AND (t.responsavel_id = ? OR ${E.pessoas(req.user, 't.responsavel_id')})`, Number(req.params.id), req.user.id);
+  const t = await db.get(`SELECT * FROM crm_tarefas t WHERE t.id = ? AND (t.responsavel_id = ? OR ${E.pessoas(req.user, 't.responsavel_id')})`, Number(req.params.id), req.user.id);
   if (!t) throw new ErroNegocio('Tarefa não encontrada', 404);
-  await db.update('crm_tarefas', req.params.id, req.body || {}, ['titulo', 'vencimento', 'concluida', 'responsavel_id']);
+  const b = { ...(req.body || {}) };
+  if (b.prioridade && !AUT.PRIORIDADES.includes(b.prioridade)) throw new ErroNegocio('Prioridade inválida.');
+  if (b.concluida !== undefined) b.concluida_em = Number(b.concluida) ? S.agora() : null;
+  const int = b.interacao;
+  if (int && Number(b.concluida) && t.cliente_id) {
+    if (!TIPOS_INTERACAO.includes(int.tipo)) throw new ErroNegocio('Tipo de interação inválido.');
+    await exigirCliente(req, t.cliente_id);
+  }
+  await db.tx(async () => {
+    await db.update('crm_tarefas', t.id, b, ['titulo', 'descricao', 'vencimento', 'concluida', 'concluida_em', 'responsavel_id', 'prioridade']);
+    if (int && Number(b.concluida) && t.cliente_id) {
+      await db.insert('crm_interacoes', {
+        cliente_id: t.cliente_id, pedido_id: t.pedido_id, tipo: int.tipo, assunto: t.titulo, descricao: int.descricao || null, usuario_id: req.user.id,
+      });
+    }
+  });
   res.json({ ok: true });
+});
+
+// ---------- Automações (regras que geram tarefas) ----------
+const gestor = A.exige('crm.automacoes');
+r.get('/automacoes', gestor, async (req, res) => {
+  await AUT.garantirPadroes();
+  const regras = await db.all(
+    `SELECT a.*, u.nome AS responsavel_nome, eq.nome AS equipe,
+        (SELECT COUNT(*) FROM crm_tarefas t WHERE t.automacao_id = a.id) AS total_geradas,
+        (SELECT COUNT(*) FROM crm_tarefas t WHERE t.automacao_id = a.id AND t.concluida = 0) AS abertas,
+        (SELECT COUNT(*) FROM crm_tarefas t WHERE t.automacao_id = a.id AND t.concluida = 1) AS concluidas
+       FROM crm_automacoes a LEFT JOIN usuarios u ON u.id = a.responsavel_id LEFT JOIN equipes eq ON eq.id = a.equipe_id ORDER BY a.id`,
+  );
+  res.json({ regras, gatilhos: AUT.catalogo() });
+});
+r.post('/automacoes', gestor, async (req, res) => {
+  const d = AUT.validar(req.body || {});
+  res.status(201).json({ id: await db.insert('crm_automacoes', { ...d, created_by: req.user.id }) });
+});
+async function regra(id) {
+  const a = await db.get('SELECT * FROM crm_automacoes WHERE id = ?', Number(id));
+  if (!a) throw new ErroNegocio('Automação não encontrada.', 404);
+  return a;
+}
+r.put('/automacoes/:id', gestor, async (req, res) => {
+  const a = await regra(req.params.id);
+  await db.update('crm_automacoes', a.id, AUT.validar(req.body || {}, a));
+  res.json({ ok: true });
+});
+// Excluir mantém as tarefas já geradas (ficam sem a ligação com a regra).
+r.delete('/automacoes/:id', gestor, async (req, res) => {
+  const a = await regra(req.params.id);
+  await db.remove('crm_automacoes', a.id);
+  res.json({ ok: true });
+});
+r.post('/automacoes/:id/simular', gestor, async (req, res) => {
+  const a = await regra(req.params.id);
+  res.json((await AUT.executar({ regraId: a.id, simular: true }))[0]);
+});
+r.post('/automacoes/executar', gestor, async (req, res) => {
+  const id = Number(req.body?.id) || undefined;
+  if (id) await regra(id);
+  res.json(await AUT.executar({ regraId: id }));
 });
 
 // ---------- Clientes sem compra (reativação) ----------
