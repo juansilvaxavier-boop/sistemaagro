@@ -80,7 +80,7 @@ export async function painelArquivos(el, vinculo) {
 }
 
 export default async function (conteudo) {
-  const pagina = titulo(conteudo, 'Arquivos e Documentos', 'bi-folder2-open', '<button class="btn btn-success btn-sm" id="btn-up"><i class="bi bi-cloud-arrow-up"></i> Enviar arquivo</button>');
+  const pagina = titulo(conteudo, 'Arquivos e documentos', 'bi-folder2-open', '<button class="btn btn-success btn-sm" id="btn-up"><i class="bi bi-cloud-arrow-up"></i> Enviar arquivo</button>');
   const cfg = await carregarConfig();
   const t = new DataTable(pagina, {
     url: '/api/arquivos', title: 'Arquivos', sort: 'created_at', dir: 'desc',

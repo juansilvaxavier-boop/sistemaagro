@@ -173,3 +173,13 @@ test('comissão na folha: CLT vira evento, PJ vira conta a pagar, fechar paga e 
   assert.equal((await db.get(`SELECT COUNT(*) AS n FROM comissoes WHERE folha_competencia = ?`, comp)).n, 0);
   assert.equal((await rh.get(`/api/rh/folha/comissoes?competencia=${comp}`)).linhas.length, ap2.linhas.length);
 });
+
+test('cliente novo com linhas em branco (telefone, endereço) é salvo sem elas', async () => {
+  const ana = await sessao('ana');
+  const { id } = await ana.post('/api/clientes', {
+    tipo_pessoa: 'F', documento: '52998224725', nome: 'Cliente Linhas Vazias',
+    telefones: [{ tipo: 'Celular', numero: '', contato: '', whatsapp: 1 }], enderecos: [{ tipo: 'Entrega', cep: '', logradouro: '', principal: 1 }],
+  });
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM cliente_telefones WHERE cliente_id = ?', id)).n, 0);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM cliente_enderecos WHERE cliente_id = ?', id)).n, 0);
+});

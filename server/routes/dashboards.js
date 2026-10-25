@@ -14,6 +14,21 @@ const r = express.Router();
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const ids = (v) => [...new Set(String(v || '').split(',').map((x) => parseInt(x, 10)).filter((n) => n > 0))].slice(0, 200);
 
+/** Período de comparação: mês corrente parcial → mesmos dias do mês anterior; ano parcial → mesmo trecho do ano anterior; senão, o mesmo número de dias logo antes. */
+function periodoAnterior(de, ate) {
+  const [a1, m1, d1] = de.split('-').map(Number);
+  const [a2, m2, d2] = ate.split('-').map(Number);
+  const iso = (a, m, d) => `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  const ultimoDia = (a, m) => new Date(a, m, 0).getDate();
+  if (d1 === 1 && a1 === a2 && m1 === m2) {
+    const [a, m] = m1 === 1 ? [a1 - 1, 12] : [a1, m1 - 1];
+    return [iso(a, m, 1), iso(a, m, Math.min(d2, ultimoDia(a, m)))];
+  }
+  if (d1 === 1 && m1 === 1 && a1 === a2) return [iso(a1 - 1, 1, 1), iso(a1 - 1, m2, Math.min(d2, ultimoDia(a1 - 1, m2)))];
+  const dias = S.diasEntre(de, ate) + 1;
+  return [S.addDias(de, -dias), S.addDias(de, -1)];
+}
+
 function contexto(req) {
   const q = req.query;
   const hoje = S.hoje();
@@ -613,6 +628,22 @@ r.get('/', async (req, res) => {
   const painel = PAINEIS[pedido] || PAINEIS.diretoria;
   const ctx = contexto(req);
   const dados = await painel(ctx);
+  // Comparação com o período anterior: só nos cards de movimento do período (os que terminam com "no mês"/"no período").
+  const [deAnt, ateAnt] = periodoAnterior(ctx.de, ctx.ate);
+  const ant = await painel(contexto({ ...req, query: { ...req.query, de: deAnt, ate: ateAnt } }));
+  const rotAnt = contexto({ ...req, query: { ...req.query, de: deAnt, ate: ateAnt } }).rot;
+  dados.cards.forEach((c, i) => {
+    const a = ant.cards[i];
+    if (!c.label.endsWith(` ${ctx.rot}`) || !a || a.label.replace(` ${rotAnt}`, '') !== c.label.replace(` ${ctx.rot}`, '')) return;
+    const atual = Number(c.valor) || 0;
+    const anterior = Number(a.valor) || 0;
+    c.comparacao = {
+      anterior, de: deAnt, ate: ateAnt, diferenca: S.r2(atual - anterior),
+      pct: anterior ? S.r2(((atual - anterior) / Math.abs(anterior)) * 100) : null,
+      // Para estes, subir é ruim.
+      melhor: /^(Notas canceladas|Cartas de correção|Faltas e atestados)/.test(c.label) ? 'baixa' : 'alta',
+    };
+  });
   dados.cards.push(...await cardsModulos(pedido, ctx, req.user));
   res.json({
     perfil: pedido, titulo: `Painel ${PERFIS[pedido] || ''}`.trim(),

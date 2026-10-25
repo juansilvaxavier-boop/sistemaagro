@@ -12,7 +12,7 @@ const hoje = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).
 const st = (v) => { const [l, c] = STATUS[v] || [v, 'secondary']; return `<span class="badge text-bg-${c}">${esc(l)}</span>`; };
 
 export default async function (conteudo) {
-  const pagina = titulo(conteudo, 'Contas a Pagar', 'bi-credit-card-2-back', '<button class="btn btn-sm btn-success" id="btn-nova"><i class="bi bi-plus-lg"></i> Nova conta</button>');
+  const pagina = titulo(conteudo, 'Contas a pagar', 'bi-credit-card-2-back', '<button class="btn btn-sm btn-success" id="btn-nova"><i class="bi bi-plus-lg"></i> Nova conta</button>');
   pagina.innerHTML = '<div class="kpis mb-3" id="kpis"></div><div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="so-abertas" checked><label class="form-check-label small" for="so-abertas">Só contas em aberto</label></div><div class="row g-3"><div class="col-xl-9" id="t-pagar"></div><div class="col-xl-3"><div class="card"><div class="card-header py-2">Em aberto por categoria</div><div class="card-body" id="cat"></div></div></div></div>';
   const resumo = async () => {
     const r = await get('/api/pagar/resumo');

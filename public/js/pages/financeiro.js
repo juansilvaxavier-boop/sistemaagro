@@ -50,7 +50,7 @@ export default async function (conteudo, { params: [tela] }) {
 
 // ---------- Gestão de Parcelas ----------
 function parcelas(conteudo) {
-  const pagina = titulo(conteudo, 'Gestão de Parcelas (Cobrança)', 'bi-list-check');
+  const pagina = titulo(conteudo, 'Parcelas a receber', 'bi-list-check');
   const t = new DataTable(pagina, {
     url: '/api/financeiro/parcelas', title: 'Parcelas', sort: 'vencimento', dir: 'asc',
     columns: [
@@ -106,7 +106,7 @@ function parcelas(conteudo) {
 // ---------- Lançar Descontos/Créditos ----------
 const TIPOS_LANC = [['desconto', 'Desconto'], ['credito', 'Crédito'], ['desconto_brinde', 'Desconto de brinde'], ['desconto_devolucao', 'Desconto de devolução']];
 function lancamentos(conteudo) {
-  const pagina = titulo(conteudo, 'Lançar Descontos/Créditos', 'bi-plus-slash-minus', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Novo lançamento</button>');
+  const pagina = titulo(conteudo, 'Descontos e créditos', 'bi-plus-slash-minus', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Novo lançamento</button>');
   const t = new DataTable(pagina, {
     url: '/api/financeiro/lancamentos', title: 'Descontos e créditos', sort: 'created_at', dir: 'desc',
     columns: [
@@ -131,7 +131,7 @@ function lancamentos(conteudo) {
 
 // ---------- Revisar Comissões ----------
 function comissoes(conteudo) {
-  const pagina = titulo(conteudo, 'Revisar Comissões', 'bi-percent');
+  const pagina = titulo(conteudo, 'Revisar comissões', 'bi-percent');
   pagina.innerHTML = abas([
     { id: 'ordens', label: 'Ordens de comissão', html: '<div id="t-com"></div>' },
     { id: 'resumo', label: 'Resumo por colaborador', html: `<div class="d-flex gap-2 align-items-center mb-2 small">Período <input type="month" class="form-control form-control-sm w-auto" id="per" value="${hoje().slice(0, 7)}"></div><div id="t-res"></div>` },
@@ -177,7 +177,7 @@ function comissoes(conteudo) {
 
 // ---------- Lançar Desconto Devolução ----------
 function devolucoes(conteudo) {
-  const pagina = titulo(conteudo, 'Lançar Desconto Devolução', 'bi-arrow-counterclockwise', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Nova devolução</button>');
+  const pagina = titulo(conteudo, 'Descontos de devolução', 'bi-arrow-counterclockwise', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Nova devolução</button>');
   const t = new DataTable(pagina, {
     url: '/api/financeiro/devolucoes', title: 'Devoluções', sort: 'created_at', dir: 'desc',
     columns: [
@@ -219,7 +219,7 @@ const ACOES_NEG = {
   inclusao_rejeitada: [['inclusao_solicitada', 'Reenviar inclusão', 'warning']],
 };
 function negativados(conteudo) {
-  const pagina = titulo(conteudo, 'Clientes Negativados', 'bi-person-x');
+  const pagina = titulo(conteudo, 'Clientes negativados', 'bi-person-x');
   pagina.insertAdjacentHTML('beforebegin', `<div class="alert alert-light border small py-2">Ciclo: <b>pedido de inclusão</b> → aceita ou rejeitada → <b>pedido de baixa</b> → aceita ou rejeitada. A baixa é pedida automaticamente quando a parcela é liquidada.</div>`);
   const t = new DataTable(pagina, {
     url: '/api/financeiro/negativacoes', title: 'Clientes negativados', sort: 'updated_at', dir: 'desc',
@@ -243,7 +243,7 @@ function negativados(conteudo) {
 
 // ---------- Nota Fiscal de Saída ----------
 function notas(conteudo) {
-  const pagina = titulo(conteudo, 'Nota Fiscal de Saída', 'bi-file-earmark-text');
+  const pagina = titulo(conteudo, 'Notas fiscais de saída', 'bi-file-earmark-text');
   const t = new DataTable(pagina, {
     url: '/api/financeiro/notas', title: 'Notas fiscais de saída', sort: 'numero', dir: 'desc',
     columns: [

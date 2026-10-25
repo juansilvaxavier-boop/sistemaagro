@@ -15,7 +15,7 @@ const ATIVO = { k: 'ativo', l: 'Ativo', t: 'bool', filter: { options: [['1', 'Si
 
 // ---------- Produto ----------
 function produtos(conteudo) {
-  const pagina = titulo(conteudo, 'Produto', 'bi-box', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Novo produto</button>');
+  const pagina = titulo(conteudo, 'Produtos', 'bi-box', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Novo produto</button>');
   const t = new DataTable(pagina, {
     url: '/api/cadastros/produtos', title: 'Produtos', sort: 'nome', dir: 'asc',
     columns: [
@@ -78,7 +78,7 @@ async function abrirProduto(id, aoSalvar) {
 
 // ---------- Forma de Pagamento ----------
 function formas(conteudo) {
-  const pagina = titulo(conteudo, 'Forma de Pagamento', 'bi-credit-card', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Nova forma</button>');
+  const pagina = titulo(conteudo, 'Formas de pagamento', 'bi-credit-card', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Nova forma</button>');
   const t = new DataTable(pagina, {
     url: '/api/cadastros/formas-pagamento', title: 'Formas de pagamento', sort: 'nome', dir: 'asc',
     columns: [{ k: 'nome', l: 'Forma' }, { k: 'tipo', l: 'Tipo', render: (v) => (v === 'a_vista' ? 'À vista' : 'A prazo') }, { k: 'tipo_baixa', l: 'Tipo de baixa' },
@@ -269,7 +269,7 @@ async function comissao(conteudo) {
 
 // ---------- Alterar Minha Senha ----------
 function senha(conteudo) {
-  const pagina = titulo(conteudo, 'Alterar Minha Senha', 'bi-key');
+  const pagina = titulo(conteudo, 'Alterar minha senha', 'bi-key');
   pagina.innerHTML = `<div class="card" style="max-width:420px"><div class="card-body"><form class="row g-2">
     ${campo('atual', 'Senha atual', { type: 'password', col: 'col-12', required: true, attrs: 'autocomplete="current-password"' })}
     ${campo('nova', 'Nova senha (mín. 8 caracteres, com letras e números)', { type: 'password', col: 'col-12', required: true, attrs: 'autocomplete="new-password" minlength="8"' })}

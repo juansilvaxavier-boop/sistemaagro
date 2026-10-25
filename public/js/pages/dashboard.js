@@ -1,13 +1,13 @@
-import { get, esc, fmt, state, titulo, qs, periodoAtalho, pode } from '../core.js';
+import { get, esc, fmt, state, titulo, qs, periodoAtalho, pode, kpi, estiloGraficos, coresGrafico } from '../core.js';
 import { mapaVendas } from '../mapa-brasil.js';
 
 const graficos = [];
 let ultimo;
-const alfa = (hex, a) => {
-  const n = parseInt(hex.replace('#', ''), 16);
+const alfa = (cor, a) => {
+  if (!cor.startsWith('#')) return cor;
+  const n = parseInt(cor.replace('#', ''), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 };
-const CORES = ['#2e7d32', '#1976d2', '#f9a825', '#c62828', '#6a1b9a', '#00838f', '#ef6c00', '#5d4037', '#546e7a', '#9e9d24', '#ad1457'];
 
 export default async function (conteudo) {
   const corpo = titulo(conteudo, 'Painel', 'bi-speedometer2', '<select class="form-select form-select-sm d-none" id="sel-perfil" style="width:auto"></select>');
@@ -130,52 +130,71 @@ function valorCard(c) {
   return Number(c.valor || 0).toLocaleString('pt-BR');
 }
 
+/** Rosca com a legenda em tabela ao lado: nome, valor e % de cada fatia (leitura direta, sem depender só da cor). */
+function roscaHtml(g, i) {
+  const dados = g.series[0].dados.map(Number);
+  const total = dados.reduce((a, x) => a + (x || 0), 0);
+  const moeda = g.series.some((s) => /R\$/.test(s.nome));
+  const cores = coresGrafico();
+  return `<div class="rosca"><div class="rosca-grafico"><canvas id="g${i}" role="img" aria-label="${esc(g.titulo)}"></canvas>
+      <div class="rosca-total"><small>Total</small><b>${moeda ? fmt.money(total) : total.toLocaleString('pt-BR')}</b></div></div>
+    <table class="table table-sm rosca-legenda mb-0"><tbody>${g.labels.map((l, k) => `<tr><td><span class="ponto" style="background:${cores[k % cores.length]}"></span>${esc(l)}</td>
+      <td class="num">${moeda ? fmt.money(dados[k]) : (dados[k] || 0).toLocaleString('pt-BR')}</td><td class="num text-body-secondary">${total ? ((dados[k] / total) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : 0}%</td></tr>`).join('')}</tbody></table></div>`;
+}
+
 function desenhar(el, d) {
   graficos.splice(0).forEach((g) => g.destroy());
-  const cards = d.cards.map((c) => {
-    const html = `<div class="card kpi cor-${c.cor || 'primary'} h-100"><div class="card-body d-flex gap-3 align-items-start">
-      <span class="icone"><i class="bi ${c.icone || 'bi-graph-up'}"></i></span>
-      <div class="flex-grow-1 min-w-0"><div class="rotulo">${esc(c.label)}</div><div class="valor">${valorCard(c)}</div>${c.sub ? `<div class="sub">${esc(c.sub)}</div>` : ''}</div>
-      ${c.link ? '<i class="bi bi-arrow-up-right text-body-secondary"></i>' : ''}</div></div>`;
-    return `<div>${c.link ? `<a class="kpi-link" href="${c.link}">${html}</a>` : html}</div>`;
-  }).join('');
-  const charts = d.graficos.map((g, i) => `<div class="col-12 col-xl-${d.graficos.length === 1 ? 12 : 6}"><div class="card h-100"><div class="card-header py-2">${esc(g.titulo)}</div>
-    <div class="card-body"><div class="chart-box"><canvas id="g${i}"></canvas></div></div></div></div>`).join('');
+  const cards = d.cards.map((c) => kpi(c.label, valorCard(c), { icone: c.icone || 'bi-graph-up', cor: c.cor || 'primary', sub: c.sub ? esc(c.sub) : '', link: c.link, comparacao: c.comparacao, moeda: c.tipo === 'moeda' })).join('');
+  // Com número ímpar de gráficos, o último ocupa a linha inteira (sem buraco na grade).
+  const vazioG = (g) => !g.series.some((s) => s.dados.some((x) => Number(x)));
+  const charts = d.graficos.map((g, i) => `<div class="col-12 col-xl-${d.graficos.length === 1 || (d.graficos.length % 2 && i === d.graficos.length - 1) ? 12 : 6}"><div class="card h-100"><div class="card-header">${esc(g.titulo)}</div>
+    <div class="card-body">${vazioG(g) ? '<div class="chart-box"><div class="grafico-vazio vazio"><i class="bi bi-bar-chart"></i><b>Sem movimento no período</b>Mude o período ou os filtros para comparar.</div></div>'
+      : g.tipo === 'doughnut' ? roscaHtml(g, i) : `<div class="chart-box"><canvas id="g${i}" role="img" aria-label="${esc(g.titulo)}"></canvas></div>`}</div></div></div>`).join('');
   const tabelas = d.tabelas.map((t) => `<div class="col-12 col-xl-6"><div class="card h-100"><div class="card-header py-2">${esc(t.titulo)}</div>
     <div class="card-body p-0">${t.linhas.length ? `<table class="table table-sm mb-0"><thead><tr>${t.colunas.map((c, j) => `<th class="${t.tipos[j] === 'moeda' ? 'num' : ''}">${esc(c)}</th>`).join('')}</tr></thead>
     <tbody>${t.linhas.map((l) => `<tr>${l.map((v, j) => `<td class="${t.tipos[j] === 'moeda' ? 'num' : ''}">${t.tipos[j] === 'moeda' ? fmt.money(v) : t.tipos[j] === 'date' ? fmt.date(v) : t.tipos[j] === 'datetime' ? fmt.datetime(v) : esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`
-      : '<div class="vazio">Sem dados.</div>'}</div></div></div>`).join('');
+      : '<div class="vazio"><i class="bi bi-inbox"></i><b>Sem dados no período</b></div>'}</div></div></div>`).join('');
   // Mesma regra do servidor: o mapa de vendas é para quem acompanha vendas ou recebimentos.
   const comMapa = d.filtro?.recortes && !['producao', 'expedicao', 'rh'].includes(d.perfil)
     && ['fila.venda', 'relatorios.vendas', 'dashboard.todos', 'financeiro.parcelas'].some((p) => pode(p));
   el.innerHTML = `<div class="kpis mb-3">${cards}</div><div class="row g-3 mb-3">${charts}</div>${comMapa ? '<div class="mb-3" id="mapa-vendas"></div>' : ''}<div class="row g-3">${tabelas}</div>`;
   if (comMapa) mapaVendas(el.querySelector('#mapa-vendas'), paraQuery(lerFiltro()));
-  const css = getComputedStyle(document.documentElement);
-  const corTexto = css.getPropertyValue('--texto-2').trim();
-  const corGrade = css.getPropertyValue('--borda').trim();
-  const corAgro = css.getPropertyValue('--agro').trim();
-  Chart.defaults.color = corTexto;
-  Chart.defaults.font.family = css.getPropertyValue('--bs-body-font-family');
-  CORES[0] = corAgro;
+  const est = estiloGraficos();
+  const CORES = est.cores;
   d.graficos.forEach((g, i) => {
+    const canvas = el.querySelector(`#g${i}`);
+    if (!canvas) return;
     const moeda = g.series.some((s) => /R\$/.test(s.nome));
-    graficos.push(new Chart(el.querySelector(`#g${i}`), {
+    const rosca = g.tipo === 'doughnut';
+    // Categorias com nome (etapas, vendedores) ficam na horizontal: rótulos legíveis, sem texto inclinado.
+    const deitado = g.tipo === 'bar' && g.labels.length > 5 && !g.labels.every((l) => /^\d{2}\/\d{2,4}/.test(l));
+    const valorFmt = (v) => (moeda ? fmt.money(v) : Number(v).toLocaleString('pt-BR'));
+    const total = rosca ? g.series[0].dados.reduce((a, x) => a + Number(x || 0), 0) : 0;
+    graficos.push(new Chart(canvas, {
       type: g.tipo,
       data: {
         labels: g.labels,
         datasets: g.series.map((s, k) => ({
-          label: s.nome, data: s.dados, tension: 0.3, fill: g.tipo === 'line',
-          backgroundColor: g.tipo === 'doughnut' ? CORES : g.tipo === 'line' ? alfa(corAgro, 0.14) : CORES[k],
-          borderColor: g.tipo === 'doughnut' ? css.getPropertyValue('--superficie').trim() : CORES[k], borderRadius: g.tipo === 'bar' ? 6 : 0, pointRadius: 3,
+          label: s.nome.replace(/\s*\(R\$\)\s*$/, '').replace(/^R\$$/, 'Valor'), data: s.dados, fill: g.tipo === 'line' ? 'origin' : false,
+          backgroundColor: rosca ? CORES : g.tipo === 'line' ? alfa(CORES[k], 0.1) : CORES[k],
+          borderColor: rosca ? est.superficie : CORES[k], pointBackgroundColor: CORES[k],
         })),
       },
       options: {
         maintainAspectRatio: false,
+        indexAxis: deitado ? 'y' : 'x',
+        cutout: rosca ? '68%' : undefined,
         plugins: {
-          legend: { display: g.tipo === 'doughnut', position: 'right' },
-          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${moeda ? fmt.money(c.parsed.y ?? c.parsed) : (c.parsed.y ?? c.parsed).toLocaleString('pt-BR')}` } },
+          legend: { display: !rosca && g.series.length > 1, position: 'top', align: 'end' },
+          tooltip: { callbacks: { label: (c) => {
+            const v = rosca ? c.parsed : (deitado ? c.parsed.x : c.parsed.y);
+            return ` ${rosca ? c.label : c.dataset.label}: ${valorFmt(v)}${rosca && total ? ` (${((v / total) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)` : ''}`;
+          } } },
         },
-        scales: g.tipo === 'doughnut' ? {} : { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: corGrade }, border: { display: false }, ticks: { callback: (v) => (moeda ? 'R$ ' + Number(v).toLocaleString('pt-BR', { notation: 'compact' }) : v) } } },
+        scales: rosca ? {} : {
+          [deitado ? 'y' : 'x']: { grid: { display: false }, border: { display: false }, ticks: { autoSkip: !deitado, maxRotation: 0 } },
+          [deitado ? 'x' : 'y']: { beginAtZero: true, grid: { color: est.grade }, border: { display: false }, ticks: { maxTicksLimit: 6, callback: (v) => (moeda ? 'R$ ' + Number(v).toLocaleString('pt-BR', { notation: 'compact' }) : Number(v).toLocaleString('pt-BR')) } },
+        },
       },
     }));
   });

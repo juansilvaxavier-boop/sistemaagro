@@ -53,7 +53,7 @@ function detalhe(r) {
 }
 
 async function backups(conteudo) {
-  const pagina = titulo(conteudo, 'Backups do banco', 'bi-database-check', '<button class="btn btn-primary btn-sm" id="btn-backup"><i class="bi bi-cloud-arrow-up"></i> Fazer backup agora</button>');
+  const pagina = titulo(conteudo, 'Backups', 'bi-database-check', '<button class="btn btn-primary btn-sm" id="btn-backup"><i class="bi bi-cloud-arrow-up"></i> Fazer backup agora</button>');
   const carregar = async () => {
     const lista = await get('/api/admin/backups');
     const tam = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ceil(b / 1024)} KB`);
@@ -107,7 +107,7 @@ const fmtItem = (k, v) => (ITENS[k]?.[1] === 'm' ? fmt.money(v) : fmt.num(v));
 const ICONE_AVISO = { erro: ['bi-x-octagon', 'danger'], atencao: ['bi-exclamation-triangle', 'warning'], info: ['bi-info-circle', 'info'] };
 
 async function importar(conteudo) {
-  const pagina = titulo(conteudo, 'Importar dados do sistema anterior', 'bi-cloud-upload');
+  const pagina = titulo(conteudo, 'Importar dados', 'bi-cloud-upload');
   const sit = await get('/api/admin/importacao');
   const jaTem = sit.importado.pedidos > 0 || sit.importado.clientes > 0;
   pagina.innerHTML = `<p class="text-body-secondary mt-n2">Envie a planilha de relatórios do sistema anterior (abas Vendas, Faturamento, Contas a Receber, Contas Recebidas, Parcelas Vencidas e Parcelas Liquidadas).

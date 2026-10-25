@@ -104,6 +104,10 @@ Tema claro e escuro, menu recolhível, busca global (**Ctrl+K**) por pedido, cli
 direito com o **chat interno** (leitura, quem está online, contador de não lidas) e o **assistente de IA**, *Meu perfil* com foto, avisos do navegador para mensagens e pedidos, e instalação como
 aplicativo (PWA) no computador ou no celular.
 
+**Design system:** tokens de cor, tipografia, espaço, raios e sombras, mais os componentes compartilhados (botões, modal,
+toast, tabela padrão com modo cartão no celular, indicadores com variação vs período anterior e estilo único de gráficos).
+As regras estão em [`docs/design-system.md`](docs/design-system.md).
+
 ## O que o sistema tem
 
 **Acesso:** login, escolha da empresa (multiempresa) e menus liberados conforme o perfil do usuário.

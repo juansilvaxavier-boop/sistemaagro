@@ -109,7 +109,11 @@ async function sincronizar(tabela, campos, clienteId, itens) {
       }
     }
   }
+  // Linha nova sem nada preenchido (só tipo e marcações) é ignorada: o formulário sempre traz uma linha em branco.
+  const marcacoes = ['tipo', 'whatsapp', 'principal', 'zona_rural', 'posta_restante', 'checada', 'positivo', 'medida'];
+  const vazia = (i) => campos.filter((c) => !marcacoes.includes(c)).every((c) => i[c] == null || String(i[c]).trim() === '');
   for (const i of itens) {
+    if (!i.id && vazia(i)) continue;
     const dados = { ...i, cliente_id: clienteId };
     if (i.id) await db.update(tabela, i.id, dados, campos);
     else await db.insert(tabela, dados, ['cliente_id', ...campos]);

@@ -24,9 +24,9 @@ const post = (url, body) => api(url, { method: 'POST', body });
 
 function toast(msg, cor = 'success') {
   const el = document.createElement('div');
-  el.className = `toast align-items-center text-bg-${cor} border-0`;
+  el.className = `toast align-items-center t-${cor}`;
   el.setAttribute('role', 'status');
-  el.innerHTML = `<div class="d-flex"><div class="toast-body">${esc(msg)}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button></div>`;
+  el.innerHTML = `<div class="d-flex"><div class="toast-body d-flex gap-2"><i class="bi ${cor === 'danger' ? 'bi-exclamation-octagon-fill' : 'bi-check-circle-fill'}"></i><span>${esc(msg)}</span></div><button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button></div>`;
   document.getElementById('toasts').append(el);
   new bootstrap.Toast(el, { delay: 5000 }).show();
   el.addEventListener('hidden.bs.toast', () => el.remove());

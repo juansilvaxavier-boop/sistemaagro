@@ -15,7 +15,7 @@ const sit = (v) => { const [l, c] = SITUACAO[v] || [v, 'secondary']; return `<sp
 
 export default async function (conteudo) {
   const mov = pode('estoque.movimentar');
-  const pagina = titulo(conteudo, 'Controle de Estoque', 'bi-boxes', `${pode('compras') ? '<a class="btn btn-sm btn-outline-secondary" href="#/compras/reposicao"><i class="bi bi-arrow-repeat"></i> Repor estoque</a>' : ''}` + (mov ? `
+  const pagina = titulo(conteudo, 'Estoque', 'bi-boxes', `${pode('compras') ? '<a class="btn btn-sm btn-outline-secondary" href="#/compras/reposicao"><i class="bi bi-arrow-repeat"></i> Repor estoque</a>' : ''}` + (mov ? `
     <button class="btn btn-sm btn-success" id="btn-entrada"><i class="bi bi-box-arrow-in-down"></i> Entrada</button>
     <button class="btn btn-sm btn-outline-danger" id="btn-saida"><i class="bi bi-box-arrow-up"></i> Saída</button>` : ''));
   pagina.innerHTML = `<div class="kpis mb-3" id="kpis"></div>${abas([

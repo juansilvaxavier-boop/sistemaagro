@@ -23,7 +23,7 @@ async function precosDo(produtoId) {
 
 export default async function (conteudo, { modo, params }) {
   if (modo === 'form') return formulario(conteudo, params[0] ? Number(params[0]) : null);
-  const pagina = titulo(conteudo, 'Propostas Comerciais', 'bi-file-earmark-text', '<a href="#/propostas/nova" class="btn btn-sm btn-success"><i class="bi bi-plus-lg"></i> Nova proposta</a>');
+  const pagina = titulo(conteudo, 'Propostas comerciais', 'bi-file-earmark-text', '<a href="#/propostas/nova" class="btn btn-sm btn-success"><i class="bi bi-plus-lg"></i> Nova proposta</a>');
   pagina.innerHTML = '<div class="kpis mb-3" id="kpis"></div><div id="t-prop"></div>';
   const resumo = async () => {
     const r = await get('/api/propostas/resumo');

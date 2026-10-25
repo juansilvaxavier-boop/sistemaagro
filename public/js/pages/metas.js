@@ -5,6 +5,7 @@ const IND = ['valor', 'volume', 'pedidos', 'clientes_novos'];
 const ROT = { valor: 'Valor vendido', volume: 'Volume (kg/L)', pedidos: 'Pedidos', clientes_novos: 'Clientes novos' };
 const mesAtual = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 7);
 const nomeMes = (p) => new Date(`${p}-15T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+const nomeMesTitulo = (p) => { const t = nomeMes(p); return t.charAt(0).toUpperCase() + t.slice(1); };
 const somaMes = (p, n) => { const d = new Date(`${p}-15T12:00:00`); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 7); };
 const vInd = (k, v) => (v == null ? '—' : k === 'valor' ? fmt.money(v) : fmt.num(v));
 const corPct = (p) => (p == null ? 'secondary' : p >= 100 ? 'success' : p >= 70 ? 'warning' : 'danger');
@@ -29,7 +30,7 @@ async function metas(conteudo, periodo = mesAtual()) {
   const d = await get(`/api/metas?periodo=${periodo}`);
   const pagina = titulo(conteudo, 'Metas', 'bi-bullseye', `
     <div class="input-group input-group-sm w-auto"><button class="btn btn-outline-secondary" data-mes="-1" aria-label="Mês anterior"><i class="bi bi-chevron-left"></i></button>
-      <span class="input-group-text text-capitalize" style="min-width:150px;justify-content:center">${nomeMes(periodo)}</span>
+      <span class="input-group-text" style="min-width:150px;justify-content:center">${nomeMesTitulo(periodo)}</span>
       <button class="btn btn-outline-secondary" data-mes="1" aria-label="Próximo mês"><i class="bi bi-chevron-right"></i></button></div>
     ${d.pode_gerir ? '<button class="btn btn-sm btn-outline-secondary" data-copiar><i class="bi bi-copy"></i> Copiar do mês anterior</button><button class="btn btn-sm btn-success" data-editar><i class="bi bi-pencil"></i> Definir metas</button>' : ''}`);
   const fr = d.fracao_mes;
@@ -88,7 +89,7 @@ async function ranking(conteudo, periodo = mesAtual()) {
   const rows = await get(`/api/metas/ranking?periodo=${periodo}`);
   const pagina = titulo(conteudo, 'Ranking de vendas', 'bi-trophy', `
     <div class="input-group input-group-sm w-auto"><button class="btn btn-outline-secondary" data-mes="-1" aria-label="Mês anterior"><i class="bi bi-chevron-left"></i></button>
-      <span class="input-group-text text-capitalize" style="min-width:150px;justify-content:center">${nomeMes(periodo)}</span>
+      <span class="input-group-text" style="min-width:150px;justify-content:center">${nomeMesTitulo(periodo)}</span>
       <button class="btn btn-outline-secondary" data-mes="1" aria-label="Próximo mês"><i class="bi bi-chevron-right"></i></button></div>`);
   const medalha = (p) => (p === 1 ? '🥇' : p === 2 ? '🥈' : p === 3 ? '🥉' : p);
   pagina.innerHTML = rows.length ? `<div class="card"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th style="width:60px">#</th><th>Vendedor</th><th>Equipe</th><th style="min-width:220px">Meta de valor</th><th class="num">Vendido</th><th class="num">Pedidos</th></tr></thead>

@@ -96,7 +96,7 @@ async function demanda(conteudo, horizonte = 3) {
 }
 
 function recompra(conteudo) {
-  const pagina = titulo(conteudo, 'Clientes atrasando a recompra', 'bi-arrow-repeat');
+  const pagina = titulo(conteudo, 'Recompra atrasada', 'bi-arrow-repeat');
   pagina.innerHTML = `<p class="small text-muted">Clientes com pelo menos duas compras cujo tempo desde a última passou de 1,2× o intervalo habitual entre elas. Ordenado pelo ticket médio: os primeiros valem mais uma ligação.</p><div data-t></div>`;
   new DataTable(pagina.querySelector('[data-t]'), {
     url: '/api/analises/recompra', title: 'Clientes atrasando a recompra', sort: 'ticket_medio', dir: 'desc',

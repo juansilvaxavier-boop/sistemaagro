@@ -269,7 +269,7 @@ async function ferias(conteudo) {
 
 // ---------- Ponto e ocorrências ----------
 function ocorrencias(conteudo) {
-  const pagina = titulo(conteudo, 'Ponto e Ocorrências', 'bi-clock-history', pode('rh.gerir') ? '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Lançar ocorrência</button>' : '');
+  const pagina = titulo(conteudo, 'Ponto e ocorrências', 'bi-clock-history', pode('rh.gerir') ? '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Lançar ocorrência</button>' : '');
   const t = new DataTable(pagina, {
     url: '/api/rh/ocorrencias', title: 'Ocorrências', sort: 'data', dir: 'desc',
     columns: [
@@ -285,7 +285,7 @@ function ocorrencias(conteudo) {
 
 // ---------- Solicitações ----------
 function solicitacoes(conteudo) {
-  const pagina = titulo(conteudo, 'Solicitações dos Colaboradores', 'bi-inbox');
+  const pagina = titulo(conteudo, 'Solicitações dos colaboradores', 'bi-inbox');
   const t = new DataTable(pagina, {
     url: '/api/rh/solicitacoes', title: 'Solicitações', sort: 'id', dir: 'desc', filtrosIniciais: { status: 'aberta' },
     columns: [
@@ -310,7 +310,7 @@ function solicitacoes(conteudo) {
 
 // ---------- Folha (eventos do mês) ----------
 async function folha(conteudo) {
-  const pagina = titulo(conteudo, 'Folha: Eventos do Mês', 'bi-cash-stack', `<input type="month" class="form-control form-control-sm" id="comp" value="${hoje().slice(0, 7)}" style="width:auto">`);
+  const pagina = titulo(conteudo, 'Folha do mês', 'bi-cash-stack', `<input type="month" class="form-control form-control-sm" id="comp" value="${hoje().slice(0, 7)}" style="width:auto">`);
   const compEl = conteudo.querySelector('#comp');
   const carregar = async () => {
     const [d, cm] = await Promise.all([get(`/api/rh/folha?competencia=${compEl.value}`), get(`/api/rh/folha/comissoes?competencia=${compEl.value}`)]);

@@ -146,7 +146,7 @@ export async function abrirCliente(id, aoSalvar) {
 
 // ---------- Histórico de compra ----------
 async function historicoCompra(conteudo) {
-  const pagina = titulo(conteudo, 'Histórico de Compra de Cliente', 'bi-clock-history');
+  const pagina = titulo(conteudo, 'Histórico de compra', 'bi-clock-history');
   pagina.innerHTML = `<div class="card mb-3"><div class="card-body"><form class="row g-2 align-items-end" id="f-hist">
     <div class="col-md-4"><label class="form-label">CPF/CNPJ</label><input class="form-control form-control-sm" name="documento" placeholder="Somente números"></div>
     <div class="col-md-5"><label class="form-label">ou busque pelo nome</label><input class="form-control form-control-sm" id="h-busca" autocomplete="off"></div>
@@ -177,7 +177,7 @@ async function historicoCompra(conteudo) {
 // ---------- Blacklist ----------
 async function blacklist(conteudo) {
   const editar = pode('blacklist.editar');
-  const pagina = titulo(conteudo, 'Cliente (Blacklist)', 'bi-shield-x', editar ? '<button class="btn btn-danger btn-sm" id="btn-incluir"><i class="bi bi-plus-lg"></i> Incluir cliente</button>' : '');
+  const pagina = titulo(conteudo, 'Blacklist', 'bi-shield-x', editar ? '<button class="btn btn-danger btn-sm" id="btn-incluir"><i class="bi bi-plus-lg"></i> Incluir cliente</button>' : '');
   const t = new DataTable(pagina, {
     url: '/api/clientes/blacklist/lista', title: 'Blacklist', filtrosIniciais: { ativo: '1' }, sort: 'data_inclusao', dir: 'desc',
     columns: [

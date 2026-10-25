@@ -42,7 +42,7 @@ let cachePerm;
 const permissoes = async () => (cachePerm ||= await get('/api/cadastros/permissoes'));
 
 function usuarios(conteudo) {
-  const pagina = titulo(conteudo, 'Usuários e Permissões', 'bi-person-lock', '<button class="btn btn-primary btn-sm" id="btn-novo"><i class="bi bi-plus-lg"></i> Novo usuário</button>');
+  const pagina = titulo(conteudo, 'Usuários e permissões', 'bi-person-lock', '<button class="btn btn-primary btn-sm" id="btn-novo"><i class="bi bi-plus-lg"></i> Novo usuário</button>');
   const t = new DataTable(pagina, {
     url: '/api/cadastros/usuarios', title: 'Usuários', sort: 'nome', dir: 'asc',
     columns: [

@@ -1,6 +1,6 @@
 // Tesouraria: fluxo de caixa (realizado + previsto), resultado do mês (DRE gerencial) e conciliação bancária (OFX).
 import {
-  get, post, put, api, esc, fmt, titulo, DataTable, modal, campo, opcoes, lerForm, toast, tentar, state, pode, btnAcao, kpi, erro, pedirTexto, qs,
+  get, post, put, api, esc, fmt, titulo, DataTable, modal, campo, opcoes, lerForm, toast, tentar, state, pode, btnAcao, kpi, erro, pedirTexto, qs, estiloGraficos,
 } from '../core.js';
 import { CATEGORIAS } from './pagar.js';
 
@@ -10,8 +10,7 @@ const graficos = new WeakMap();
 
 function grafico(canvas, config) {
   graficos.get(canvas)?.destroy();
-  const css = getComputedStyle(document.documentElement);
-  Chart.defaults.color = css.getPropertyValue('--bs-secondary-color').trim() || '#6c757d';
+  estiloGraficos();
   const g = new Chart(canvas, { type: 'bar', ...config });
   graficos.set(canvas, g);
   return g;
@@ -56,9 +55,9 @@ async function fluxo(conteudo) {
       data: {
         labels: d.linhas.map((l) => rot(l.periodo, d.agrupar)),
         datasets: [
-          { type: 'bar', label: 'Entradas', data: d.linhas.map((l) => l.entradas + l.entradas_previstas), backgroundColor: cor('--bs-success') || '#2e7d32', borderRadius: 4, stack: 'e' },
-          { type: 'bar', label: 'Saídas', data: d.linhas.map((l) => -(l.saidas + l.saidas_previstas)), backgroundColor: cor('--bs-danger') || '#c62828', borderRadius: 4, stack: 'e' },
-          { type: 'line', label: 'Saldo', data: d.linhas.map((l) => l.saldo), borderColor: cor('--bs-primary') || '#1565c0', borderWidth: 2, pointRadius: 2, tension: 0.2, yAxisID: 'y', order: 0 },
+          { type: 'bar', label: 'Entradas', data: d.linhas.map((l) => l.entradas + l.entradas_previstas), backgroundColor: cor('--ok'), stack: 'e' },
+          { type: 'bar', label: 'Saídas', data: d.linhas.map((l) => -(l.saidas + l.saidas_previstas)), backgroundColor: cor('--erro'), stack: 'e' },
+          { type: 'line', label: 'Saldo', data: d.linhas.map((l) => l.saldo), borderColor: cor('--texto'), borderWidth: 2, yAxisID: 'y', order: 0 },
         ],
       },
       options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmt.money(Math.abs(c.raw))}` } } }, scales: { y: { ticks: { callback: (v) => fmt.money(v) } } } },
@@ -98,8 +97,8 @@ async function resultado(conteudo, ano = Number(hoje().slice(0, 4))) {
   const res = d.linhas.find((l) => l.final);
   grafico(pagina.querySelector('[data-g]'), {
     data: { labels: nomes.slice(0, Math.max(ultimo + 1, 1)), datasets: [
-      { type: 'bar', label: 'Receita bruta', data: d.linhas[0].valores.slice(0, ultimo + 1), backgroundColor: cor('--bs-success') || '#2e7d32', borderRadius: 4, order: 1 },
-      { type: 'line', label: 'Resultado operacional', data: res.valores.slice(0, ultimo + 1), borderColor: cor('--bs-primary') || '#1565c0', borderWidth: 2, tension: 0.2, order: 0 },
+      { type: 'bar', label: 'Receita bruta', data: d.linhas[0].valores.slice(0, ultimo + 1), backgroundColor: cor('--agro'), order: 1 },
+      { type: 'line', label: 'Resultado operacional', data: res.valores.slice(0, ultimo + 1), borderColor: cor('--texto'), borderWidth: 2, order: 0 },
     ] },
     options: { maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmt.money(c.raw)}` } } }, scales: { y: { ticks: { callback: (v) => fmt.money(v) } } } },
   });

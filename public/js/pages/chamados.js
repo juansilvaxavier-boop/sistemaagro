@@ -10,7 +10,7 @@ const ESCOPOS = [['', 'Todos que posso ver'], ['setor', 'Para o meu setor'], ['a
 const bdg = (mapa, v) => { const [l, c] = mapa[v] || [v, 'secondary']; return `<span class="badge text-bg-${c}">${esc(l)}</span>`; };
 
 export default async function (conteudo) {
-  const pagina = titulo(conteudo, 'Chamados Internos', 'bi-headset', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Abrir chamado</button>');
+  const pagina = titulo(conteudo, 'Chamados internos', 'bi-headset', '<button class="btn btn-sm btn-success" id="btn-novo"><i class="bi bi-plus-lg"></i> Abrir chamado</button>');
   pagina.innerHTML = `<div class="kpis mb-3" id="kpis"></div>
     <div class="d-flex gap-2 mb-2 flex-wrap align-items-center">
       <div class="btn-group btn-group-sm" role="group" id="escopo">${ESCOPOS.map(([v, l], i) => `<input type="radio" class="btn-check" name="esc" id="esc-${i}" value="${v}" ${i === (pode('chamados.gerir') ? 0 : 1) ? 'checked' : ''}><label class="btn btn-outline-success" for="esc-${i}">${l}</label>`).join('')}</div>

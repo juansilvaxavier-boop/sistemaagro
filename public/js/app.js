@@ -711,6 +711,8 @@ async function rotear() {
   if (!state.me?.empresa) return;
   const hash = (location.hash || '#/dashboard').split('?')[0];
   fecharMenu();
+  // Ao trocar de tela, fecha o que ficou aberto por cima (modal de outra tela).
+  document.querySelectorAll('.modal.show').forEach((m) => bootstrap.Modal.getInstance(m)?.hide());
   // Marca a área da rota no menu; a aba aparece na barra de abas da tela.
   const area = areaDaRota(hash);
   let ativo = null;
@@ -746,11 +748,18 @@ async function rotear() {
       document.title = `${area?.aba?.l || area?.item.l || 'Agroterra'} · Agroterra Sistema`;
     } catch (e) {
       console.error(e);
-      conteudo.innerHTML = `<div class="alert alert-danger">${esc(e.message)}</div>`;
+      const semAcesso = e.status === 403;
+      conteudo.innerHTML = `<div class="card"><div class="vazio ${semAcesso ? '' : 'erro'} py-5">
+        <i class="bi ${semAcesso ? 'bi-lock' : 'bi-exclamation-triangle'}"></i><b>${semAcesso ? 'Você não tem acesso a esta tela' : 'Não foi possível abrir esta tela'}</b>
+        ${esc(semAcesso ? 'Peça a liberação ao administrador, se precisar dela.' : e.message)}
+        <div class="d-flex gap-2 justify-content-center">${semAcesso ? '' : '<button type="button" class="btn btn-sm btn-outline-secondary" data-recarregar><i class="bi bi-arrow-clockwise"></i> Tentar de novo</button>'}
+          <a class="btn btn-sm btn-success" href="#/dashboard"><i class="bi bi-grid-1x2"></i> Ir para o painel</a></div></div></div>`;
+      conteudo.querySelector('[data-recarregar]')?.addEventListener('click', rotear);
     }
     return;
   }
-  conteudo.innerHTML = '<div class="vazio"><i class="bi bi-signpost-split"></i>Página não encontrada.</div>';
+  conteudo.innerHTML = `<div class="card"><div class="vazio py-5"><i class="bi bi-signpost-split"></i><b>Página não encontrada</b>O endereço pode ter mudado ou o link está incompleto.
+    <div><a class="btn btn-sm btn-success" href="#/dashboard"><i class="bi bi-grid-1x2"></i> Ir para o painel</a></div></div></div>`;
 }
 window.addEventListener('hashchange', rotear);
 

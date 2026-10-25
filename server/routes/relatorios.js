@@ -45,7 +45,7 @@ const filtroParcelaComum = {
 
 const RELATORIOS = {
   'contas-receber': {
-    titulo: 'Contas a Receber', perm: 'relatorios.financeiro',
+    titulo: 'Contas a receber', perm: 'relatorios.financeiro',
     async gerar(q, ctx) {
       const f = filtros(q, { venc_de: ['p.vencimento >= ?'], venc_ate: ['p.vencimento <= ?'], ...filtroParcelaComum });
       const ordem = q.agrupar_vendedor === '1' ? 'v.nome, p.vencimento' : 'p.vencimento';
@@ -58,7 +58,7 @@ const RELATORIOS = {
     },
   },
   'contas-recebidas': {
-    titulo: 'Contas Recebidas', perm: 'relatorios.financeiro',
+    titulo: 'Contas recebidas', perm: 'relatorios.financeiro',
     async gerar(q, ctx) {
       const f = filtros(q, { baixa_de: ['p.data_pagamento >= ?'], baixa_ate: ['p.data_pagamento <= ?'], ...filtroParcelaComum });
       return {
@@ -71,7 +71,7 @@ const RELATORIOS = {
     },
   },
   vencidas: {
-    titulo: 'Vencidas', perm: 'relatorios.financeiro',
+    titulo: 'Parcelas vencidas', perm: 'relatorios.financeiro',
     async gerar(q, ctx) {
       const f = filtros(q, { venc_de: ['p.vencimento >= ?'], venc_ate: ['p.vencimento <= ?'], ...filtroParcelaComum });
       let neg = '';
@@ -128,7 +128,7 @@ const RELATORIOS = {
     },
   },
   'historico-vendas': {
-    titulo: 'Histórico de Vendas', perm: 'relatorios.vendas', escopo: true,
+    titulo: 'Histórico de vendas', perm: 'relatorios.vendas', escopo: true,
     async gerar(q, ctx) {
       const f = filtros(q, { emissao_de: ['nf.data_emissao >= ?'], emissao_ate: ['nf.data_emissao <= ?', fimDia], empresa_id: ['nf.empresa_id = ?'], vendedor_id: ['pe.vendedor_id = ?'], supervisor_id: ['pe.supervisor_id = ?'] });
       return {
@@ -146,7 +146,7 @@ const RELATORIOS = {
     },
   },
   'venda-produtos': {
-    titulo: 'Venda de Produtos', perm: 'relatorios.vendas', escopo: true,
+    titulo: 'Venda de produtos', perm: 'relatorios.vendas', escopo: true,
     async gerar(q, ctx) {
       const dims = {
         produto: ['pr.nome', 'Produto'], grupo: ['g.nome', 'Grupo'], cliente: ['c.nome', 'Cliente'], vendedor: ['v.nome', 'Vendedor'], mes: [`substr(nf.data_emissao,1,7)`, 'Mês'],
@@ -182,7 +182,7 @@ const RELATORIOS = {
     },
   },
   'contas-pagar': {
-    titulo: 'Contas a Pagar', perm: 'financeiro.pagar', soTodos: true,
+    titulo: 'Contas a pagar', perm: 'financeiro.pagar', soTodos: true,
     async gerar(q, ctx) {
       const { STATUS_SQL, SALDO_SQL } = require('./pagar');
       const f = filtros(q, {
@@ -205,7 +205,7 @@ const RELATORIOS = {
     },
   },
   'fluxo-caixa': {
-    titulo: 'Fluxo de Caixa Previsto', perm: 'relatorios.financeiro', soTodos: true,
+    titulo: 'Fluxo de caixa previsto', perm: 'relatorios.financeiro', soTodos: true,
     async gerar(q, ctx) {
       const de = q.venc_de || S.hoje();
       const ate = q.venc_ate || S.addDias(de, 30);
@@ -231,7 +231,7 @@ const RELATORIOS = {
     },
   },
   'posicao-estoque': {
-    titulo: 'Posição de Estoque', perm: 'relatorios.estoque',
+    titulo: 'Posição de estoque', perm: 'relatorios.estoque',
     async gerar(q, ctx) {
       const porLote = q.por_lote === '1';
       const linhas = await db.all(
@@ -252,7 +252,7 @@ const RELATORIOS = {
     },
   },
   'movimentacao-estoque': {
-    titulo: 'Movimentação de Estoque', perm: 'relatorios.estoque',
+    titulo: 'Movimentação de estoque', perm: 'relatorios.estoque',
     async gerar(q, ctx) {
       const f = filtros(q, { mov_de: ['m.created_at >= ?'], mov_ate: ['m.created_at <= ?', fimDia], origem: ['m.origem = ?'] });
       return {
@@ -271,7 +271,7 @@ const RELATORIOS = {
     },
   },
   'vendedores-supervisor': {
-    titulo: 'Vendedores por Supervisor', perm: 'relatorios.vendas',
+    titulo: 'Vendedores por supervisor', perm: 'relatorios.vendas',
     async gerar(q, ctx) {
       return {
         colunas: [col('supervisor', 'Supervisor'), col('equipe', 'Equipe'), col('vendedor', 'Vendedor'), col('login', 'Login'), col('email', 'E-mail'), col('ativo', 'Ativo', 'bool')],

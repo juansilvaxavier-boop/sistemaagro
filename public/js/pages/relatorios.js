@@ -44,19 +44,40 @@ function filtrosDe(tipo) {
   }
 }
 
+// Grupo, descrição curta e ícone de cada relatório na tela inicial.
+const INFO = {
+  vendas: ['Vendas', 'Pedidos por período, etapa, vendedor e equipe.', 'bi-cart3'],
+  'historico-vendas': ['Vendas', 'Notas emitidas por cliente ao longo do tempo.', 'bi-clock-history'],
+  'venda-produtos': ['Vendas', 'Quantidade e valor vendido por produto, grupo, cliente ou mês.', 'bi-box'],
+  'vendedores-supervisor': ['Vendas', 'Carteira de vendedores de cada supervisor.', 'bi-people'],
+  'contas-receber': ['Financeiro', 'Parcelas em aberto por vencimento, banco e vendedor.', 'bi-wallet2'],
+  'contas-recebidas': ['Financeiro', 'Baixas do período por banco e forma de pagamento.', 'bi-cash-coin'],
+  vencidas: ['Financeiro', 'Parcelas em atraso, com filtro de negativados.', 'bi-exclamation-triangle'],
+  faturamento: ['Financeiro', 'Notas fiscais emitidas no período por empresa.', 'bi-receipt'],
+  'contas-pagar': ['Financeiro', 'Contas de fornecedores por situação, categoria e fornecedor.', 'bi-credit-card-2-back'],
+  'fluxo-caixa': ['Financeiro', 'A receber menos a pagar, dia a dia.', 'bi-graph-up'],
+  'posicao-estoque': ['Estoque', 'Saldo por produto, embalagem e lote.', 'bi-boxes'],
+  'movimentacao-estoque': ['Estoque', 'Entradas e saídas do período por origem.', 'bi-arrow-left-right'],
+};
+
 export default async function (conteudo, { params: [tipo] }) {
   const lista = await get('/api/relatorios');
   if (!tipo) {
     const pagina = titulo(conteudo, 'Relatórios', 'bi-bar-chart-line');
-    pagina.innerHTML = `<div class="row g-3">${lista.map((r) => `<div class="col-md-4 col-xl-3"><a class="card h-100 text-decoration-none kpi-link" href="#/relatorios/${r.id}">
-      <div class="card-body"><i class="bi bi-file-earmark-bar-graph fs-3 text-agro"></i><div class="fw-semibold mt-2">${esc(r.titulo)}</div></div></a></div>`).join('')}</div>`;
+    const grupos = [...new Set(lista.map((r) => (INFO[r.id] || ['Outros'])[0]))];
+    pagina.innerHTML = grupos.map((g) => `<h3 class="secao-titulo">${esc(g)}</h3><div class="row g-3 mb-4">${lista.filter((r) => (INFO[r.id] || ['Outros'])[0] === g).map((r) => {
+      const [, desc, icone] = INFO[r.id] || ['', '', 'bi-file-earmark-bar-graph'];
+      return `<div class="col-sm-6 col-lg-4 col-xxl-3"><a class="kpi-link" href="#/relatorios/${r.id}"><div class="card kpi cor-primary h-100"><div class="card-body d-flex gap-3">
+        <span class="icone" aria-hidden="true"><i class="bi ${icone}"></i></span><div><div class="fw-semibold">${esc(r.titulo)}</div>${desc ? `<div class="sub mt-1">${esc(desc)}</div>` : ''}</div>
+        <i class="bi bi-arrow-up-right" aria-hidden="true"></i></div></div></a></div>`;
+    }).join('')}</div>`).join('');
     return;
   }
   const def = lista.find((r) => r.id === tipo);
   if (!def) { conteudo.innerHTML = '<div class="vazio">Relatório não disponível para o seu perfil.</div>'; return; }
   const pagina = titulo(conteudo, def.titulo, 'bi-file-earmark-bar-graph', '<a href="#/relatorios" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Relatórios</a>');
   pagina.innerHTML = `<div class="card mb-3 no-print"><div class="card-body"><form class="row g-2">${filtrosDe(tipo)}
-    <div class="col-12 d-flex gap-2 mt-2"><button class="btn btn-success btn-sm" type="submit"><i class="bi bi-play-fill"></i> Gerar Relatório</button>
+    <div class="col-12 d-flex gap-2 mt-2"><button class="btn btn-success btn-sm" type="submit"><i class="bi bi-play-fill"></i> Gerar relatório</button>
     <button class="btn btn-outline-success btn-sm" type="button" data-excel><i class="bi bi-file-earmark-excel"></i> Gerar Excel</button>
     <button class="btn btn-outline-secondary btn-sm d-none" type="button" data-print><i class="bi bi-printer"></i> Imprimir</button></div></form></div></div>
     <div id="rel-res"></div>`;
