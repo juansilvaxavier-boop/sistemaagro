@@ -112,12 +112,12 @@ export default async function (conteudo, { params: [etapa] }) {
     onAction: { etiqueta: async (r) => { const { abrirEtiqueta } = await import('../etiqueta.js'); abrirEtiqueta(r.id, () => tabelas.forEach((t) => t.reload())); } },
   } : {};
   tabelas.push(new DataTable(pagina.querySelector('#t-pedidos'), {
-    url: `/api/pedidos/fila/${etapa}`, columns: cols, rowClick: abrir, title: `Fila ${info.label}`, sort: 'etapa_desde', dir: 'asc', ...comEtiqueta,
+    url: `/api/pedidos/fila/${etapa}`, columns: cols, empresa: true, rowClick: abrir, title: `Fila ${info.label}`, sort: 'etapa_desde', dir: 'asc', ...comEtiqueta,
     painel: camposFiltro(etapa), chave: `fila-${etapa}`,
   }));
   if (etapa === 'transito') {
     tabelas.push(new DataTable(pagina.querySelector('#t-entregues'), {
-      url: '/api/pedidos/fila/transito?aba=entregues', columns: cols, rowClick: abrir, title: 'Pedidos entregues', sort: 'data_entrega', dir: 'desc', ...comEtiqueta,
+      url: '/api/pedidos/fila/transito?aba=entregues', columns: cols, empresa: true, rowClick: abrir, title: 'Pedidos entregues', sort: 'data_entrega', dir: 'desc', ...comEtiqueta,
       painel: camposFiltro('transito'), chave: 'fila-entregues',
     }));
   }

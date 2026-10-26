@@ -93,7 +93,24 @@ async function open() {
  * parâmetros `?` ou `:nome` viram $1..$n, IFNULL vira COALESCE e as funções de data
  * (date/datetime/julianday no formato do SQLite) usam as funções sq_* do schema.
  */
+/**
+ * Visão de todas as empresas: nas consultas (SELECT/WITH), "empresa_id = ?" (ou :nome, ou 0) vira
+ * "empresa_id IN (empresas do usuário)". O parâmetro continua no lugar (consumido por um teste que é sempre
+ * verdadeiro), então a numeração dos parâmetros não muda. Escritas não são reescritas: ficam bloqueadas nessa visão.
+ */
+function paraTodasEmpresas(sql, ids) {
+  if (!ids?.length || !/^\s*(SELECT|WITH)\b/i.test(sql)) return sql;
+  const lista = ids.map(Number).filter((n) => n > 0).join(',') || '0';
+  const consumir = (p) => (p === '0' ? 'TRUE' : `CAST(${p} AS integer) IS NOT NULL`);
+  return sql
+    .replace(/COALESCE\(\s*([a-z_]+\.)?empresa_id\s*,\s*(\?|:[a-z_]\w*|0)\s*\)\s*=\s*(\?|:[a-z_]\w*|0)(?![\w.])/gi,
+      (_, a = '', p1, p2) => `(COALESCE(${a}empresa_id, ${Number(ids[0]) || 0}) IN (${lista}) AND ${consumir(p1)} AND ${consumir(p2)})`)
+    .replace(/(?<![\w.])([a-z_]+\.)?empresa_id\s*=\s*(\?|:[a-z_]\w*|0)(?![\w.])/gi,
+      (_, a = '', p) => `(${a}empresa_id IN (${lista}) AND ${consumir(p)})`);
+}
+
 function traduzir(sql, params) {
+  sql = paraTodasEmpresas(sql, contexto.getStore()?.empresas);
   let lista = params;
   let nomes = null;
   if (params.length === 1 && params[0] && typeof params[0] === 'object' && !Array.isArray(params[0]) && !(params[0] instanceof Buffer)) {
@@ -281,5 +298,6 @@ async function close() {
 }
 
 module.exports = {
+  paraTodasEmpresas,
   open, query, all, get, run, tx, insert, update, remove, nextSeq, paginate, close, comUsuario, usuarioAtual, SCHEMA,
 };

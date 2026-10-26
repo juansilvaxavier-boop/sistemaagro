@@ -104,6 +104,12 @@ Tema claro e escuro, menu recolhível, busca global (**Ctrl+K**) por pedido, cli
 direito com o **chat interno** (leitura, quem está online, contador de não lidas) e o **assistente de IA**, *Meu perfil* com foto, avisos do navegador para mensagens e pedidos, e instalação como
 aplicativo (PWA) no computador ou no celular.
 
+**Todas as empresas:** quem tem acesso a mais de uma empresa pode escolher *Todas as empresas* na tela de escolha da
+empresa ou no seletor do menu. Painel, filas, listas e relatórios passam a somar as empresas liberadas para o usuário.
+Pedidos, parcelas, notas e contas a pagar ganham a coluna *Empresa*, com filtro. A visão é só para consulta: lançar ou
+alterar pede que se escolha uma empresa (a API responde 409 `somente_consulta`). Nessa sessão, o banco troca
+`empresa_id = ?` pela lista de empresas do usuário nas consultas (`paraTodasEmpresas` em `server/db.js`).
+
 **Design system:** tokens de cor, tipografia, espaço, raios e sombras, mais os componentes compartilhados (botões, modal,
 toast, tabela padrão com modo cartão no celular, indicadores com variação vs período anterior e estilo único de gráficos).
 As regras estão em [`docs/design-system.md`](docs/design-system.md).

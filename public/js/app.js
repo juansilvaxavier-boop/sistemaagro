@@ -322,11 +322,15 @@ async function seguir() {
 
 function escolherEmpresa(empresas) {
   mostrarPasso('passo-empresa');
+  const atual = state.me?.empresa;
+  const marca = (on) => (on ? '<i class="bi bi-check2 ms-auto text-agro" aria-label="Atual"></i>' : '');
   $('#lista-empresas').innerHTML = empresas.map((e) => `<button type="button" class="list-group-item list-group-item-action" data-id="${e.id}">
-    <i class="bi bi-building fs-5 text-agro"></i><span><strong class="d-block">${esc(e.nome)}</strong><small class="text-body-secondary">${fmt.doc(e.cnpj)}</small></span></button>`).join('');
+    <i class="bi bi-building fs-5 text-agro"></i><span><strong class="d-block">${esc(e.nome)}</strong><small class="text-body-secondary">${fmt.doc(e.cnpj)}</small></span>${marca(atual?.id === e.id)}</button>`).join('')
+    + (empresas.length > 1 ? `<button type="button" class="list-group-item list-group-item-action empresa-todas" data-id="todas">
+    <i class="bi bi-buildings fs-5 text-agro"></i><span><strong class="d-block">Todas as empresas</strong><small class="text-body-secondary">Dados das ${empresas.length} empresas juntos · só consulta</small></span>${marca(atual?.todas)}</button>` : '');
   $('#lista-empresas').querySelectorAll('button').forEach((b) => b.addEventListener('click', async () => {
     try {
-      await post('/api/auth/empresa', { empresa_id: Number(b.dataset.id) });
+      await post('/api/auth/empresa', { empresa_id: b.dataset.id === 'todas' ? 'todas' : Number(b.dataset.id) });
       state.me = await get('/api/auth/me');
       await abrirApp();
     } catch (e) { erro(e); }
@@ -408,6 +412,7 @@ $('#btn-sair').addEventListener('click', async () => {
   location.hash = '';
   location.reload();
 });
+$('#aviso-todas').addEventListener('click', () => escolherEmpresa(state.me.empresas));
 $('#btn-empresa').addEventListener('click', () => {
   if (state.me.empresas.length > 1) escolherEmpresa(state.me.empresas);
   else toast('Seu usuário tem acesso a apenas uma empresa.', 'info');
@@ -449,6 +454,10 @@ async function abrirApp() {
   $('#app').classList.remove('d-none');
   pintarUsuario();
   $('#empresa-nome').textContent = state.me.empresa.nome;
+  // Visão consolidada: ícone próprio e aviso de que é só consulta.
+  document.documentElement.classList.toggle('todas-empresas', !!state.me.empresa.todas);
+  $('#btn-empresa .emp-ico i').className = `bi ${state.me.empresa.todas ? 'bi-buildings' : 'bi-building'}`;
+  $('#aviso-todas')?.classList.toggle('d-none', !state.me.empresa.todas);
   $('#dock').classList.remove('d-none');
   $('#btn-chat').classList.toggle('d-none', !pode('chat'));
   state.opcoes = await get('/api/cadastros/opcoes');

@@ -19,7 +19,7 @@ function escopo(req, alias = 'p') {
 const etapaLabelSql = `CASE p.etapa ${Object.entries(W.ETAPAS).map(([k, v]) => `WHEN '${k}' THEN '${v.label}'`).join(' ')} END`;
 
 const LISTA_SQL = `
-  SELECT p.id, p.numero, p.created_at AS data, c.documento, c.nome AS cliente, c.id AS cliente_id,
+  SELECT p.id, p.numero, p.created_at AS data, c.documento, c.nome AS cliente, c.id AS cliente_id, (SELECT nome FROM empresas em WHERE em.id = p.empresa_id) AS empresa,
     f.nome AS forma, cp.descricao AS condicao, p.valor_total AS valor,
     v.nome AS vendedor, s.nome AS supervisor, a.nome AS analista, eq.nome AS equipe,
     en.uf, en.cidade, p.etapa, ${etapaLabelSql} AS etapa_label, p.etapa_desde,

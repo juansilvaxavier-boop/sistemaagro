@@ -28,7 +28,7 @@ export default async function (conteudo) {
       <div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:${(c.valor / max) * 100}%"></div></div></div>`).join('') || '<div class="vazio py-2">Nada em aberto.</div>';
   };
   const t = new DataTable(pagina.querySelector('#t-pagar'), {
-    url: () => `/api/pagar?abertos=${pagina.querySelector('#so-abertas').checked ? 1 : ''}`, title: 'Contas a pagar', sort: 'vencimento', dir: 'asc',
+    url: () => `/api/pagar?abertos=${pagina.querySelector('#so-abertas').checked ? 1 : ''}`, title: 'Contas a pagar', sort: 'vencimento', dir: 'asc', empresa: true,
     columns: [
       { k: 'vencimento', l: 'Vencimento', t: 'date' }, { k: 'fornecedor', l: 'Fornecedor' }, { k: 'descricao', l: 'Descrição', cls: 'quebra' },
       { k: 'categoria', l: 'Categoria', filter: { options: CATEGORIAS.map((c) => [c, c]) } }, { k: 'documento', l: 'Documento' }, { k: 'parcela', l: 'Parc.' },

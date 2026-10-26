@@ -15,7 +15,7 @@ const STATUS_SQL = `CASE WHEN c.status = 'a_pagar' AND c.vencimento < date('now'
 const SALDO_SQL = `CASE WHEN c.status = 'a_pagar' THEN ROUND((c.valor + COALESCE(c.juros,0) - COALESCE(c.desconto,0) - COALESCE(c.valor_pago,0))::numeric, 2)::float8 ELSE 0 END`;
 
 const LISTA_SQL = `
-  SELECT c.id, c.vencimento, c.descricao, f.razao_social AS fornecedor, c.fornecedor_id, c.categoria, c.documento, c.competencia,
+  SELECT c.id, c.vencimento, c.descricao, f.razao_social AS fornecedor, c.fornecedor_id, c.categoria, c.documento, c.competencia, (SELECT nome FROM empresas em WHERE em.id = c.empresa_id) AS empresa,
     c.parcela || '/' || c.total_parcelas AS parcela, c.valor, c.juros, c.desconto, c.valor_pago, ${SALDO_SQL} AS saldo,
     c.data_pagamento, c.forma_pagamento, b.nome AS banco, ${STATUS_SQL} AS status, c.grupo, c.emissao, u.nome AS lancado_por
   FROM contas_pagar c LEFT JOIN fornecedores f ON f.id = c.fornecedor_id LEFT JOIN bancos b ON b.id = c.banco_id

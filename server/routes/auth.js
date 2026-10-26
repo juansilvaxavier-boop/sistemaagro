@@ -14,13 +14,7 @@ function setCookie(res, token, req) {
   res.setHeader('Set-Cookie', `${A.COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${A.SESSION_HOURS * 3600}${seguro}`);
 }
 
-async function empresasDo(usuario) {
-  if (['admin', 'diretoria'].includes(usuario.perfil)) return db.all('SELECT id, nome, cnpj FROM empresas ORDER BY nome');
-  return db.all(
-    'SELECT e.id, e.nome, e.cnpj FROM empresas e JOIN usuario_empresas ue ON ue.empresa_id = e.id WHERE ue.usuario_id = ? ORDER BY e.nome',
-    usuario.id,
-  );
-}
+const empresasDo = A.empresasDoUsuario;
 
 r.post('/login', async (req, res) => {
   const { login, senha } = req.body || {};
@@ -51,11 +45,14 @@ r.post('/login', async (req, res) => {
 const pendente = A.autenticado({ semEmpresa: true, semPendencias: true });
 
 r.post('/empresa', pendente, async (req, res) => {
+  const empresas = await empresasDo(req.user);
+  // "todas": visão consolidada das empresas liberadas para o usuário (só consulta).
+  const todas = req.body?.empresa_id === 'todas';
   const id = Number(req.body?.empresa_id);
-  if (!(await empresasDo(req.user)).some((e) => e.id === id)) return res.status(403).json({ erro: 'Empresa não liberada para o usuário.' });
+  if (todas ? empresas.length < 2 : !empresas.some((e) => e.id === id)) return res.status(403).json({ erro: 'Empresa não liberada para o usuário.' });
   // Nova sessão já com a empresa escolhida (o token assinado carrega a empresa).
   await db.run('DELETE FROM sessoes WHERE token = ?', req.token);
-  setCookie(res, await A.criarSessao(req.user.id, id), req);
+  setCookie(res, await A.criarSessao(req.user.id, todas ? null : id, { todas }), req);
   res.json({ ok: true });
 });
 
@@ -70,7 +67,8 @@ r.get('/me', pendente, async (req, res) => {
   const u = await db.get('SELECT foto IS NOT NULL AS tem_foto, ultimo_acesso FROM usuarios WHERE id = ?', req.user.id);
   res.json({
     usuario: { ...req.user, perfil_label: A.PERFIS[req.user.perfil], tem_foto: !!u?.tem_foto, permissoesEfetivas: undefined },
-    empresa: req.empresaId ? await db.get('SELECT id, nome, cnpj FROM empresas WHERE id = ?', req.empresaId) : null,
+    empresa: req.todasEmpresas ? { id: 0, nome: 'Todas as empresas', cnpj: null, todas: true, ids: req.todasEmpresas }
+      : req.empresaId ? await db.get('SELECT id, nome, cnpj FROM empresas WHERE id = ?', req.empresaId) : null,
     empresas: await empresasDo(req.user),
     permissoes: req.user.permissoesEfetivas,
     pendencias: { trocarSenha: req.user.trocar_senha, aceitarTermo: !req.user.termo_aceito_em, versaoTermo: VERSAO_TERMO },

@@ -11,7 +11,7 @@ const { ErroNegocio } = S;
 
 // ---------- Gestão de Parcelas ----------
 const PARCELAS_SQL = `
-  SELECT p.id, p.pedido_id, pe.numero AS pedido, nf.numero AS nota, p.cliente_id, c.documento, c.nome AS cliente,
+  SELECT p.id, p.pedido_id, pe.numero AS pedido, nf.numero AS nota, p.cliente_id, c.documento, c.nome AS cliente, (SELECT nome FROM empresas em WHERE em.id = p.empresa_id) AS empresa,
     p.numero AS parcela, p.total_parcelas, p.vencimento, p.vencimento_original, p.valor, p.juros, p.desconto, p.valor_pago,
     ${S.SALDO_PARCELA_SQL} AS saldo, p.data_pagamento, ${S.STATUS_PARCELA_SQL} AS status,
     CASE WHEN ${S.ABERTA_SQL} AND p.vencimento < date('now','localtime') THEN CAST(julianday('now','localtime') - julianday(p.vencimento) AS INTEGER) ELSE 0 END AS dias_atraso,
@@ -208,7 +208,7 @@ r.post('/devolucoes', A.exige('financeiro.devolucoes', 'financeiro.notas'), asyn
 // ---------- Nota fiscal de saída ----------
 r.get('/notas', A.exige('financeiro.notas'), async (req, res) =>
   await responderLista(req, res, {
-    sql: `SELECT nf.id, nf.numero, nf.serie, nf.data_emissao, pe.numero AS pedido, c.documento, c.nome AS cliente, nf.valor, nf.status, nf.natureza, nf.chave,
+    sql: `SELECT nf.id, nf.numero, nf.serie, nf.data_emissao, pe.numero AS pedido, c.documento, c.nome AS cliente, nf.valor, nf.status, nf.natureza, nf.chave, (SELECT nome FROM empresas em WHERE em.id = nf.empresa_id) AS empresa,
             (SELECT COUNT(*) FROM cartas_correcao cc WHERE cc.nota_id = nf.id) AS cartas_correcao,
             (SELECT IFNULL(SUM(valor),0) FROM devolucoes d WHERE d.nota_id = nf.id) AS devolvido
           FROM notas_fiscais nf JOIN clientes c ON c.id = nf.cliente_id LEFT JOIN pedidos pe ON pe.id = nf.pedido_id WHERE nf.empresa_id = ? AND ${E.financeiro(req.user, 'nf')}`,

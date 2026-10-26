@@ -402,6 +402,10 @@ export class DataTable {
   constructor(container, opts) {
     this.c = typeof container === 'string' ? document.querySelector(container) : container;
     this.o = { pageSize: 20, ...opts };
+    // Visão de todas as empresas: listas marcadas com empresa: true ganham a coluna Empresa (com filtro).
+    if (opts.empresa && state.me?.empresa?.todas) {
+      this.o.columns = [{ k: 'empresa', l: 'Empresa', filter: { options: (state.me.empresas || []).map((e) => [e.nome, e.nome]) } }, ...opts.columns];
+    }
     this.filtros = { ...(opts.filtrosIniciais || {}) };
     // Painel de filtros (opts.painel): parâmetros extras como de_/ate_/em_/f_, lembrados por tela nesta sessão.
     this.extras = {};

@@ -788,3 +788,12 @@ code { color: var(--texto-2); background: var(--superficie-3); padding: 1px 6px;
 tr.clicavel { cursor: pointer; }
 /* Título de seção dentro da página */
 .secao-titulo { font-size: var(--fs-xs); font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--texto-2); margin: 0 0 10px; }
+
+/* Visão de todas as empresas (só consulta) */
+.aviso-todas { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--info-borda); background: var(--info-bg); color: var(--info);
+  border-radius: 99px; padding: 4px 12px; font-size: var(--fs-xs); font-weight: 650; white-space: nowrap; }
+.aviso-todas.d-none { display: none; }
+.aviso-todas:hover { filter: brightness(.97); }
+html.todas-empresas .btn-empresa { border-color: var(--info-borda); background: var(--info-bg); }
+html.todas-empresas .btn-empresa .emp-ico { background: var(--info); }
+@media (max-width: 575.98px) { .aviso-todas span { display: none; } .aviso-todas { padding: 6px 9px; } }

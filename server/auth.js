@@ -142,15 +142,26 @@ function validarSenha(senha) {
 const SEGREDO = process.env.SESSION_SECRET;
 const assinar = (dados) => crypto.createHmac('sha256', SEGREDO).update(dados).digest('base64url');
 
-async function criarSessao(usuarioId, empresaId) {
+/** Empresas que o usuário pode acessar (admin e diretoria: todas). */
+async function empresasDoUsuario(usuario) {
+  if (['admin', 'diretoria'].includes(usuario.perfil)) return db.all('SELECT id, nome, cnpj FROM empresas ORDER BY nome');
+  return db.all(
+    'SELECT e.id, e.nome, e.cnpj FROM empresas e JOIN usuario_empresas ue ON ue.empresa_id = e.id WHERE ue.usuario_id = ? ORDER BY e.nome',
+    usuario.id,
+  );
+}
+
+/** Sessão de uma empresa ou, com todas = true, a visão consolidada de todas as empresas do usuário (só consulta). */
+async function criarSessao(usuarioId, empresaId, { todas = false } = {}) {
   const expira = new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString();
   let token = crypto.randomBytes(32).toString('hex');
   if (SEGREDO) {
-    const dados = `${usuarioId}.${empresaId ?? 0}.${Date.parse(expira)}.${crypto.randomBytes(6).toString('hex')}`;
+    const dados = `${usuarioId}.${todas ? -1 : empresaId ?? 0}.${Date.parse(expira)}.${crypto.randomBytes(6).toString('hex')}`;
     token = `${dados}.${assinar(dados)}`;
   }
   await db.run('DELETE FROM sessoes WHERE expira_em < ?', new Date().toISOString());
-  await db.run('INSERT INTO sessoes (token, usuario_id, empresa_id, expira_em) VALUES (?, ?, ?, ?)', token, usuarioId, empresaId ?? null, expira);
+  await db.run('INSERT INTO sessoes (token, usuario_id, empresa_id, expira_em, todas_empresas) VALUES (?, ?, ?, ?, ?)',
+    token, usuarioId, todas ? null : empresaId ?? null, expira, todas ? 1 : 0);
   return token;
 }
 
@@ -167,7 +178,7 @@ const CAMPOS_USUARIO = 'u.id, u.nome, u.login, u.email, u.perfil, u.equipe_id, u
 
 async function carregarSessao(token) {
   if (!token) return null;
-  const s = await db.get(`SELECT s.token, s.empresa_id, s.expira_em, ${CAMPOS_USUARIO} FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token = ?`, token);
+  const s = await db.get(`SELECT s.token, s.empresa_id, s.todas_empresas, s.expira_em, ${CAMPOS_USUARIO} FROM sessoes s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token = ?`, token);
   if (s) return !s.ativo || s.expira_em < new Date().toISOString() ? null : s;
   return SEGREDO ? sessaoAssinada(token) : null;
 }
@@ -183,9 +194,14 @@ async function sessaoAssinada(token) {
   if (exp < Date.now()) return null;
   const u = await db.get(`SELECT ${CAMPOS_USUARIO} FROM usuarios u WHERE u.id = ?`, uid);
   if (!u || !u.ativo) return null;
-  await db.run('INSERT INTO sessoes (token, usuario_id, empresa_id, expira_em) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING', token, uid, emp || null, new Date(exp).toISOString());
-  return { ...u, token, empresa_id: emp || null };
+  const todas = emp === -1;
+  await db.run('INSERT INTO sessoes (token, usuario_id, empresa_id, expira_em, todas_empresas) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING',
+    token, uid, emp > 0 ? emp : null, new Date(exp).toISOString(), todas ? 1 : 0);
+  return { ...u, token, empresa_id: emp > 0 ? emp : null, todas_empresas: todas ? 1 : 0 };
 }
+
+// Rotas que alteram dados mas não dependem da empresa (liberadas na visão de todas as empresas).
+const ROTAS_LIVRES_TODAS = [/^\/api\/auth\//, /^\/api\/chat\b/, /^\/api\/assistente\b/, /^\/api\/mensagens\/(\d+\/lida|todas-lidas)$/];
 
 const ipDe = (req) => String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
 
@@ -198,7 +214,7 @@ function autenticado(opts = {}) {
     const token = lerCookie(req, COOKIE) || (req.headers.authorization || '').replace(/^Bearer /, '');
     const s = await carregarSessao(token);
     if (!s) return res.status(401).json({ erro: 'Sessão expirada. Faça login novamente.' });
-    if (!opts.semEmpresa && !s.empresa_id) return res.status(409).json({ erro: 'Escolha a empresa.' });
+    if (!opts.semEmpresa && !s.empresa_id && !s.todas_empresas) return res.status(409).json({ erro: 'Escolha a empresa.' });
     if (!opts.semPendencias && (s.trocar_senha || !s.termo_aceito_em)) {
       return res.status(428).json({ erro: s.trocar_senha ? 'Troque a senha provisória para continuar.' : 'Aceite o termo de privacidade para continuar.' });
     }
@@ -208,7 +224,19 @@ function autenticado(opts = {}) {
     };
     req.empresaId = s.empresa_id;
     req.token = s.token;
-    db.comUsuario({ usuarioId: s.id, usuarioNome: s.nome, ip: ipDe(req), rota: `${req.method} ${req.originalUrl.split('?')[0]}` }, next);
+    // Visão de todas as empresas: as consultas valem para todas as empresas do usuário (o db troca "empresa_id = ?"
+    // pela lista); lançar ou alterar exige escolher uma empresa.
+    let empresas = null;
+    if (s.todas_empresas) {
+      empresas = (await empresasDoUsuario(s)).map((e) => e.id);
+      req.empresaId = 0;
+      req.todasEmpresas = empresas;
+      const rota = req.originalUrl.split('?')[0];
+      if (!opts.semEmpresa && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !ROTAS_LIVRES_TODAS.some((r) => r.test(rota))) {
+        return res.status(409).json({ erro: 'Você está vendo todas as empresas, que é só para consulta. Escolha uma empresa no topo da tela para lançar ou alterar.', codigo: 'somente_consulta' });
+      }
+    }
+    db.comUsuario({ usuarioId: s.id, usuarioNome: s.nome, ip: ipDe(req), rota: `${req.method} ${req.originalUrl.split('?')[0]}`, empresas }, next);
   };
 }
 
@@ -221,5 +249,5 @@ function exige(...perms) {
 
 module.exports = {
   PERFIS, PERMISSOES, CATALOGO, COOKIE, SESSION_HOURS, MAX_TENTATIVAS, BLOQUEIO_MIN,
-  can, permissoesDe, hashSenha, conferirSenha, validarSenha, criarSessao, carregarSessao, lerCookie, autenticado, exige, ipDe,
+  can, permissoesDe, hashSenha, conferirSenha, validarSenha, criarSessao, carregarSessao, lerCookie, autenticado, exige, ipDe, empresasDoUsuario,
 };

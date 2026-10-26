@@ -1432,3 +1432,6 @@ CREATE TABLE IF NOT EXISTS portal_sessoes (
   created_at text NOT NULL DEFAULT sq_datetime('now', 'localtime')
 );
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS origem_portal integer DEFAULT 0;
+
+-- ============ Visão de todas as empresas ============
+ALTER TABLE sessoes ADD COLUMN IF NOT EXISTS todas_empresas integer DEFAULT 0;   -- 1 = sessão consolidada (só consulta)

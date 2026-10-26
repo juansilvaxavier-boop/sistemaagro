@@ -52,7 +52,7 @@ export default async function (conteudo, { params: [tela] }) {
 function parcelas(conteudo) {
   const pagina = titulo(conteudo, 'Parcelas a receber', 'bi-list-check');
   const t = new DataTable(pagina, {
-    url: '/api/financeiro/parcelas', title: 'Parcelas', sort: 'vencimento', dir: 'asc',
+    url: '/api/financeiro/parcelas', title: 'Parcelas', sort: 'vencimento', dir: 'asc', empresa: true,
     columns: [
       { k: 'pedido', l: 'Pedido' }, { k: 'nota', l: 'NF' }, { k: 'documento', l: 'CPF/CNPJ', t: 'doc' }, { k: 'cliente', l: 'Cliente', render: (v, r) => `${esc(v)} ${r.blacklist ? badge(r.blacklist) : ''}` },
       { k: 'parcela', l: 'Parc.', render: (v, r) => `${v}/${r.total_parcelas || ''}` }, { k: 'vencimento', l: 'Vencimento', t: 'date' },
@@ -245,7 +245,7 @@ function negativados(conteudo) {
 function notas(conteudo) {
   const pagina = titulo(conteudo, 'Notas fiscais de saída', 'bi-file-earmark-text');
   const t = new DataTable(pagina, {
-    url: '/api/financeiro/notas', title: 'Notas fiscais de saída', sort: 'numero', dir: 'desc',
+    url: '/api/financeiro/notas', title: 'Notas fiscais de saída', sort: 'numero', dir: 'desc', empresa: true,
     columns: [
       { k: 'numero', l: 'Nº' }, { k: 'serie', l: 'Série' }, { k: 'data_emissao', l: 'Emissão', t: 'datetime' }, { k: 'pedido', l: 'Pedido' },
       { k: 'documento', l: 'CPF/CNPJ', t: 'doc' }, { k: 'cliente', l: 'Cliente' }, { k: 'valor', l: 'Valor', t: 'money' }, { k: 'devolvido', l: 'Devolvido', t: 'money' },
