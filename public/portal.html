@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="/img/apple-touch.png">
   <script>
     try {
-      document.documentElement.dataset.bsTheme = localStorage.getItem('agt-tema') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.bsTheme = localStorage.getItem('agt-tema') === 'dark' ? 'dark' : 'light';
     } catch {}
   </script>
   <link rel="stylesheet" href="/vendor/fonte/index.css">

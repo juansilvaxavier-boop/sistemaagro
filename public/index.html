@@ -3,8 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#005826" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0f1712" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#005826">
   <meta name="description" content="ERP de venda, crédito, cobrança e logística de fertilizantes">
   <title>Acelera Fertilizantes</title>
   <link rel="manifest" href="/manifest.webmanifest">
@@ -14,7 +13,8 @@
   <script>
     // Aplica o tema salvo antes de desenhar a página (evita piscar).
     try {
-      const t = localStorage.getItem('agt-tema') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      // Tema claro é o padrão; o escuro só vale se a pessoa escolheu no botão do topo.
+      const t = localStorage.getItem('agt-tema') === 'dark' ? 'dark' : 'light';
       document.documentElement.dataset.bsTheme = t;
       if (localStorage.getItem('agt-menu') === 'compacto') document.documentElement.classList.add('menu-compacto');
     } catch {}
