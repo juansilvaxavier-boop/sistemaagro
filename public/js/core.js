@@ -880,3 +880,46 @@ export function estiloGraficos() {
   D.interaction.intersect = false;
   return { grade: v('--borda'), texto: v('--texto-2'), agro: v('--agro'), superficie: v('--superficie'), cores: coresGrafico() };
 }
+
+// ---------- Ajuda ("?") ----------
+// Botão ao lado do título: passar o mouse mostra o resumo; clicar abre a explicação completa.
+const negrito = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+export const botaoAjuda = (chave, rotulo = 'Como funciona esta tela') =>
+  `<button type="button" class="btn-ajuda" data-ajuda="${esc(chave)}" aria-label="${esc(rotulo)}">?</button>`;
+
+let modAjuda;
+async function ajudaPorChave(chave) {
+  modAjuda ||= await import('./ajuda.js');
+  return modAjuda.ajudaDe(chave);
+}
+
+export async function abrirAjuda(chave) {
+  const a = await ajudaPorChave(chave);
+  if (!a) return;
+  modal({
+    title: `<i class="bi bi-question-circle text-agro"></i> ${esc(a.t)}`, size: 'lg',
+    body: `<p class="ajuda-resumo">${negrito(a.r)}</p>${a.s.map(([tit, itens]) => `<h3 class="ajuda-secao">${esc(tit)}</h3>
+      <ul class="ajuda-lista">${itens.map((i) => `<li>${negrito(i)}</li>`).join('')}</ul>`).join('')}`,
+  });
+}
+
+document.addEventListener('mouseover', async (e) => {
+  const b = e.target.closest?.('[data-ajuda]');
+  if (!b || b.dataset.popPronto) return;
+  b.dataset.popPronto = '1';
+  const a = await ajudaPorChave(b.dataset.ajuda);
+  if (!a || !window.bootstrap) return;
+  const pop = new bootstrap.Popover(b, {
+    trigger: 'hover focus', placement: 'bottom', html: true, customClass: 'popover-ajuda',
+    title: esc(a.t), content: `${negrito(a.r)}<div class="popover-ajuda-mais"><i class="bi bi-hand-index"></i> Clique para ver a explicação completa</div>`,
+  });
+  if (b.matches(':hover')) pop.show();
+});
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-ajuda]');
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  bootstrap.Popover.getInstance(b)?.hide();
+  abrirAjuda(b.dataset.ajuda);
+}, true);

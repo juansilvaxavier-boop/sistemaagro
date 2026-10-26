@@ -1,4 +1,4 @@
-import { state, get, post, esc, toast, pode, erro, avatar, fmt, debounce, qs } from './core.js';
+import { state, get, post, esc, toast, pode, erro, avatar, fmt, debounce, qs, botaoAjuda } from './core.js';
 import { TEXTO_TERMO } from './privacidade.js';
 import * as chat from './chat.js';
 import * as assistente from './assistente.js';
@@ -745,6 +745,9 @@ async function rotear() {
       const mod = await carregar();
       await mod.default(conteudo, { params: m.slice(1), modo, hash });
       barraDeAbas(conteudo, area);
+      // Botão "?" com a explicação da tela.
+      const tituloTela = conteudo.querySelector(':scope > .page-title h2, :scope > .page-title .saudacao');
+      if (tituloTela && !tituloTela.querySelector('[data-ajuda]')) tituloTela.insertAdjacentHTML('beforeend', botaoAjuda(hash));
       const sub = SUBTITULOS[hash];
       const h2 = conteudo.querySelector(':scope > .page-title > h2');
       if (sub && h2 && !h2.parentElement.querySelector('.page-sub')) {

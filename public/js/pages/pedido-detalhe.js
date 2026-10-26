@@ -1,6 +1,6 @@
 // Janela do pedido: resumo, ações da etapa, comentários, mensagens, histórico, financeiro e arquivos.
 import {
-  get, post, put, esc, fmt, modal, abas, campo, opcoes, lerForm, toast, erro, tentar, state, badgeEtapa, tabelaSimples, pedirTexto, ROTULOS, pode,
+  get, post, put, esc, fmt, modal, abas, campo, opcoes, lerForm, toast, erro, tentar, state, badgeEtapa, tabelaSimples, pedirTexto, ROTULOS, pode, botaoAjuda,
 } from '../core.js';
 import { painelArquivos } from './arquivos.js';
 
@@ -59,7 +59,7 @@ export async function abrirPedido(id, aoMudar) {
   }
 
   const m = modal({
-    title: `Pedido ${p.numero} · ${esc(d.cliente.nome)} ${badgeEtapa(p.etapa)}`,
+    title: `Pedido ${p.numero} · ${esc(d.cliente.nome)} ${badgeEtapa(p.etapa)} ${['entregue', 'cancelado'].includes(p.etapa) ? '' : botaoAjuda(`etapa:${p.etapa}`, 'Como funciona esta etapa')}`,
     size: 'xl',
     body: `${alertas(d)}${fluxo(p)}${abas(lista, 'ped')}${d.acoes.some((a) => a.avanca) ? `<div class="mt-3 no-print"><label class="form-label">Observação ao enviar (opcional)</label><input name="obs_acao" class="form-control form-control-sm" placeholder="Ex.: cliente pediu entrega até sexta"></div>` : ''}`,
     buttons: botoes,

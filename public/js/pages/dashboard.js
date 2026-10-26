@@ -1,4 +1,4 @@
-import { get, esc, fmt, state, titulo, qs, periodoAtalho, pode, kpi, estiloGraficos, coresGrafico } from '../core.js';
+import { get, esc, fmt, state, titulo, qs, periodoAtalho, pode, kpi, estiloGraficos, coresGrafico, botaoAjuda } from '../core.js';
 import { mapaVendas } from '../mapa-brasil.js';
 
 const graficos = [];
@@ -27,7 +27,7 @@ export default async function (conteudo) {
     const saud = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
     const data = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
     const novo = document.createElement('div');
-    novo.innerHTML = `<p class="saudacao">${saud}, ${esc(state.me.usuario.nome.split(' ')[0])}</p>
+    novo.innerHTML = `<p class="saudacao">${saud}, ${esc(state.me.usuario.nome.split(' ')[0])} ${botaoAjuda('#/dashboard', 'Como funciona o painel')}</p>
       <div class="text-body-secondary">${esc(d.titulo)} · ${esc(data)}</div>`;
     cabecalho.replaceWith(novo);
     cabecalho = novo;

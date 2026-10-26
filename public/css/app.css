@@ -812,3 +812,19 @@ html.menu-compacto #sidebar .brand-icone { display: block; }
 .acesso-arte::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--ouro), #005826); }
 #menu a.ativo::before { background: var(--ouro); }
 .avatar { background: #005826; }
+
+/* Ajuda "?" */
+.btn-ajuda { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; padding: 0; flex: none;
+  border: 1px solid var(--borda-forte); background: var(--superficie); color: var(--texto-2); font-size: .8rem; font-weight: 700; line-height: 1;
+  box-shadow: var(--sombra); cursor: help; vertical-align: middle; margin-left: 4px; transition: background-color .12s, color .12s, border-color .12s; letter-spacing: 0; }
+.btn-ajuda:hover, .btn-ajuda:focus-visible { background: var(--agro); color: #fff; border-color: var(--agro); }
+.modal-title .btn-ajuda { width: 22px; height: 22px; font-size: .75rem; }
+.popover-ajuda { --bs-popover-max-width: 340px; --bs-popover-border-color: var(--borda); --bs-popover-bg: var(--superficie); --bs-popover-header-bg: var(--superficie-2);
+  --bs-popover-body-color: var(--texto-2); --bs-popover-header-color: var(--texto); --bs-popover-font-size: var(--fs-sm); box-shadow: var(--sombra-alta); border-radius: 12px; }
+.popover-ajuda .popover-header { font-weight: 650; font-size: var(--fs-base); }
+.popover-ajuda-mais { margin-top: 8px; font-size: var(--fs-xs); color: var(--agro-texto); font-weight: 600; }
+.ajuda-resumo { font-size: var(--fs-md); color: var(--texto); padding: 12px 14px; background: var(--agro-suave); border-radius: 10px; margin-bottom: 18px; }
+.ajuda-secao { font-size: var(--fs-md); font-weight: 650; margin: 18px 0 8px; }
+.ajuda-lista { padding-left: 18px; margin: 0; color: var(--texto); }
+.ajuda-lista li { margin-bottom: 6px; line-height: 1.5; }
+.ajuda-lista li::marker { color: var(--agro); }
