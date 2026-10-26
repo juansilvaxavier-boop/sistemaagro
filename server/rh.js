@@ -104,11 +104,10 @@ async function validarFerias(colab, { aquisitivo_inicio, inicio, dias, abono_dia
   return { aquisitivo_inicio: p.inicio, inicio, fim, dias, abono_dias };
 }
 
+/** Banco de horas (horas): saldo apurado do ponto web + créditos e débitos lançados pelo RH. */
 async function saldoBancoHoras(colaboradorId) {
-  return r2((await db.get(
-    `SELECT COALESCE(SUM(CASE WHEN tipo = 'banco_credito' THEN horas WHEN tipo = 'banco_debito' THEN -horas ELSE 0 END), 0) AS s FROM rh_ocorrencias WHERE colaborador_id = ?`,
-    colaboradorId,
-  )).s);
+  const c = await db.get('SELECT * FROM colaboradores WHERE id = ?', colaboradorId);
+  return c ? (await require('./ponto').bancoDeHoras(c)).saldo : 0;
 }
 
 const fimDoMes = (comp) => S.addDias(addMeses(`${comp}-01`, 1), -1);

@@ -15,7 +15,7 @@ const carregarOpcoes = async () => (O = await get('/api/rh/opcoes'));
 
 export default async function (conteudo, { params: [tela] }) {
   await carregarOpcoes();
-  const telas = { painel, colaboradores, ferias, ocorrencias, solicitacoes, folha };
+  const telas = { painel, colaboradores, ferias, ocorrencias, solicitacoes, folha, ponto: async (c) => (await import('./ponto.js')).rhPonto(c) };
   return (telas[tela || 'painel'] || painel)(conteudo);
 }
 

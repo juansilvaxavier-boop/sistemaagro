@@ -233,8 +233,14 @@ automáticos, consulta os rastreios e os boletos em aberto.
 | **Painel do RH** | Ativos, turnover, solicitações, férias vencendo ou vencidas, exames vencidos, aniversariantes, quadro por departamento e custo mensal. |
 | **Colaboradores** | Admissão e ficha com dados pessoais, contrato, salário, banco, dependentes, histórico (reajustes, promoções), benefícios, exames (ASO) e documentos; desligamento (desativa o acesso). Salário e banco só com *Gerir RH* ou *Folha*. |
 | **Férias** | Programação validada pela CLT: dias de direito pelas faltas (art. 130), até 3 períodos (um ≥ 14 dias, nenhum < 5), abono de até 1/3 e alerta do período concessivo. |
-| **Ponto e Ocorrências** | Faltas, atestados, atrasos, horas extras 50%/100%, banco de horas, advertências, suspensões e elogios. |
+| **Meu ponto** (quem é colaborador) | Ponto web: registra entrada, intervalo, volta e saída pelo navegador com a localização do aparelho (latitude, longitude, precisão e endereço aproximado via OpenStreetMap; `PONTO_ENDERECO=0` desliga a busca de endereço). A hora é a do servidor (Brasília). Mostra as marcações do dia, o espelho do mês e o banco de horas. Sem permissão de localização, a marcação entra sinalizada para o RH. |
+| **Ponto** (RH) | Quem está trabalhando agora, saldo do mês e banco de horas por colaborador, pendências (dias incompletos, sem marcação, sem localização), espelho com o local de cada marcação no mapa, ajuste com justificativa, anulação (fica no histórico) e exportação do espelho. Previsto do dia pela carga horária e escala (5x2, 6x1; 12x36/4x3/flexível contam só os dias trabalhados), tolerância de 10 min/dia (CLT art. 58), férias/atestado/falta justificada sem débito. O banco de horas = saldo do ponto até ontem + créditos/débitos manuais. Competência fechada trava os ajustes. |
+| **Ocorrências** | Faltas, atestados, atrasos, horas extras 50%/100%, créditos e débitos manuais no banco de horas, advertências, suspensões e elogios. |
 | **Folha** | Gera os eventos do mês (horas extras, faltas, comissões revisadas ainda não pagas, descontos de benefícios e lançamentos), mostra as comissões que a folha vai pagar e as que aguardam revisão, ajuste manual, fechamento da competência (trava as ocorrências) e exportação para a contabilidade. INSS, IRRF e FGTS ficam com a contabilidade. |
+
+### Produtividade
+
+**Produtividade** (#/produtividade): no período escolhido, cobranças feitas por analista (canal, resultado, clientes, promessas e acordos), pedidos tratados por setor (avançados, devolvidos, reprovados, valor e tempo médio na etapa, a partir do histórico do pedido), notas emitidas e faturamento, vendas lançadas, CRM, chamados resolvidos e horas no ponto. Uma linha por colaborador, com detalhe ao clicar. Com a permissão *Painel de produtividade* (padrão de admin, diretoria e gerente) a pessoa vê todos; sem ela, vê só o próprio resultado.
 
 ### Automação e cadastros
 

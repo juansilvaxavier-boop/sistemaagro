@@ -48,7 +48,7 @@ const CATALOGO = [
     ['financeiro.pagar', 'Contas a pagar'], ['tesouraria', 'Tesouraria: conciliação bancária, fluxo de caixa e resultado do mês'],
     ['credito.gerir', 'Definir limites de crédito e regras de bloqueio'], ['credito.liberar', 'Liberar crédito de pedido bloqueado'],
   ]],
-  ['Relatórios', [['analises', 'Análises: curva ABC, recompra atrasada e previsão de demanda'], ['relatorios.vendas', 'Relatórios de vendas'], ['relatorios.financeiro', 'Relatórios financeiros'], ['relatorios.estoque', 'Relatórios de estoque']]],
+  ['Relatórios', [['produtividade', 'Painel de produtividade de todos os setores e colaboradores (sem ela, cada um vê só o próprio resultado)'], ['analises', 'Análises: curva ABC, recompra atrasada e previsão de demanda'], ['relatorios.vendas', 'Relatórios de vendas'], ['relatorios.financeiro', 'Relatórios financeiros'], ['relatorios.estoque', 'Relatórios de estoque']]],
   ['RH e DP', [
     ['rh', 'Ver colaboradores, férias, ponto e solicitações (sem salários)'], ['rh.gerir', 'Gerir RH: fichas, salários, férias, ocorrências, benefícios e exames'],
     ['rh.folha', 'Eventos da folha e fechamento do mês'],
@@ -76,7 +76,7 @@ const PERMISSOES = {
   ],
   gerente: [
     'dashboard', 'dashboard.todos', 'chat', 'chamados', 'propostas', 'fila.venda', 'fila.supervisao', 'pedido.criar', 'clientes', 'clientes.editar', 'clientes.historico',
-    'blacklist', 'serasa', 'crm', 'crm.automacoes', 'compras.solicitar', 'metas', 'metas.gerir', 'analises', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
+    'blacklist', 'serasa', 'crm', 'crm.automacoes', 'compras.solicitar', 'metas', 'metas.gerir', 'analises', 'produtividade', 'arquivos', 'relatorios.vendas', 'relatorios.financeiro', 'lgpd.dados',
   ],
   analista: [
     'dashboard', 'chat', 'chamados', 'fila.analise', 'credito.gerir', 'clientes', 'clientes.editar', 'clientes.historico', 'blacklist', 'blacklist.editar',
@@ -201,7 +201,7 @@ async function sessaoAssinada(token) {
 }
 
 // Rotas que alteram dados mas não dependem da empresa (liberadas na visão de todas as empresas).
-const ROTAS_LIVRES_TODAS = [/^\/api\/auth\//, /^\/api\/chat\b/, /^\/api\/assistente\b/, /^\/api\/mensagens\/(\d+\/lida|todas-lidas)$/];
+const ROTAS_LIVRES_TODAS = [/^\/api\/auth\//, /^\/api\/chat\b/, /^\/api\/assistente\b/, /^\/api\/mensagens\/(\d+\/lida|todas-lidas)$/, /^\/api\/ponto\/bater$/];
 
 const ipDe = (req) => String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
 

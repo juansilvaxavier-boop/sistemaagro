@@ -19,7 +19,7 @@ export default async function meuRh(conteudo) {
   const prox = d.ferias.filter((f) => f.status === 'aprovada' && f.fim >= new Date().toISOString().slice(0, 10)).at(-1);
   pagina.innerHTML = `<div class="kpis mb-3">
       ${kpi('Férias disponíveis', `${saldo} dias`, { icone: 'bi-sun', cor: saldo ? 'success' : 'secondary', sub: prox ? `Próximas: ${fmt.date(prox.inicio)} a ${fmt.date(prox.fim)}` : 'Nenhuma programada' })}
-      ${kpi('Banco de horas', `${fmt.num(d.banco_horas)} h`, { icone: 'bi-clock', cor: d.banco_horas < 0 ? 'danger' : 'info' })}
+      ${kpi('Banco de horas', `${fmt.num(d.banco_horas)} h`, { icone: 'bi-clock', cor: d.banco_horas < 0 ? 'danger' : 'info', link: '#/ponto', sub: 'Ver meu ponto' })}
       ${kpi('Tempo de casa', c.data_admissao ? `${Math.floor((Date.now() - Date.parse(c.data_admissao)) / 31557600000)} anos` : '—', { icone: 'bi-award', sub: c.data_admissao ? `desde ${fmt.date(c.data_admissao)}` : '' })}
       ${kpi('Solicitações em aberto', d.solicitacoes.filter((s) => s.status === 'aberta').length, { icone: 'bi-inbox', cor: 'warning' })}
     </div>${abas([

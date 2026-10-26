@@ -58,6 +58,8 @@ function criarApp() {
   api.use('/chamados', require('./routes/chamados'));
   api.use('/propostas', require('./routes/propostas'));
   api.use('/rh', require('./routes/rh'));
+  api.use('/ponto', require('./routes/ponto'));
+  api.use('/produtividade', require('./routes/produtividade'));
   api.use('/assistente', require('./routes/assistente'));
   api.use('/consulta', require('./routes/consulta'));
   api.use('/admin', require('./routes/admin'));
