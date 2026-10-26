@@ -811,7 +811,7 @@ html.menu-compacto #sidebar .brand-icone { display: block; }
 .acesso-marca img { background: #fff; border-radius: 18px; padding: 14px 18px; width: 216px; height: auto; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
 .acesso-arte::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--ouro), #005826); }
 #menu a.ativo::before { background: var(--ouro); }
-.avatar { background: #005826; }
+.avatar { background-color: #005826; }
 
 /* Ajuda "?" */
 .btn-ajuda { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; padding: 0; flex: none;
@@ -889,3 +889,9 @@ html.menu-compacto #sidebar .brand-icone { display: block; }
 @media (max-width: 575.98px) { .chat.chat-grande { width: 100vw; height: 100dvh; } }
 #chat .bolha { white-space: normal; }
 #chat .chat-texto { white-space: pre-wrap; }
+
+/* Ajuste da foto do perfil */
+.enquadrar { position: relative; display: inline-block; width: 280px; max-width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; touch-action: none; }
+.enquadrar canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+.enquadrar canvas:active { cursor: grabbing; }
+.enquadrar::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(0, 0, 0, .45); pointer-events: none; }
