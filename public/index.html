@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1f6f3a" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#005826" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0f1712" media="(prefers-color-scheme: dark)">
   <meta name="description" content="ERP de venda, crédito, cobrança e logística de fertilizantes">
-  <title>Agroterra Sistema</title>
+  <title>Acelera Fertilizantes</title>
   <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/img/favicon.png" type="image/png">
   <link rel="icon" href="/img/icone.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/img/icone-192.png">
+  <link rel="apple-touch-icon" href="/img/apple-touch.png">
   <script>
     // Aplica o tema salvo antes de desenhar a página (evita piscar).
     try {
@@ -29,7 +30,7 @@
   <!-- Acesso -->
   <section id="tela-login" class="acesso d-none">
     <div class="acesso-arte" aria-hidden="true">
-      <div class="acesso-marca"><img src="/img/icone.svg" alt="" width="44" height="44"> Agroterra</div>
+      <div class="acesso-marca"><img src="/img/logo.png" alt="Acelera Fertilizantes" width="188" height="120"></div>
       <h2>Do pedido à entrega,<br>cada etapa no seu lugar.</h2>
       <ul>
         <li><i class="bi bi-diagram-3"></i> Fluxo do pedido com fila por setor</li>
@@ -38,6 +39,7 @@
       </ul>
     </div>
     <div class="acesso-form">
+      <img src="/img/logo.png" alt="Acelera Fertilizantes" class="acesso-logo-mob d-lg-none" width="157" height="100">
       <div class="acesso-card">
         <div id="passo-login">
           <h1 class="h3 mb-1">Entrar</h1>
@@ -81,7 +83,7 @@
           <button class="btn btn-primary btn-lg w-100" id="btn-aceitar" disabled>Aceitar e entrar</button>
         </div>
       </div>
-      <p class="text-body-secondary small mt-3 mb-0 text-center">Agroterra Sistema · <a href="#" data-abrir-privacidade>Política de privacidade</a></p>
+      <p class="text-body-secondary small mt-3 mb-0 text-center">Acelera Fertilizantes · <a href="#" data-abrir-privacidade>Política de privacidade</a></p>
     </div>
   </section>
 
@@ -89,7 +91,7 @@
   <div id="app" class="d-none">
     <aside id="sidebar" aria-label="Menu principal">
       <div class="brand">
-        <img src="/img/icone.svg" alt="" width="30" height="30"><span>Agroterra</span>
+        <img src="/img/logo.png" alt="Acelera Fertilizantes" class="brand-logo" width="82" height="52"><img src="/img/favicon.png" alt="Acelera Fertilizantes" class="brand-icone" width="32" height="32">
         <button class="btn btn-icon ms-auto d-none d-lg-inline-flex" id="btn-compactar" title="Recolher menu" aria-label="Recolher menu"><i class="bi bi-layout-sidebar"></i></button>
       </div>
       <button class="btn-empresa" id="btn-empresa" type="button" title="Trocar empresa"><span class="emp-ico"><i class="bi bi-building"></i></span>
@@ -146,7 +148,7 @@
 
   <aside id="assistente" class="chat" aria-label="Assistente de IA" hidden>
     <div class="chat-cab">
-      <div class="flex-grow-1 text-truncate"><strong><i class="bi bi-stars text-success"></i> Assistente Agroterra</strong>
+      <div class="flex-grow-1 text-truncate"><strong><i class="bi bi-stars text-success"></i> Assistente Acelera</strong>
         <small class="d-block text-body-secondary" id="ass-modo">tira dúvidas sobre o sistema</small></div>
       <button class="btn btn-icon" id="ass-nova" title="Nova conversa" aria-label="Nova conversa"><i class="bi bi-arrow-counterclockwise"></i></button>
       <button class="btn btn-icon" id="ass-fechar" aria-label="Fechar assistente"><i class="bi bi-x-lg"></i></button>

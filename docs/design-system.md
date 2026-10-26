@@ -1,4 +1,4 @@
-# Design system do Agroterra Sistema
+# Design system do Acelera Fertilizantes
 
 A interface usa Bootstrap 5.3 com uma camada própria em `public/css/app.css`. Os componentes compartilhados ficam em
 `public/js/core.js`. Toda tela nova deve usar estes tokens e componentes, sem cores ou tamanhos soltos.

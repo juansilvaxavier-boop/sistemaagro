@@ -8,7 +8,7 @@ const CACHE = new Map();
 const VALIDADE_MS = 6 * 3600e3;
 const TIMEOUT_MS = 6000;
 
-let buscar = (url) => fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { Accept: 'application/json', 'User-Agent': 'AgroterraSistema/1.0' } });
+let buscar = (url) => fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { Accept: 'application/json', 'User-Agent': 'AceleraFertilizantes/1.0' } });
 
 async function json(url) {
   const res = await buscar(url);

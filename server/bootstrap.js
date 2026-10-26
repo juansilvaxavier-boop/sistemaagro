@@ -11,7 +11,7 @@ async function bootstrap() {
   await db.open();
   if (await db.get('SELECT id FROM usuarios LIMIT 1')) return { criado: false };
   return db.comUsuario({ semAuditoria: true }, () => db.tx(async () => {
-    const empresa = await db.insert('empresas', { nome: process.env.EMPRESA_NOME || 'Agroterra', cnpj: process.env.EMPRESA_CNPJ || null, uf: process.env.EMPRESA_UF || null });
+    const empresa = await db.insert('empresas', { nome: process.env.EMPRESA_NOME || 'Acelera Fertilizantes', cnpj: process.env.EMPRESA_CNPJ || null, uf: process.env.EMPRESA_UF || null });
     let senha = process.env.ADMIN_SENHA_INICIAL;
     if (!senha) {
       senha = crypto.randomBytes(9).toString('base64url') + '9a';

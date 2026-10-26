@@ -5,7 +5,7 @@ const { mascararLinhas } = require('./lgpd');
 
 async function enviarXlsx(res, { titulo, colunas, linhas }) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Agroterra Sistema';
+  wb.creator = 'Acelera Fertilizantes';
   const ws = wb.addWorksheet(String(titulo || 'Dados').slice(0, 31).replace(/[\\/*?:[\]]/g, ' '));
   ws.columns = colunas.map((c) => ({ header: c.l, key: c.k, width: Math.min(Math.max(String(c.l).length + 4, 12), 45) }));
   for (const l of linhas) {

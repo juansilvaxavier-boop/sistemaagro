@@ -754,7 +754,7 @@ async function rotear() {
         bloco.append(h2);
         bloco.insertAdjacentHTML('beforeend', `<p class="page-sub">${esc(sub)}</p>`);
       }
-      document.title = `${area?.aba?.l || area?.item.l || 'Agroterra'} · Agroterra Sistema`;
+      document.title = `${area?.aba?.l || area?.item.l || 'Painel'} · Acelera Fertilizantes`;
     } catch (e) {
       console.error(e);
       const semAcesso = e.status === 403;

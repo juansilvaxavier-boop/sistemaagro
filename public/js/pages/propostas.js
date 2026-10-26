@@ -112,12 +112,12 @@ function imprimirProposta(d) {
   const w = window.open('', '_blank');
   if (!w) return toast('Libere as janelas pop-up para imprimir.', 'warning');
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Proposta ${p.numero} - ${esc(d.cliente.nome)}</title><style>
-    @page{size:A4;margin:14mm} body{font:11px Arial,sans-serif;color:#222} h1{font-size:20px;margin:0;color:#1f6f3a} .topo{display:flex;justify-content:space-between;border-bottom:3px solid #1f6f3a;padding-bottom:8px;margin-bottom:12px}
+    @page{size:A4;margin:14mm} body{font:11px Arial,sans-serif;color:#222} h1{font-size:20px;margin:0;color:#005826} .topo{display:flex;justify-content:space-between;border-bottom:3px solid #005826;padding-bottom:8px;margin-bottom:12px}
     .caixa{border:1px solid #ccc;border-radius:6px;padding:8px;margin-bottom:10px} .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px} .rot{font-size:9px;text-transform:uppercase;color:#666;letter-spacing:.5px}
     table{width:100%;border-collapse:collapse;margin:8px 0} th{background:#e8f5e9;text-align:left;font-size:10px;text-transform:uppercase} th,td{border-bottom:1px solid #ddd;padding:5px} .num{text-align:right}
     .total{font-size:15px;text-align:right;margin-top:6px} .assin{margin-top:50px;display:grid;grid-template-columns:1fr 1fr;gap:40px;text-align:center} .assin div{border-top:1px solid #444;padding-top:4px}
     .rodape{margin-top:20px;font-size:9px;color:#777;text-align:center}</style></head><body>
-    <div class="topo"><div><h1>${esc(e.nome || 'Agroterra')}</h1><div>${e.cnpj ? 'CNPJ ' + esc(fmt.doc(e.cnpj)) : ''}${e.endereco ? ' · ' + esc(e.endereco) : ''}${e.cidade ? ' · ' + esc(e.cidade) + '/' + esc(e.uf || '') : ''}${e.telefone ? ' · ' + esc(e.telefone) : ''}</div></div>
+    <div class="topo"><div><h1>${esc(e.nome || 'Acelera Fertilizantes')}</h1><div>${e.cnpj ? 'CNPJ ' + esc(fmt.doc(e.cnpj)) : ''}${e.endereco ? ' · ' + esc(e.endereco) : ''}${e.cidade ? ' · ' + esc(e.cidade) + '/' + esc(e.uf || '') : ''}${e.telefone ? ' · ' + esc(e.telefone) : ''}</div></div>
       <div style="text-align:right"><div class="rot">Proposta comercial</div><div style="font-size:20px;font-weight:bold">Nº ${p.numero}</div><div>Emitida em ${fmt.date(p.enviada_em || p.created_at)}</div><div><b>Válida até ${fmt.date(p.validade)}</b></div></div></div>
     <div class="grid"><div class="caixa"><div class="rot">Cliente</div><b>${esc(d.cliente.nome)}</b>${d.cliente.nome_fantasia ? '<br>' + esc(d.cliente.nome_fantasia) : ''}<br>${fmt.doc(d.cliente.documento)}
       ${d.endereco ? `<br>${esc([d.endereco.logradouro, d.endereco.numero].filter(Boolean).join(', '))} ${esc(d.endereco.bairro || '')}<br>${esc(d.endereco.cidade || '')}/${esc(d.endereco.uf || '')}` : ''}</div>
@@ -131,7 +131,7 @@ function imprimirProposta(d) {
     ${p.observacao ? `<div class="caixa"><div class="rot">Observações</div>${esc(p.observacao)}</div>` : ''}
     <div class="caixa" style="font-size:9.5px">Preços sujeitos à aprovação de crédito. Após a validade, valores e disponibilidade podem mudar.</div>
     <div class="assin"><div>${esc(p.vendedor?.nome || '')}<br>${esc(e.nome || '')}</div><div>De acordo — ${esc(d.cliente.nome)}<br>Data: ____/____/______</div></div>
-    <div class="rodape">Documento gerado pelo Agroterra Sistema em ${new Date().toLocaleString('pt-BR')}</div>
+    <div class="rodape">Documento gerado pelo sistema Acelera Fertilizantes em ${new Date().toLocaleString('pt-BR')}</div>
     <script>onload=()=>print()<\/script></body></html>`);
   w.document.close();
 }

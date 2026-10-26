@@ -1,7 +1,7 @@
 // Termo de uso e política de privacidade (LGPD) exibidos no primeiro acesso e na página Privacidade.
 export const VERSAO_TERMO = '2026-10';
 export const TEXTO_TERMO = `
-<p><strong>Termo de uso e política de privacidade do Agroterra Sistema</strong> — versão ${VERSAO_TERMO}</p>
+<p><strong>Termo de uso e política de privacidade do sistema Acelera Fertilizantes</strong> — versão ${VERSAO_TERMO}</p>
 <h3>1. Para que o sistema trata dados pessoais</h3>
 <p>O sistema registra dados de clientes (nome, CPF/CNPJ, endereço, telefones, e-mail, área de cultivo, referências comerciais e bancárias),
 de colaboradores e de usuários para <b>vender, analisar crédito, faturar, entregar, cobrar e cumprir obrigações fiscais</b>.</p>

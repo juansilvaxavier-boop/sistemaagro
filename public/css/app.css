@@ -1,15 +1,16 @@
-/* Agroterra Sistema — tema claro e escuro sobre Bootstrap 5.3 */
+/* Acelera Fertilizantes — tema claro e escuro sobre Bootstrap 5.3 */
 /* ============ Design system: tokens ============
    Cores, tipografia, espaço, raios, sombras e estados. Todas as telas usam estes valores. */
 :root, [data-bs-theme="light"] {
   /* Marca */
-  --agro: #1f6f3a;
-  --agro-forte: #17552c;
-  --agro-suave: #edf6ef;
-  --agro-texto: #1a6334;
-  --agro-acao: #1f6f3a;          /* ação primária (botão sólido) */
-  --agro-acao-borda: #1f6f3a;
-  --agro-acao-hover: #185a2f;
+  --agro: #005826;              /* verde da logo Acelera */
+  --agro-forte: #004520;
+  --agro-suave: #e9f4ed;
+  --agro-texto: #00612b;
+  --ouro: #bc904a;              /* dourado da logo Acelera */
+  --agro-acao: #005826;          /* ação primária (botão sólido) */
+  --agro-acao-borda: #005826;
+  --agro-acao-hover: #004a20;
   --agro-acao-texto: #ffffff;
   --terra: #a2652a;
   /* Neutros */
@@ -60,14 +61,14 @@
   --bs-body-bg: var(--fundo);
   --bs-body-color: var(--texto);
   --bs-border-color: var(--borda);
-  --bs-primary: #1f6f3a;
-  --bs-primary-rgb: 31, 111, 58;
-  --bs-link-color: #1a6334;
-  --bs-link-color-rgb: 26, 99, 52;
-  --bs-link-hover-color: #17552c;
-  --bs-primary-bg-subtle: #e6f1e9;
-  --bs-primary-text-emphasis: #17552c;
-  --bs-focus-ring-color: rgba(31, 111, 58, .25);
+  --bs-primary: #005826;
+  --bs-primary-rgb: 0, 88, 38;
+  --bs-link-color: #00612b;
+  --bs-link-color-rgb: 0, 97, 43;
+  --bs-link-hover-color: #004520;
+  --bs-primary-bg-subtle: #e4f1e8;
+  --bs-primary-text-emphasis: #004520;
+  --bs-focus-ring-color: rgba(0, 88, 38, .25);
   --bs-secondary-color: var(--texto-2);
   color-scheme: light;
 }
@@ -76,6 +77,7 @@
   --agro-forte: #6cc785;
   --agro-suave: rgba(79, 178, 107, .13);
   --agro-texto: #7fd296;
+  --ouro: #d4ab66;
   --agro-acao: #4fb26b;
   --agro-acao-borda: #4fb26b;
   --agro-acao-hover: #62c07c;
@@ -200,7 +202,7 @@ kbd { background: var(--superficie); color: var(--texto-2); border: 1px solid va
 
 /* Acesso */
 .acesso { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
-.acesso-arte { background: #10251a;
+.acesso-arte { background: #003f1b;
   color: #eaf4ec; padding: 48px clamp(24px, 5vw, 72px); display: flex; flex-direction: column; justify-content: center; gap: 28px; position: relative; overflow: hidden; }
 .acesso-arte::after { content: ""; position: absolute; inset: auto -80px -120px auto; width: 420px; height: 420px; border-radius: 50%;
   background: repeating-radial-gradient(circle at center, rgba(255,255,255,.07) 0 2px, transparent 2px 22px); }
@@ -225,7 +227,7 @@ kbd { background: var(--superficie); color: var(--texto-2); border: 1px solid va
 #sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar-w); background: var(--sidebar); color: var(--sidebar-texto); z-index: 1040;
   display: flex; flex-direction: column; border-right: 1px solid var(--borda); transition: width .2s ease, transform .2s ease; }
 #main { margin-left: var(--sidebar-w); min-height: 100vh; display: flex; flex-direction: column; transition: margin .2s ease; }
-.brand { display: flex; align-items: center; gap: 10px; height: var(--topo-h); padding: 0 10px 0 16px; color: var(--texto); font-weight: 700; font-size: 1.02rem; flex: none; letter-spacing: -.01em; }
+.brand { display: flex; align-items: center; gap: 10px; height: 76px; padding: 0 10px 0 16px; color: var(--texto); font-weight: 700; font-size: 1.02rem; flex: none; letter-spacing: -.01em; }
 .brand .btn-icon { color: var(--texto-3); width: 32px; height: 32px; }
 .brand .btn-icon:hover { background: var(--sidebar-hover); color: var(--texto); }
 .busca-menu { display: flex; align-items: center; gap: 8px; margin: 0 12px 6px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--borda);
@@ -797,3 +799,16 @@ tr.clicavel { cursor: pointer; }
 html.todas-empresas .btn-empresa { border-color: var(--info-borda); background: var(--info-bg); }
 html.todas-empresas .btn-empresa .emp-ico { background: var(--info); }
 @media (max-width: 575.98px) { .aviso-todas span { display: none; } .aviso-todas { padding: 6px 9px; } }
+
+/* Marca Acelera Fertilizantes */
+.brand-logo { height: 52px; width: auto; display: block; }
+.acesso-logo-mob { width: 157px; height: auto; margin-bottom: 20px; }
+[data-bs-theme="dark"] .acesso-logo-mob { background: #fff; border-radius: 14px; padding: 10px 14px; }
+.brand-icone { display: none; border-radius: 8px; }
+html.menu-compacto #sidebar .brand-logo { display: none; }
+html.menu-compacto #sidebar .brand-icone { display: block; }
+@media (max-width: 991.98px) { html.menu-compacto #sidebar .brand-logo { display: block; } html.menu-compacto #sidebar .brand-icone { display: none; } }
+.acesso-marca img { background: #fff; border-radius: 18px; padding: 14px 18px; width: 216px; height: auto; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.acesso-arte::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, var(--ouro), #005826); }
+#menu a.ativo::before { background: var(--ouro); }
+.avatar { background: #005826; }

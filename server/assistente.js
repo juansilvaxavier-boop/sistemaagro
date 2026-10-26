@@ -18,7 +18,7 @@ const LIMITE_HORA = () => Number(process.env.ASSISTENTE_LIMITE_HORA || 40);
 const PRAZO_MS = 50_000; // a função na Vercel tem 60 s
 const MAX_VOLTAS = 6;
 
-const INSTRUCOES = `Você é o Assistente Agroterra, a ajuda embutida no Agroterra Sistema (ERP de uma empresa do agronegócio).
+const INSTRUCOES = `Você é o Assistente Acelera, a ajuda embutida no sistema da Acelera Fertilizantes (ERP de uma empresa do agronegócio).
 Seu trabalho é explicar como usar o sistema e responder perguntas sobre os dados que a pessoa pode ver, usando as ferramentas de consulta.
 
 Como responder:

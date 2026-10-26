@@ -32,7 +32,7 @@ function toast(msg, cor = 'success') {
   el.addEventListener('hidden.bs.toast', () => el.remove());
 }
 
-const marca = '<div class="d-flex align-items-center gap-2 mb-3"><img src="/img/icone.svg" alt="" width="36" height="36"><div><div class="fw-bold">Agroterra</div><div class="small text-muted">Portal do Cliente</div></div></div>';
+const marca = '<div class="d-flex align-items-center gap-3 mb-3"><img src="/img/logo.png" alt="Acelera Fertilizantes" width="88" height="56"><div class="small text-muted border-start ps-3">Portal do Cliente</div></div>';
 
 // ---------- Acesso ----------
 function telaLogin(msg) {
@@ -94,7 +94,7 @@ async function iniciar() {
   if (conv) return telaConvite(conv[1]);
   try { me = await api('/me'); } catch (e) { if (e.status !== 401) telaLogin(e.message); return; }
   app.innerHTML = `<header class="pt-topo"><div class="pt-wrap d-flex align-items-center gap-2 py-3">
-      <span class="bg-white rounded-3 p-1 d-inline-flex"><img src="/img/icone.svg" alt="" width="26" height="26"></span>
+      <span class="bg-white rounded-3 px-2 py-1 d-inline-flex"><img src="/img/logo.png" alt="Acelera Fertilizantes" width="47" height="30"></span>
       <div class="me-auto min-w-0"><div class="fw-bold text-truncate">${esc(me.nome)}</div><div class="small opacity-75">${esc(docFmt(me.documento))}${me.empresa ? ` · ${esc(me.empresa)}` : ''}</div></div>
       <button class="btn btn-sm btn-outline-light" id="sair"><i class="bi bi-box-arrow-right"></i> Sair</button></div></header>
     <nav class="pt-nav" aria-label="Seções"><div class="pt-wrap">${ABAS.map(([id, i, l]) => `<a href="#${id}" data-aba="${id}"><i class="bi ${i}"></i> ${l}</a>`).join('')}</div></nav>

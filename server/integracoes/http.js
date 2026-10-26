@@ -28,7 +28,7 @@ let transporte = transportePadrao;
  * Devolve { status, headers, texto, json }.
  */
 async function requisicao({ method = 'GET', url, headers = {}, json, form, body, cert, key, timeout, basic, bearer }) {
-  const h = { Accept: 'application/json', 'User-Agent': 'AgroterraSistema/1.0', ...headers };
+  const h = { Accept: 'application/json', 'User-Agent': 'AceleraFertilizantes/1.0', ...headers };
   let corpo = body;
   if (json !== undefined) { corpo = JSON.stringify(json); h['Content-Type'] = 'application/json'; }
   if (form !== undefined) { corpo = new URLSearchParams(form).toString(); h['Content-Type'] = 'application/x-www-form-urlencoded'; }

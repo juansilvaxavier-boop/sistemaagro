@@ -222,7 +222,7 @@ async function portalAcesso(el, clienteId, whatsapp) {
   el.querySelector('[data-convite]').addEventListener('click', async () => {
     const r = await tentar(() => post(`/api/portal-acesso/${clienteId}/convite`, {}));
     if (!r) return;
-    const msg = `Olá! Este é o seu acesso ao Portal do Cliente Agroterra, para acompanhar pedidos, entregas e boletos. Crie sua senha pelo link (vale 7 dias): ${r.link}`;
+    const msg = `Olá! Este é o seu acesso ao Portal do Cliente Acelera Fertilizantes, para acompanhar pedidos, entregas e boletos. Crie sua senha pelo link (vale 7 dias): ${r.link}`;
     el.querySelector('[data-link]').innerHTML = `<div class="input-group input-group-sm"><input class="form-control" readonly value="${esc(r.link)}" aria-label="Link de acesso">
       <button class="btn btn-outline-secondary" data-copiar title="Copiar"><i class="bi bi-clipboard"></i></button>
       ${whatsapp ? `<a class="btn btn-outline-success" target="_blank" rel="noopener" title="Enviar por WhatsApp" href="https://wa.me/55${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}"><i class="bi bi-whatsapp"></i></a>` : ''}</div>

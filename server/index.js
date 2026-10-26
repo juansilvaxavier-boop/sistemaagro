@@ -98,7 +98,7 @@ if (require.main === module) {
     }
     (await require('./bootstrap')).bootstrap();
     const port = Number(process.env.PORT || 3000);
-    criarApp().listen(port, () => console.log(`Agroterra Sistema em http://localhost:${port}`));
+    criarApp().listen(port, () => console.log(`Acelera Fertilizantes em http://localhost:${port}`));
   })();
 }
 

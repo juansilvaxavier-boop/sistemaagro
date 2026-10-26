@@ -43,10 +43,10 @@ async function seed() {
   return db.comUsuario({ semAuditoria: true }, () => db.tx(async () => {
     // ---------- Empresas ----------
     const emp1 = await db.insert('empresas', {
-      nome: 'Agroterra Fertilizantes Ltda', cnpj: '12345678000195', uf: 'MG', endereco: 'Rodovia BR-365, km 412, Distrito Industrial', cidade: 'Patrocínio', cep: '38740000', telefone: '3438310000',
+      nome: 'Acelera Fertilizantes Ltda', cnpj: '12345678000195', uf: 'MG', endereco: 'Rodovia BR-365, km 412, Distrito Industrial', cidade: 'Patrocínio', cep: '38740000', telefone: '3438310000',
     });
     const emp2 = await db.insert('empresas', {
-      nome: 'Agroterra Nutrição Vegetal Ltda', cnpj: '98765432000198', uf: 'SP', endereco: 'Av. das Indústrias, 1500', cidade: 'Franca', cep: '14400000', telefone: '1637220000',
+      nome: 'Acelera Nutrição Vegetal Ltda', cnpj: '98765432000198', uf: 'SP', endereco: 'Av. das Indústrias, 1500', cidade: 'Franca', cep: '14400000', telefone: '1637220000',
     });
 
     // ---------- Usuários ----------
@@ -627,7 +627,7 @@ async function seed() {
     for (const [idx, p] of emAnalise.entries()) {
       await db.insert('mensagens', { pedido_id: p.id, remetente_id: p.vendedor_id, setor_destino: idx % 2 ? 'producao' : 'analista', texto: idx % 2 ? 'Cliente pediu prioridade na produção, plantio começa semana que vem.' : 'Cliente já tem referência positiva na Cooxupé, pode ligar para confirmar.' });
     }
-    await db.insert('mensagens', { remetente_id: diretor, texto: 'Bem-vindos ao novo Agroterra Sistema! Dúvidas, falem com a diretoria.' });
+    await db.insert('mensagens', { remetente_id: diretor, texto: 'Bem-vindos ao novo sistema da Acelera Fertilizantes! Dúvidas, falem com a diretoria.' });
     await db.run(`UPDATE usuarios SET termo_aceito_em = datetime('now','localtime')`);
     return { admin, diretor };
   }));

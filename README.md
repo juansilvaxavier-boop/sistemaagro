@@ -1,7 +1,7 @@
-# Agroterra Sistema
+# Acelera Fertilizantes
 
 ERP web de venda, crédito, cobrança e logística para distribuição de fertilizantes e insumos agrícolas,
-construído a partir do levantamento *Agroterra Sistema – Funcionalidades por Etapa*.
+construído a partir do levantamento *Acelera Fertilizantes – Funcionalidades por Etapa*.
 
 O centro do sistema é o **pedido de venda**, que passa por uma fila própria em cada setor até ser entregue.
 

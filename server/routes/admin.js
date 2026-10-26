@@ -50,7 +50,7 @@ r.get('/lgpd/cliente/:id/exportar', A.exige('lgpd.titular'), async (req, res) =>
   await registrar('lgpd_exportar', 'clientes', id, null, { motivo: req.query.motivo || 'Solicitação do titular' });
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="dados_titular_${id}_${S.hoje()}.json"`);
-  res.end(JSON.stringify({ gerado_em: new Date().toISOString(), controlador: 'Agroterra', titular: id, dados }, null, 2));
+  res.end(JSON.stringify({ gerado_em: new Date().toISOString(), controlador: 'Acelera Fertilizantes', titular: id, dados }, null, 2));
 });
 
 /**

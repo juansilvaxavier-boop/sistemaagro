@@ -1,7 +1,7 @@
 // Service worker: guarda a "casca" do aplicativo para abrir rápido e funcionar como app instalado.
 // A API nunca é guardada em cache (os dados sempre vêm do servidor).
-const VERSAO = 'agt-v4';
-const CASCA = ['/', '/index.html', '/css/app.css', '/js/app.js', '/js/core.js', '/img/icone.svg', '/manifest.webmanifest',
+const VERSAO = 'agt-v5';
+const CASCA = ['/', '/index.html', '/css/app.css', '/js/app.js', '/js/core.js', '/img/icone.svg', '/img/logo.png', '/img/favicon.png', '/manifest.webmanifest',
   '/vendor/bootstrap/css/bootstrap.min.css', '/vendor/bootstrap/js/bootstrap.bundle.min.js', '/vendor/bootstrap-icons/bootstrap-icons.min.css',
   '/vendor/chart.js/chart.umd.js', '/vendor/fonte/index.css'];
 

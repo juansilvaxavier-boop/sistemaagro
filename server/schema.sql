@@ -1,4 +1,4 @@
--- Agroterra Sistema - schema PostgreSQL. Idempotente: pode rodar em todo início.
+-- Acelera Fertilizantes - schema PostgreSQL. Idempotente: pode rodar em todo início.
 
 -- ============ Funções de data (formato texto AAAA-MM-DD HH:MI:SS, fuso de São Paulo) ============
 CREATE OR REPLACE FUNCTION sq_ts(t text, mods text[]) RETURNS timestamp LANGUAGE plpgsql STABLE SET search_path FROM CURRENT AS $$

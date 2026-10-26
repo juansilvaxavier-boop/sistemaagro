@@ -1,5 +1,5 @@
 // Importa a planilha de relatórios do sistema anterior (Vendas, Faturamento, Contas a Receber/Recebidas,
-// Parcelas Vencidas/Liquidadas e Cadastros) para o banco do Agroterra Sistema.
+// Parcelas Vencidas/Liquidadas e Cadastros) para o banco do sistema Acelera Fertilizantes.
 //
 // Pela tela Segurança → Importar dados, ou pela linha de comando:
 //   node scripts/importar-planilha.js <arquivo.xlsx> [--empresa 1] [--relatorio saida.md]
