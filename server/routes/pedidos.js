@@ -459,3 +459,4 @@ r.post('/:id/links/:linkId/pago', async (req, res) => {
 
 module.exports = r;
 module.exports.salvarItens = salvarItens;
+module.exports.carregar = carregar;

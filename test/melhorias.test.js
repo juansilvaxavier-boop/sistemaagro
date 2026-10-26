@@ -135,20 +135,21 @@ test('chat com anexos: imagem e PDF, só quem conversa baixa', async () => {
   fd.append('arquivos', new Blob([Buffer.from('%PDF-1.4')], { type: 'application/pdf' }), 'boleto.pdf');
   fd.append('texto', 'segue');
   fd.append('medidas', JSON.stringify([{ largura: 1, altura: 1 }, {}]));
-  const r = await ana.req('POST', `/api/chat/${idCarlos}/anexos`, fd);
+  const { id: conv } = await ana.post(`/api/chat/direta/${idCarlos}`);
+  const r = await ana.req('POST', `/api/chat/c/${conv}/anexos`, fd);
   assert.equal(r.status, 201);
   const msg = r.dados;
   assert.equal(msg.anexos.length, 2);
   const carlos = await sessao('carlos');
-  const conversa = await carlos.get(`/api/chat/${(await db.get(`SELECT id FROM usuarios WHERE login = 'ana'`)).id}`);
-  assert.equal(conversa.at(-1).anexos.length, 2);
+  const conversa = await carlos.get(`/api/chat/c/${conv}`);
+  assert.equal(conversa.mensagens.at(-1).anexos.length, 2);
   const img = await carlos.req('GET', `/api/chat/anexos/${msg.anexos[0].id}`);
   assert.equal(img.headers.get('content-type'), 'image/png');
   const outro = await sessao('elisa');
   assert.equal((await outro.req('GET', `/api/chat/anexos/${msg.anexos[0].id}`)).status, 404);
   const ruim = new FormData();
   ruim.append('arquivos', new Blob(['<svg/>'], { type: 'image/svg+xml' }), 'x.svg');
-  assert.equal((await ana.req('POST', `/api/chat/${idCarlos}/anexos`, ruim)).status, 400);
+  assert.equal((await ana.req('POST', `/api/chat/c/${conv}/anexos`, ruim)).status, 400);
 });
 
 test('mapa de vendas por estado e cidade respeita período e abrangência', async () => {

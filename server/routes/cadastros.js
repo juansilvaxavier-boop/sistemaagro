@@ -169,7 +169,10 @@ async function salvarUsuario(req, id) {
       await db.run('DELETE FROM usuario_empresas WHERE usuario_id = ?', id);
       for (const e of b.empresas) await db.run('INSERT INTO usuario_empresas (usuario_id, empresa_id) VALUES (?, ?)', id, e);
     }
-    if (b.ativo === 0) await db.run('DELETE FROM sessoes WHERE usuario_id = ?', id);
+    if (b.ativo === 0) {
+      await db.run('DELETE FROM sessoes WHERE usuario_id = ?', id);
+      await require('../chat').encerrarAcesso(id);
+    }
     return id;
   });
 }

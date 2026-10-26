@@ -166,15 +166,22 @@
     <div class="chat-cab">
       <button class="btn btn-icon d-none" id="chat-voltar" aria-label="Voltar"><i class="bi bi-arrow-left"></i></button>
       <div class="flex-grow-1 text-truncate" id="chat-titulo"><strong>Chat</strong></div>
+      <div class="d-flex" id="chat-acoes"></div>
+      <button class="btn btn-icon d-none d-md-inline-flex" id="chat-expandir" title="Aumentar ou diminuir o chat" aria-label="Aumentar ou diminuir o chat"><i class="bi bi-arrows-fullscreen"></i></button>
       <button class="btn btn-icon" id="chat-fechar" aria-label="Fechar chat"><i class="bi bi-x-lg"></i></button>
     </div>
+    <button type="button" class="chat-fixada d-none" id="chat-fixada" aria-label="Ir para a mensagem fixada"></button>
     <div class="chat-corpo" id="chat-corpo"></div>
     <div class="chat-pendentes d-none" id="chat-pendentes" aria-live="polite"></div>
+    <div class="chat-contexto d-none" id="chat-contexto"></div>
+    <div class="chat-mencoes d-none" id="chat-mencoes" role="listbox" aria-label="Mencionar"></div>
     <form class="chat-envio d-none" id="chat-form">
-      <input type="file" id="chat-arquivo" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.odt,.ods,.xml,.zip,.mp4,.mp3,.ogg,.m4a">
+      <input type="file" id="chat-arquivo" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.odt,.ods,.xml,.zip,.mp4,.mp3,.ogg,.m4a,.webm">
       <button type="button" class="btn btn-icon" id="chat-anexar" title="Anexar imagem ou arquivo (ou cole um print com Ctrl+V)" aria-label="Anexar arquivo"><i class="bi bi-paperclip"></i></button>
-      <textarea class="form-control" id="chat-texto" rows="1" placeholder="Mensagem, ou cole um print (Ctrl+V)" aria-label="Mensagem"></textarea>
-      <button class="btn btn-primary" aria-label="Enviar"><i class="bi bi-send-fill"></i></button>
+      <div class="chat-gravando d-none" id="chat-gravando" aria-live="polite"></div>
+      <textarea class="form-control" id="chat-texto" rows="1" placeholder="Mensagem (@ para mencionar)" aria-label="Mensagem"></textarea>
+      <button type="button" class="btn btn-icon" id="chat-gravar" title="Gravar áudio" aria-label="Gravar áudio"><i class="bi bi-mic"></i></button>
+      <button class="btn btn-primary" id="chat-enviar" aria-label="Enviar"><i class="bi bi-send-fill"></i></button>
     </form>
   </aside>
 

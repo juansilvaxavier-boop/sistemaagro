@@ -120,7 +120,11 @@ async function sincronizarUsuario(colabId) {
   const c = await db.get('SELECT equipe_id, ativo FROM colaboradores WHERE id = ?', colabId);
   if (!c) return;
   if (c.equipe_id) await db.run(`UPDATE usuarios SET equipe_id = ? WHERE colaborador_id = ? AND perfil IN ('vendedor','supervisor')`, c.equipe_id, colabId);
-  if (c.ativo === 0) await db.run('UPDATE usuarios SET ativo = 0 WHERE colaborador_id = ?', colabId);
+  if (c.ativo === 0) {
+    const us = await db.all('SELECT id FROM usuarios WHERE colaborador_id = ? AND ativo = 1', colabId);
+    await db.run('UPDATE usuarios SET ativo = 0 WHERE colaborador_id = ?', colabId);
+    for (const u of us) await require('./chat').encerrarAcesso(u.id);
+  }
 }
 
 module.exports = { CAMPOS, RESTRITOS, VINCULOS, SEM_CLT, CARGAS, ESCALAS, opcoes, dados, sincronizarUsuario };

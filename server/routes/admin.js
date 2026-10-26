@@ -192,6 +192,7 @@ async function cronCrm(req, res) {
       return { geradas: resumo.reduce((a, x) => a + x.geradas, 0), regras: resumo.map((x) => ({ id: x.id, nome: x.nome, geradas: x.geradas })) };
     });
     await parte('credito', () => require('../credito').atualizarAutomaticos());
+    await parte('chat_retencao', () => require('../chat').aplicarRetencao());
     await parte('rastreio', () => require('../rastreio').atualizarTodos());
     const empresas = await db.all('SELECT id FROM empresas');
     await parte('boletos', async () => {

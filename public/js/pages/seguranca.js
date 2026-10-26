@@ -1,5 +1,5 @@
 // Auditoria (quem alterou o quê), backups do banco e política de privacidade.
-import { get, post, esc, fmt, titulo, DataTable, modal, toast, tentar, baixar, pode, confirmar, pedirTexto, kpi, erro, state } from '../core.js';
+import { get, post, put, esc, fmt, titulo, DataTable, modal, toast, tentar, baixar, pode, confirmar, pedirTexto, kpi, erro, state } from '../core.js';
 import { TEXTO_TERMO } from '../privacidade.js';
 
 const ACOES = {
@@ -13,12 +13,14 @@ const ENTIDADES = {
   clientes: 'Cliente', pedidos: 'Pedido', pedido_itens: 'Item do pedido', usuarios: 'Usuário', colaboradores: 'Colaborador', produtos: 'Produto',
   parcelas: 'Parcela', notas_fiscais: 'Nota fiscal', blacklist: 'Blacklist', comissoes: 'Comissão', formas_pagamento: 'Forma de pagamento',
   transportadoras: 'Transportadora', arquivos: 'Arquivo', crm_interacoes: 'Interação CRM', cobranca_acoes: 'Ação de cobrança',
+  chat_mensagem: 'Mensagem do chat', chat_conversas: 'Conversa do chat',
 };
 
 export default async function (conteudo, { params: [tela] }) {
   if (tela === 'auditoria') return auditoria(conteudo);
   if (tela === 'backups') return backups(conteudo);
   if (tela === 'importacao') return importar(conteudo);
+  if (tela === 'chat-lgpd') return chatLgpd(conteudo);
   return privacidade(conteudo);
 }
 
@@ -180,4 +182,36 @@ function mostrarPrevia(el, d, aoAplicar) {
         <div class="mt-2">A numeração da NF-e continua depois da nota <b>${t.maior_nf}</b>.</div></div></div></div></div>
     <div class="d-flex gap-2 justify-content-end mt-3"><button class="btn btn-success" data-aplicar><i class="bi bi-cloud-upload"></i> Importar agora</button></div>`;
   el.querySelector('[data-aplicar]').addEventListener('click', aoAplicar);
+}
+
+// ---------- Chat: prazo de guarda e exportação de conversas ----------
+const PRAZOS = [[0, 'Sem limite'], [180, '6 meses'], [365, '1 ano'], [730, '2 anos'], [1825, '5 anos']];
+async function chatLgpd(conteudo, filtro = '') {
+  const pagina = titulo(conteudo, 'Chat: guarda e exportação', 'bi-chat-square-text');
+  const [cfg, lista] = await Promise.all([get('/api/chat/admin/config'), get(`/api/chat/admin/conversas${filtro ? `?usuario_id=${filtro}` : ''}`)]);
+  const usuarios = state.opcoes?.usuarios || [];
+  pagina.innerHTML = `<div class="row g-3 mb-3"><div class="col-lg-5"><div class="card h-100"><div class="card-header">Prazo de guarda das mensagens</div><div class="card-body">
+      <p class="small text-body-secondary">Mensagens e anexos mais antigos que o prazo são apagados todo dia pela rotina automática. Use o prazo da política de privacidade da empresa.</p>
+      <div class="d-flex gap-2"><select class="form-select form-select-sm" id="cl-prazo" aria-label="Prazo de guarda">${PRAZOS.map(([v, l]) => `<option value="${v}" ${cfg.retencao_dias === v ? 'selected' : ''}>${l}</option>`).join('')}
+        ${PRAZOS.some(([v]) => v === cfg.retencao_dias) ? '' : `<option value="${cfg.retencao_dias}" selected>${cfg.retencao_dias} dias</option>`}</select>
+        <button class="btn btn-sm btn-success" id="cl-salvar">Salvar</button></div></div></div></div>
+    <div class="col-lg-7"><div class="card h-100"><div class="card-header">Como funciona</div><div class="card-body small vstack gap-2">
+      <div><i class="bi bi-file-earmark-excel text-agro"></i> <b>Exportar</b> gera a planilha da conversa inteira (autor, data, texto, anexos, edições e mensagens apagadas). Cada exportação fica na auditoria.</div>
+      <div><i class="bi bi-trash text-agro"></i> Mensagem <b>apagada para todos</b> sai da conversa; o texto original vai para a auditoria.</div>
+      <div><i class="bi bi-person-x text-agro"></i> Quando um usuário é <b>desativado ou desligado</b>, ele sai dos grupos e para de receber notificações. As conversas ficam no histórico.</div>
+    </div></div></div></div>
+    <div class="card"><div class="card-header d-flex align-items-center gap-2 flex-wrap"><span>Conversas</span>
+      <select class="form-select form-select-sm ms-auto" style="max-width:16rem" id="cl-usuario" aria-label="Participante"><option value="">Todas as pessoas</option>
+        ${usuarios.map((u) => `<option value="${u.id}" ${String(filtro) === String(u.id) ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></div>
+    <div class="card-body p-0">${lista.length ? `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Conversa</th><th>Participantes</th><th class="num">Mensagens</th><th>Última atividade</th><th></th></tr></thead>
+      <tbody>${lista.map((c) => `<tr><td>${c.tipo === 'grupo' ? `<i class="bi bi-people"></i> <b>${esc(c.nome)}</b>` : '<i class="bi bi-person"></i> Conversa direta'}</td>
+        <td class="small">${esc(c.participantes || '')}</td><td class="num">${fmt.num(c.mensagens)}</td><td>${fmt.datetime(c.atualizada_em)}</td>
+        <td class="text-end"><button class="btn btn-sm btn-outline-success py-0" data-exportar="${c.id}"><i class="bi bi-file-earmark-excel"></i> Exportar</button></td></tr>`).join('')}</tbody></table></div>`
+    : '<div class="vazio"><i class="bi bi-chat"></i>Nenhuma conversa.</div>'}</div></div>`;
+  pagina.querySelector('#cl-salvar').addEventListener('click', () => tentar(async () => {
+    const r = await put('/api/chat/admin/config', { retencao_dias: Number(pagina.querySelector('#cl-prazo').value) });
+    return r;
+  }, 'Prazo de guarda salvo.'));
+  pagina.querySelector('#cl-usuario').addEventListener('change', (e) => chatLgpd(conteudo, e.target.value));
+  pagina.querySelectorAll('[data-exportar]').forEach((b) => b.addEventListener('click', () => tentar(() => baixar(`/api/chat/admin/conversas/${b.dataset.exportar}/exportar`, `conversa_${b.dataset.exportar}.xlsx`))));
 }

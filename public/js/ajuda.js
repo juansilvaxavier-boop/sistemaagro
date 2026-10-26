@@ -530,6 +530,14 @@ export const AJUDA = {
     s: [['Como usar', ['Adicione, renomeie ou desative. Renomear atualiza os cadastros que usam a opção; desativar tira da lista sem apagar o histórico.', 'No cargo, a **função comercial** define comissão e exige equipe para vendedores.']]],
   },
   '#/auditoria': { t: 'Auditoria', r: 'Quem fez o quê e quando, com antes e depois de cada alteração.', s: [['Como usar', ['Filtre por usuário, ação ou registro. Clique numa linha para ver os campos antes e depois. Inclui acessos, exportações e tentativas de login.']], ['Lista', DT]] },
+  '#/chat-lgpd': {
+    t: 'Chat: guarda e exportação', r: 'Prazo de guarda das mensagens do chat e exportação de conversas.',
+    s: [
+      ['Prazo de guarda', ['Escolha por quanto tempo as mensagens e anexos ficam guardados (sem limite, 6 meses, 1, 2 ou 5 anos). A rotina diária apaga o que passar do prazo.']],
+      ['Exportar', ['Filtre pela pessoa e clique em **Exportar**: a planilha traz a conversa inteira (autor, data, texto, anexos, edições e mensagens apagadas). Cada exportação fica na auditoria.']],
+      ['Desligamento', ['Usuário desativado ou desligado sai dos grupos e para de receber notificações. As conversas ficam no histórico e podem ser exportadas.']],
+    ],
+  },
   '#/backups': { t: 'Backups', r: 'Cópias de segurança do banco de dados.', s: [['Como funciona', ['O backup automático roda todo dia às 03:00 e guarda os últimos 30. **Fazer backup agora** gera um na hora.', 'O arquivo tem dados pessoais (LGPD): guarde em local seguro.']]] },
   '#/importacao': { t: 'Importar dados', r: 'Carga da planilha do sistema anterior, com conferência antes de gravar.', s: [['Como usar', ['Envie a planilha (.xlsx) e clique em **Analisar**: o sistema mostra o que vai entrar, sem gravar.', '**Importar agora** grava (com backup automático antes). Reenviar a mesma planilha não duplica. **Desfazer importação** remove o que entrou.']]] },
   '#/integracoes': { t: 'Integrações', r: 'Credenciais das APIs externas: NF-e, cotação de frete, boleto e emissão de nota.', s: [['Como usar', ['Para cada serviço, informe o ambiente (homologação ou produção) e as credenciais, ative e use **Testar conexão**.']]] },

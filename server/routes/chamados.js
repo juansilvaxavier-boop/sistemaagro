@@ -204,3 +204,4 @@ r.post('/:id/avaliar', async (req, res) => {
 
 module.exports = r;
 module.exports.PRIORIDADES = PRIORIDADES;
+module.exports.carregar = carregar;

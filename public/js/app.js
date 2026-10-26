@@ -142,6 +142,7 @@ const MENU = [
           { href: '#/auditoria', l: 'Auditoria', i: 'bi-journal-text', p: 'auditoria' },
           { href: '#/backups', l: 'Backups', i: 'bi-database-check', p: 'backup' },
           { href: '#/importacao', l: 'Importar dados', i: 'bi-cloud-upload', p: 'importacao' },
+          { href: '#/chat-lgpd', l: 'Chat: guarda e exportação', i: 'bi-chat-square-text', p: 'lgpd.titular' },
           { href: '#/integracoes', l: 'Integrações', i: 'bi-plug', p: 'integracoes' },
         ],
       },
@@ -224,6 +225,7 @@ const SUBTITULOS = {
   '#/rh/folha': 'Eventos variáveis do mês para enviar à contabilidade.',
   '#/relatorios': 'Relatórios de vendas, financeiro e estoque, com exportação.',
   '#/auditoria': 'Quem fez o quê e quando, com antes e depois de cada alteração.',
+  '#/chat-lgpd': 'Prazo de guarda das mensagens do chat e exportação de conversas para o jurídico ou o RH.',
   '#/backups': 'Cópias de segurança do banco de dados.',
   '#/importacao': 'Carga dos dados do sistema anterior, com conferência e opção de desfazer.',
   '#/integracoes': 'Credenciais de APIs externas: consulta de NF-e, cotação de frete, boleto e emissão de nota fiscal.',
@@ -274,7 +276,7 @@ const ROTAS = [
   [/^#\/relatorios$/, () => import('./pages/relatorios.js')],
   [/^#\/relatorios\/([\w-]+)$/, () => import('./pages/relatorios.js')],
   [/^#\/perfil$/, () => import('./pages/perfil.js')],
-  [/^#\/(auditoria|backups|privacidade|importacao)$/, () => import('./pages/seguranca.js')],
+  [/^#\/(auditoria|backups|privacidade|importacao|chat-lgpd)$/, () => import('./pages/seguranca.js')],
   [/^#\/integracoes$/, () => import('./pages/integracoes.js')],
 ];
 
@@ -472,6 +474,8 @@ async function abrirApp() {
   montarMenu();
   conectarEventos();
   atualizarContadores();
+  if (pode('chat')) chat.iniciar();
+  if ('Notification' in window && Notification.permission === 'granted') inscreverAparelho();
   lembretePonto();
   clearInterval(state.timerContadores);
   state.timerContadores = setInterval(atualizarContadores, 60000);
@@ -596,11 +600,7 @@ function conectarEventos() {
     atualizarContadores();
     window.dispatchEvent(new CustomEvent('nova-mensagem', { detail: d }));
   });
-  fonte.addEventListener('chat', (e) => {
-    const d = JSON.parse(e.data);
-    chat.receber(d);
-    avisar(d.de_nome, d.texto.slice(0, 140), '/#/dashboard');
-  });
+  fonte.addEventListener('chat_sinal', (e) => chat.sinal(JSON.parse(e.data)));
   fonte.addEventListener('chamado', (e) => {
     const d = JSON.parse(e.data);
     toast(d.texto, 'warning', 'Chamado interno');
@@ -643,7 +643,6 @@ function conectarEventos() {
     atualizarContadores();
     window.dispatchEvent(new CustomEvent('compras-atualizadas', { detail: d }));
   });
-  fonte.addEventListener('chat_lida', (e) => chat.lidas(JSON.parse(e.data)));
 }
 
 /** Ao abrir o sistema: avisa quem esqueceu de marcar o ponto (pelo horário cadastrado). Uma vez por tipo e dia. */
@@ -666,10 +665,28 @@ function avisar(titulo, corpo, url) {
     .then((reg) => reg.showNotification(titulo, { body: corpo, icon: '/img/icone-192.png', badge: '/img/icone-192.png', data: { url }, tag: url }))
     .catch(() => new Notification(titulo, { body: corpo, icon: '/img/icone-192.png' }));
 }
+/** Registra este aparelho para notificações com o sistema fechado (chat, lembretes de ponto). */
+async function inscreverAparelho() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || Notification.permission !== 'granted') return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const { chave } = await get('/api/ponto/push/chave');
+      const bytes = Uint8Array.from(atob((chave + '='.repeat((4 - (chave.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes });
+    }
+    await post('/api/ponto/push', { inscricao: sub.toJSON() });
+    return true;
+  } catch { return false; }
+}
 $('#btn-notificacoes').addEventListener('click', async () => {
-  if (!('Notification' in window)) return toast('Este navegador não suporta avisos.', 'warning');
+  if (!('Notification' in window)) return toast('Este navegador não suporta avisos. No iPhone, instale o sistema na tela de início e abra por lá.', 'warning');
   const r = await Notification.requestPermission();
-  toast(r === 'granted' ? 'Avisos ativados. Você será avisado de mensagens e pedidos mesmo com a aba em segundo plano.' : 'Avisos não autorizados no navegador.', r === 'granted' ? 'success' : 'warning');
+  if (r !== 'granted') return toast('Avisos não autorizados no navegador.', 'warning');
+  const push = await inscreverAparelho();
+  toast(push ? 'Avisos ativados: mensagens do chat, menções e lembretes chegam neste aparelho mesmo com o sistema fechado.'
+    : 'Avisos ativados enquanto o sistema estiver aberto.');
 });
 
 // ---------- Aplicativo instalável (PWA) ----------
@@ -745,6 +762,14 @@ $('#paleta-input').addEventListener('keydown', (e) => {
 // ---------- Rotas ----------
 async function rotear() {
   if (!state.me?.empresa) return;
+  // Link de notificação do chat (#/chat/ID): abre a conversa por cima da tela atual.
+  const linkChat = /^#\/chat\/(\d+)$/.exec(location.hash);
+  if (linkChat) {
+    history.replaceState(null, '', state.ultimaRota || '#/dashboard');
+    if (pode('chat')) chat.abrirPorLink(linkChat[1]);
+    if (state.ultimaRota) return;
+  }
+  state.ultimaRota = location.hash;
   const hash = (location.hash || '#/dashboard').split('?')[0];
   fecharMenu();
   // Ao trocar de tela, fecha o que ficou aberto por cima (modal de outra tela).

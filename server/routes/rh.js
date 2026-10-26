@@ -230,6 +230,7 @@ r.post('/colaboradores/:id/desligar', A.exige('rh.gerir'), async (req, res) => {
     if (u) {
       await db.update('usuarios', u.id, { ativo: 0 });
       await db.run('DELETE FROM sessoes WHERE usuario_id = ?', u.id);
+      await require('../chat').encerrarAcesso(u.id);
     }
   });
   res.json({ ok: true });

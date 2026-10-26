@@ -92,20 +92,20 @@ test('chat entre usuários', async () => {
   const ana = await sessao('ana');
   const carlos = await sessao('carlos');
   const idCarlos = (await db.get(`SELECT id FROM usuarios WHERE login = 'carlos'`)).id;
-  const idAna = (await db.get(`SELECT id FROM usuarios WHERE login = 'ana'`)).id;
-  await ana.post(`/api/chat/${idCarlos}`, { texto: 'Carlos, pode aprovar o pedido do Sr. José?' });
+  const { id } = await ana.post(`/api/chat/direta/${idCarlos}`);
+  await ana.post(`/api/chat/c/${id}/mensagens`, { texto: 'Carlos, pode aprovar o pedido do Sr. José?' });
   assert.equal((await carlos.get('/api/chat/nao-lidas')).n, 1);
-  const contatos = await carlos.get('/api/chat/contatos');
-  const c = contatos.find((x) => x.id === idAna);
+  const c = (await carlos.get('/api/chat/conversas')).find((x) => x.id === id);
   assert.equal(c.nao_lidas, 1);
-  assert.match(c.ultima, /aprovar/);
-  const conversa = await carlos.get(`/api/chat/${idAna}`);
-  assert.equal(conversa.at(-1).texto, 'Carlos, pode aprovar o pedido do Sr. José?');
+  assert.match(c.ultima.texto, /aprovar/);
+  const conversa = await carlos.get(`/api/chat/c/${id}`);
+  assert.equal(conversa.mensagens.at(-1).texto, 'Carlos, pode aprovar o pedido do Sr. José?');
   assert.equal((await carlos.get('/api/chat/nao-lidas')).n, 0, 'abrir a conversa marca como lida');
-  await carlos.post(`/api/chat/${idAna}`, { texto: 'Aprovado!' });
-  const deAna = await ana.get(`/api/chat/${idCarlos}`);
-  assert.deepEqual(deAna.map((m) => m.texto), ['Carlos, pode aprovar o pedido do Sr. José?', 'Aprovado!']);
-  assert.ok(deAna[0].lida_em, 'remetente vê que foi lida');
+  await carlos.post(`/api/chat/c/${id}/mensagens`, { texto: 'Aprovado!' });
+  const deAna = await ana.get(`/api/chat/c/${id}`);
+  assert.deepEqual(deAna.mensagens.map((m) => m.texto), ['Carlos, pode aprovar o pedido do Sr. José?', 'Aprovado!']);
+  const carlosMb = deAna.membros.find((x) => x.id === idCarlos);
+  assert.ok(carlosMb.ultima_lida_id >= deAna.mensagens[0].id, 'remetente vê que foi lida');
 });
 
 test('meu perfil é somente leitura, exceto a foto', async () => {

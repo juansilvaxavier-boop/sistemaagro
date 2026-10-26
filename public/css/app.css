@@ -828,3 +828,64 @@ html.menu-compacto #sidebar .brand-icone { display: block; }
 .ajuda-lista { padding-left: 18px; margin: 0; color: var(--texto); }
 .ajuda-lista li { margin-bottom: 6px; line-height: 1.5; }
 .ajuda-lista li::marker { color: var(--agro); }
+
+/* Chat: grupos, respostas, reações, menções, fixadas, áudio e cartões */
+.chat { position: fixed; }
+.chat.chat-grande { width: min(760px, calc(100vw - 40px)); height: min(86vh, calc(100vh - 110px)); }
+.chat.chat-grande .bolha { max-width: 70%; }
+.chat-secao { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--texto-2); padding: 10px 8px 4px; }
+.chat-contato.tem-nl strong { font-weight: 700; }
+.chat-grupo-av { background: var(--agro-suave); color: var(--agro-texto); font-size: 1rem; }
+.chat-fixada { display: flex; align-items: center; gap: 8px; border: 0; border-bottom: 1px solid var(--borda); background: var(--superficie-2); padding: 6px 14px; font-size: .78rem; text-align: left; color: var(--texto); width: 100%; }
+.chat-fixada > i { color: var(--agro); }
+.chat-sistema { align-self: center; font-size: .72rem; color: var(--texto-2); background: var(--superficie-2); border-radius: 99px; padding: 3px 10px; margin: 4px 0; text-align: center; max-width: 90%; }
+.bolha { position: relative; }
+.bolha.apagada { font-style: italic; opacity: .7; }
+.bolha.me-menciona.dele { border-color: var(--aviso-borda, #f0c36d); box-shadow: inset 3px 0 0 #eda100; }
+.bolha.fixada { outline: 1px dashed color-mix(in srgb, currentColor 35%, transparent); }
+.bolha.destaque { animation: chat-destaque 1.6s ease-out; }
+@keyframes chat-destaque { 0%, 40% { box-shadow: 0 0 0 3px #eda100; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.chat-autor { font-size: .72rem; font-weight: 700; margin-bottom: 2px; }
+.chat-citacao { display: block; width: 100%; text-align: left; border: 0; border-left: 3px solid currentColor; border-radius: 6px; padding: 4px 8px; margin-bottom: 4px;
+  background: color-mix(in srgb, currentColor 10%, transparent); color: inherit; font-size: .76rem; white-space: normal; }
+.chat-citacao span { display: block; opacity: .85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mencao { font-weight: 700; color: var(--info, #2a78d6); }
+.bolha.minha .mencao { color: inherit; text-decoration: underline; }
+.mencao.eu { background: color-mix(in srgb, #eda100 25%, transparent); border-radius: 4px; padding: 0 2px; }
+.bolha a { color: inherit; text-decoration: underline; }
+.chat-reacoes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chat-reacoes .reacao { border: 1px solid var(--borda); background: var(--superficie); color: var(--texto); border-radius: 99px; font-size: .74rem; padding: 0 7px; line-height: 1.6; }
+.chat-reacoes .reacao.minha { border-color: var(--agro); background: var(--agro-suave); }
+.chat-acoes-msg { position: absolute; top: -14px; display: none; gap: 2px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 99px; padding: 1px 4px; box-shadow: var(--sombra); z-index: 2; }
+.bolha.minha .chat-acoes-msg { right: 6px; }
+.bolha.dele .chat-acoes-msg { left: 6px; }
+.chat-acoes-msg button { border: 0; background: none; color: var(--texto-2); width: 26px; height: 24px; border-radius: 99px; font-size: .85rem; }
+.chat-acoes-msg button:hover { background: var(--superficie-2); color: var(--texto); }
+.bolha:hover .chat-acoes-msg, .bolha:focus-within .chat-acoes-msg, .bolha.acoes .chat-acoes-msg { display: inline-flex; }
+.bolha .hora .lida { color: #53bdeb; }
+.bolha.minha .hora .lida { color: #b8f0ff; }
+.chat-flutuante { position: absolute; z-index: 5; display: flex; gap: 2px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; padding: 4px; box-shadow: var(--sombra-alta); }
+.chat-flutuante button { border: 0; background: none; border-radius: 8px; padding: 4px 6px; font-size: 1.05rem; color: var(--texto); }
+.chat-flutuante button:hover { background: var(--superficie-2); }
+.chat-flutuante.vertical { flex-direction: column; min-width: 190px; }
+.chat-flutuante.vertical button { font-size: .82rem; text-align: left; display: flex; gap: 8px; align-items: center; }
+.chat-contexto { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid var(--borda); background: var(--superficie-2); font-size: .78rem; }
+.chat-contexto > i { color: var(--agro); }
+.chat-contexto small { display: block; color: var(--texto-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-mencoes { border-top: 1px solid var(--borda); max-height: 180px; overflow-y: auto; padding: 4px; }
+.chat-mencoes button { display: flex; flex-direction: column; width: 100%; border: 0; background: none; text-align: left; padding: 5px 8px; border-radius: 8px; color: var(--texto); font-size: .82rem; }
+.chat-mencoes button small { color: var(--texto-2); }
+.chat-mencoes button.ativo, .chat-mencoes button:hover { background: var(--agro-suave); }
+.chat-gravando { flex: 1; display: flex; align-items: center; gap: 8px; font-size: .84rem; min-height: 38px; }
+.gravando-ponto { width: 10px; height: 10px; border-radius: 50%; background: #d92d20; animation: ass-pulo 1s infinite; }
+.chat-audio { width: 240px; max-width: 100%; height: 40px; }
+.chat-cartoes { display: grid; gap: 4px; }
+.chat-cartoes:empty { display: none; }
+.chat-cartao { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 8px; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 10px;
+  background: color-mix(in srgb, currentColor 6%, transparent); color: inherit; text-align: left; font-size: .78rem; white-space: normal; width: 100%; }
+.chat-cartao small { display: block; opacity: .8; }
+.chat-escolha { max-height: 280px; overflow-y: auto; border: 1px solid var(--borda); border-radius: 10px; padding: 6px 10px; }
+.chat-escolha .form-check { padding-top: 3px; padding-bottom: 3px; }
+@media (max-width: 575.98px) { .chat.chat-grande { width: 100vw; height: 100dvh; } }
+#chat .bolha { white-space: normal; }
+#chat .chat-texto { white-space: pre-wrap; }

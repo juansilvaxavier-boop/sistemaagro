@@ -166,7 +166,7 @@ const FERRAMENTAS = {
         out.minhas_solicitacoes_rh = (await db.get(`SELECT COUNT(*) AS n FROM rh_solicitacoes WHERE colaborador_id = ? AND status = 'aberta'`, u.colaborador_id)).n;
       }
       if (A.can(u, 'rh')) out.solicitacoes_rh_para_responder = (await db.get(`SELECT COUNT(*) AS n FROM rh_solicitacoes WHERE status = 'aberta'`)).n;
-      if (A.can(u, 'chat')) out.chat_nao_lidas = (await db.get('SELECT COUNT(*) AS n FROM chat_mensagens WHERE para_id = ? AND lida_em IS NULL', u.id)).n;
+      if (A.can(u, 'chat')) out.chat_nao_lidas = (await require('./chat').naoLidas(u.id)).n;
       return out;
     },
   },

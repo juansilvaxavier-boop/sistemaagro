@@ -85,6 +85,7 @@ function criarApp() {
   app.use('/vendor/chart.js', express.static(path.join(nm, 'chart.js', 'dist')));
   app.use('/vendor/fonte', express.static(path.join(nm, '@fontsource-variable', 'plus-jakarta-sans')));
   app.use('/vendor/mapa-brasil', express.static(path.join(nm, '@svg-maps', 'brazil')));
+  app.use('/vendor/supabase', express.static(path.join(nm, '@supabase', 'supabase-js', 'dist', 'umd')));
   app.get('/portal', (req, res) => res.redirect('/portal.html'));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
