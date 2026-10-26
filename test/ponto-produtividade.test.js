@@ -145,3 +145,122 @@ test('painel de produtividade: setores, cobrança e resultado por colaborador', 
   assert.ok(so.colaboradores.every((x) => x.usuario_id === idAna));
   assert.equal((await ana.req('GET', '/api/produtividade/usuarios')).status, 403);
 });
+
+test('horário por colaborador, atraso e lembretes (regras puras)', () => {
+  assert.equal(P.validarHorario(null), null);
+  const h = P.validarHorario({ 1: { e: '08:00', si: '12:00', vi: '13:00', s: '17:00' }, 6: { e: '08:00', s: '12:00' }, 0: {} });
+  assert.deepEqual(Object.keys(h), ['1', '6']);
+  assert.throws(() => P.validarHorario({ 2: { e: '18:00', s: '08:00' } }), /fora de ordem/);
+  assert.throws(() => P.validarHorario({ 2: { e: '08:00', si: '12:00', s: '17:00' } }), /intervalo/i);
+  const c = { horario: JSON.stringify(h), carga_horaria: 44 };
+  assert.equal(P.previstoDia(c, '2026-10-26'), 480, 'segunda pelo horário');
+  assert.equal(P.previstoDia(c, '2026-10-31'), 240, 'sábado meio período');
+  assert.equal(P.previstoDia(c, '2026-10-27'), 0, 'terça sem horário = folga');
+  const rg = P.REGRAS_PADRAO;
+  const d = h[1];
+  assert.equal(P.avisoDevido(d, 0, 8 * 60 + 10, rg), null, 'dentro dos 15 min');
+  assert.equal(P.avisoDevido(d, 0, 8 * 60 + 20, rg), 'entrada');
+  assert.equal(P.avisoDevido(d, 1, 13 * 60 + 20, rg), 'intervalo');
+  assert.equal(P.avisoDevido(d, 3, 17 * 60 + 40, rg), 'saida');
+  assert.equal(P.avisoDevido(d, 4, 17 * 60 + 40, rg), null);
+  assert.ok(Math.abs(P.distancia(-16.6869, -49.2648, -16.70, -49.2648) - 1457) < 5);
+});
+
+test('cercas, foto, horário pelo RH e avisos de esquecimento', async () => {
+  const rh = await sessao('rh');
+  const bruno = await sessao('bruno');
+  const ana = await sessao('ana');
+  const { id: cid } = await rh.post('/api/rh/colaboradores', {
+    nome: 'Cerca de Teste', cpf: '390.533.447-05', cargo: 'Operador de produção', departamento: 'Produção', tipo_contrato: 'clt', data_admissao: '2020-01-02',
+  });
+  await db.run(`UPDATE usuarios SET colaborador_id = ? WHERE login = 'bruno'`, cid);
+  const outro = (await db.get(`SELECT id FROM colaboradores WHERE id <> ? AND ativo = 1 ORDER BY id LIMIT 1`, cid)).id;
+
+  // Horário de segunda a domingo (para o teste valer em qualquer dia), copiado para outro colaborador.
+  const todos = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((i) => [i, { e: '08:00', si: '12:00', vi: '13:00', s: '17:00' }]));
+  assert.equal((await bruno.req('PUT', `/api/ponto/colaborador/${cid}/horario`, { horario: todos })).status, 403);
+  assert.equal((await rh.req('PUT', `/api/ponto/colaborador/${cid}/horario`, { horario: { 1: { e: '09:00', s: '08:00' } } })).status, 400);
+  const salvo = await rh.put(`/api/ponto/colaborador/${cid}/horario`, { horario: todos, aplicar_a: [outro] });
+  assert.equal(salvo.atualizados, 2);
+  assert.ok((await db.get('SELECT horario FROM colaboradores WHERE id = ?', outro)).horario);
+  const esp = await rh.get(`/api/ponto/colaborador/${cid}`);
+  assert.equal(esp.colaborador.horario[3].s, '17:00');
+
+  // Cerca: dentro do raio, fora (sinalizado) e recusado quando a regra manda.
+  await rh.post('/api/ponto/locais', { nome: 'Matriz', latitude: -16.6869, longitude: -49.2648, raio: 200 });
+  assert.equal((await rh.req('POST', '/api/ponto/locais', { nome: 'X', latitude: 0, longitude: 0 })).status, 400);
+  const limpar = () => db.run('DELETE FROM rh_ponto WHERE colaborador_id = ?', cid);
+  let m = await bruno.post('/api/ponto/bater', { latitude: -16.6872, longitude: -49.2650, precisao: 20 });
+  assert.equal(m.fora_cerca, false);
+  assert.equal(m.local, 'Matriz');
+  await limpar();
+  m = await bruno.post('/api/ponto/bater', { latitude: -16.70, longitude: -49.2648, precisao: 20 });
+  assert.equal(m.fora_cerca, true);
+  assert.ok(m.distancia > 1400);
+  await limpar();
+  await rh.put('/api/ponto/regras', { bloquear_fora_cerca: 1, exigir_foto: 1, avisos: 1, aviso_entrada: 15, aviso_saida: 30, tolerancia_atraso: 5 });
+  let r = await bruno.req('POST', '/api/ponto/bater', { latitude: -16.70, longitude: -49.2648 });
+  assert.equal(r.status, 400);
+  assert.match(r.dados.erro, /Matriz/);
+  assert.equal((await bruno.req('POST', '/api/ponto/bater', {})).status, 400, 'sem localização com cerca obrigatória');
+  r = await bruno.req('POST', '/api/ponto/bater', { latitude: -16.6869, longitude: -49.2648 });
+  assert.match(r.dados.erro, /foto/i, 'foto obrigatória');
+  const foto = `data:image/jpeg;base64,${Buffer.from('foto-teste').toString('base64')}`;
+  m = await bruno.post('/api/ponto/bater', { latitude: -16.6869, longitude: -49.2648, foto });
+  assert.equal((await bruno.req('GET', `/api/ponto/${m.id}/foto`)).status, 200, 'o próprio colaborador vê a foto');
+  assert.equal((await rh.req('GET', `/api/ponto/${m.id}/foto`)).status, 200);
+  assert.equal((await ana.req('GET', `/api/ponto/${m.id}/foto`)).status, 403, 'outro colaborador não vê');
+  assert.equal(Buffer.from((await rh.req('GET', `/api/ponto/${m.id}/foto`)).dados).toString(), 'foto-teste');
+  // Trabalho externo marca fora da cerca mesmo com bloqueio.
+  await limpar();
+  await rh.put(`/api/ponto/colaborador/${cid}/horario`, { horario: todos, ponto_externo: 1 });
+  m = await bruno.post('/api/ponto/bater', { latitude: -15.6, longitude: -47.9, foto });
+  assert.equal(m.fora_cerca, false);
+  await rh.put('/api/ponto/regras', { avisos: 1 });
+  await limpar();
+
+  // Avisos: sem marcação às 09:00 → aviso de entrada, uma vez só; com a entrada às 17:40 → aviso de saída.
+  const hoje = S.hoje();
+  await db.run('DELETE FROM rh_ponto_avisos');
+  let v = await P.verificarAvisos(`${hoje} 09:00:00`);
+  assert.ok(v.enviados.some((x) => x.colaborador_id === cid && x.tipo === 'entrada'));
+  v = await P.verificarAvisos(`${hoje} 09:05:00`);
+  assert.ok(!v.enviados.some((x) => x.colaborador_id === cid), 'não repete o aviso');
+  await db.insert('rh_ponto', { colaborador_id: cid, empresa_id: 1, data: hoje, hora: '08:10:00', origem: 'web' });
+  v = await P.verificarAvisos(`${hoje} 17:40:00`);
+  assert.ok(v.enviados.some((x) => x.colaborador_id === cid && x.tipo === 'saida'));
+  const meu = await bruno.get('/api/ponto/meu');
+  assert.ok(meu.push_chave && meu.push_chave.length > 40, 'chave pública para os lembretes');
+  assert.equal((await bruno.req('POST', '/api/ponto/push', { inscricao: { endpoint: 'http://x' } })).status, 400);
+  await bruno.post('/api/ponto/push', { inscricao: { endpoint: 'https://push.exemplo/abc', keys: { p256dh: 'p', auth: 'a' } } });
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM push_inscricoes')).n, 1);
+  await bruno.post('/api/ponto/push/remover', { endpoint: 'https://push.exemplo/abc' });
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM push_inscricoes')).n, 0);
+
+  // Atraso no espelho: entrada 08:10 contra 08:00 com tolerância de 5 min.
+  const ontem = S.addDias(hoje, -1);
+  for (const h of ['08:20:00', '12:00:00', '13:00:00', '17:00:00']) await db.insert('rh_ponto', { colaborador_id: cid, empresa_id: 1, data: ontem, hora: h, origem: 'web' });
+  const dia = (await rh.get(`/api/ponto/colaborador/${cid}?mes=${ontem.slice(0, 7)}`)).espelho.dias.find((x) => x.data === ontem);
+  assert.equal(dia.atraso, 20);
+  assert.equal(dia.previsto, 480);
+});
+
+test('conversão da cobrança: pagamento depois da ação e promessa cumprida', async () => {
+  const admin = await sessao('admin');
+  const fin = await sessao('financeiro');
+  const hoje = S.hoje();
+  const p = await db.get(`SELECT id, cliente_id, valor FROM parcelas WHERE empresa_id = 1 AND status = 'a_pagar' AND vencimento < ? ORDER BY id LIMIT 1`, hoje);
+  assert.ok(p, 'há parcela vencida no seed');
+  const idFin = (await db.get(`SELECT id FROM usuarios WHERE login = 'financeiro'`)).id;
+  const url = `/api/produtividade?de=${hoje}&ate=${hoje}&usuario_id=${idFin}`;
+  const antes = (await admin.get(url)).colaboradores.find((x) => x.usuario_id === idFin);
+  await fin.post('/api/cobranca/acoes', { cliente_id: p.cliente_id, tipo: 'ligacao', resultado: 'promessa', data_promessa: S.addDias(hoje, 2), valor_promessa: p.valor });
+  await db.run(`UPDATE parcelas SET valor_pago = valor, data_pagamento = ?, status = 'liquidada' WHERE id = ?`, hoje, p.id);
+  const d = await admin.get(url);
+  const x = d.colaboradores.find((c) => c.usuario_id === idFin);
+  assert.ok(x.recuperado >= (antes?.recuperado || 0) + p.valor - 0.01, 'valor recuperado inclui o pagamento');
+  assert.ok(x.clientes_pagaram >= 1 && x.conversao > 0);
+  assert.ok(x.promessas_cumpridas >= 1);
+  assert.equal(x.cumprimento, x.promessas_cumpridas + x.promessas_quebradas ? Math.round((x.promessas_cumpridas / (x.promessas_cumpridas + x.promessas_quebradas)) * 10000) / 100 : null);
+  assert.ok(d.resumo.recuperado >= x.recuperado);
+});

@@ -26,7 +26,10 @@ async function meu(req) {
   if (!req.user.colaborador_id) throw new ErroNegocio('Seu usuário não está ligado a um colaborador. Peça ao RH para fazer o vínculo.', 404);
   return colaborador(req.user.colaborador_id);
 }
-const resumoColab = (c) => ({ id: c.id, nome: c.nome, cargo: c.cargo, departamento: c.departamento || c.setor, escala: c.escala, carga_horaria: c.carga_horaria, bate_ponto: c.bate_ponto });
+const resumoColab = (c) => ({
+  id: c.id, nome: c.nome, cargo: c.cargo, departamento: c.departamento || c.setor, escala: c.escala, carga_horaria: c.carga_horaria, bate_ponto: c.bate_ponto,
+  horario: P.lerHorario(c), ponto_externo: c.ponto_externo ? 1 : 0,
+});
 
 // ---------- O próprio colaborador ----------
 r.get('/meu', async (req, res) => {
@@ -34,10 +37,16 @@ r.get('/meu', async (req, res) => {
   const c = await meu(req);
   const { mes, de, ate } = periodo(req.query);
   const hoje = S.hoje();
-  const marcHoje = await db.all('SELECT id, hora, origem, endereco, latitude, longitude, precisao FROM rh_ponto WHERE colaborador_id = ? AND data = ? AND anulada = 0 ORDER BY hora, id', c.id, hoje);
+  const marcHoje = await db.all(`SELECT p.id, p.hora, p.origem, p.endereco, p.latitude, p.longitude, p.precisao, p.fora_cerca, p.distancia, l.nome AS local,
+      CASE WHEN p.foto IS NULL THEN 0 ELSE 1 END AS tem_foto
+    FROM rh_ponto p LEFT JOIN rh_ponto_locais l ON l.id = p.local_id WHERE p.colaborador_id = ? AND p.data = ? AND p.anulada = 0 ORDER BY p.hora, p.id`, c.id, hoje);
   marcHoje.forEach((m, i) => { m.tipo = P.rotulo(i); });
+  const rg = await P.regras(c.empresa_id || req.empresaId);
+  const locais = await db.all('SELECT nome, raio FROM rh_ponto_locais WHERE empresa_id IN (?) AND ativo = 1 ORDER BY nome', c.empresa_id || req.empresaId);
   res.json({
     vinculado: true, colaborador: resumoColab(c), mes, hoje, agora: S.agora(),
+    regras: { exigir_foto: rg.exigir_foto, bloquear_fora_cerca: rg.bloquear_fora_cerca && !c.ponto_externo }, locais,
+    lembrete: await P.lembreteDe(c), push_chave: await require('../push').chavePublica(),
     marcacoes_hoje: marcHoje, proxima: P.rotulo(marcHoje.length),
     espelho: await P.apurar(c, de, ate), banco: await P.bancoDeHoras(c),
   });
@@ -47,6 +56,34 @@ r.post('/bater', async (req, res) => {
   const c = await meu(req);
   const m = await P.bater(c, req.body || {}, { empresaId: req.empresaId, usuarioId: req.user.id, ip: A.ipDe(req), dispositivo: req.headers['user-agent'] });
   res.status(201).json(m);
+});
+
+/** Lembrete de marcação esquecida para a tela do colaborador. */
+r.get('/lembrete', async (req, res) => {
+  if (!req.user.colaborador_id) return res.json({ lembrete: null });
+  res.json({ lembrete: await P.lembreteDe(await colaborador(req.user.colaborador_id)) });
+});
+
+// ---------- Notificações no aparelho (Web Push) ----------
+r.get('/push/chave', async (req, res) => res.json({ chave: await require('../push').chavePublica() }));
+r.post('/push', async (req, res) => {
+  await require('../push').inscrever(req.user.id, req.body?.inscricao, req.headers['user-agent']);
+  res.status(201).json({ ok: true });
+});
+r.post('/push/remover', async (req, res) => {
+  await require('../push').remover(req.user.id, req.body?.endpoint);
+  res.json({ ok: true });
+});
+
+/** Foto da marcação: só o RH e o próprio colaborador. */
+r.get('/:id/foto', async (req, res) => {
+  const m = await db.get('SELECT colaborador_id, foto, foto_mime FROM rh_ponto WHERE id = ?', Number(req.params.id));
+  if (!m?.foto) throw new ErroNegocio('Foto não encontrada.', 404);
+  if (!A.can(req.user, 'rh') && m.colaborador_id !== req.user.colaborador_id) throw new ErroNegocio('Sem permissão.', 403);
+  res.setHeader('Content-Type', m.foto_mime || 'image/jpeg');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.end(m.foto);
 });
 
 // ---------- RH ----------
@@ -80,6 +117,56 @@ r.get('/', A.exige('rh'), async (req, res) => {
       banco_negativo: r2(linhas.filter((x) => x.banco < 0).reduce((a, x) => a + x.banco, 0)),
     },
   });
+});
+
+// Regras da empresa e locais (cercas).
+r.get('/config', A.exige('rh'), async (req, res) => {
+  res.json({
+    regras: await P.regras(req.empresaId),
+    locais: await db.all('SELECT * FROM rh_ponto_locais WHERE empresa_id = ? AND ativo = 1 ORDER BY nome', req.empresaId),
+  });
+});
+r.put('/regras', A.exige('rh.gerir'), async (req, res) => res.json(await P.salvarRegras(req.empresaId, req.body || {}, req.user.id)));
+
+function dadosLocal(b) {
+  const nome = String(b.nome || '').trim();
+  const lat = Number(b.latitude);
+  const lng = Number(b.longitude);
+  const raio = Math.round(Number(b.raio) || 150);
+  if (!nome) throw new ErroNegocio('Dê um nome ao local.');
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || (lat === 0 && lng === 0)) throw new ErroNegocio('Informe a latitude e a longitude do local.');
+  if (raio < 30 || raio > 5000) throw new ErroNegocio('O raio precisa ficar entre 30 m e 5 km.');
+  return { nome, latitude: lat, longitude: lng, raio };
+}
+r.post('/locais', A.exige('rh.gerir'), async (req, res) => {
+  res.status(201).json({ id: await db.insert('rh_ponto_locais', { ...dadosLocal(req.body || {}), empresa_id: req.empresaId }) });
+});
+r.put('/locais/:id', A.exige('rh.gerir'), async (req, res) => {
+  const l = await db.get('SELECT id FROM rh_ponto_locais WHERE id = ? AND empresa_id = ?', Number(req.params.id), req.empresaId);
+  if (!l) throw new ErroNegocio('Local não encontrado.', 404);
+  await db.update('rh_ponto_locais', l.id, dadosLocal(req.body || {}));
+  res.json({ ok: true });
+});
+// As marcações guardam o local; por isso ele é desativado, não apagado.
+r.delete('/locais/:id', A.exige('rh.gerir'), async (req, res) => {
+  const l = await db.get('SELECT id FROM rh_ponto_locais WHERE id = ? AND empresa_id = ?', Number(req.params.id), req.empresaId);
+  if (!l) throw new ErroNegocio('Local não encontrado.', 404);
+  await db.update('rh_ponto_locais', l.id, { ativo: 0 });
+  res.json({ ok: true });
+});
+
+/** Horário de trabalho e trabalho externo; pode copiar o mesmo horário para outros colaboradores. */
+r.put('/colaborador/:id/horario', A.exige('rh.gerir'), async (req, res) => {
+  const c = await colaborador(req.params.id);
+  const b = req.body || {};
+  const horario = P.validarHorario(b.horario);
+  const valor = horario ? JSON.stringify(horario) : null;
+  const ids = [c.id, ...(Array.isArray(b.aplicar_a) ? b.aplicar_a.map(Number).filter((x) => x && x !== c.id) : [])];
+  await db.tx(async () => {
+    for (const id of ids) await db.update('colaboradores', id, { horario: valor });
+    await db.update('colaboradores', c.id, { ponto_externo: b.ponto_externo ? 1 : 0 });
+  });
+  res.json({ ok: true, atualizados: ids.length });
 });
 
 r.get('/colaborador/:id', A.exige('rh'), async (req, res) => {

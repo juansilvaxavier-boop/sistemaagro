@@ -31,11 +31,22 @@ function criarApp() {
     }
   });
   app.get('/api/cron/backup', (req, res, next) => require('./routes/admin').cronBackup(req, res).catch(next));
+  app.get('/api/cron/ponto', async (req, res, next) => {
+    try {
+      if (!process.env.CRON_SECRET || req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) return res.status(401).json({ erro: 'Não autorizado.' });
+      res.json(await db.comUsuario({ usuarioNome: 'Agendador', rota: 'cron' }, () => require('./ponto').verificarAvisos()));
+    } catch (e) { next(e); }
+  });
   app.get('/api/cron/crm', (req, res, next) => require('./routes/admin').cronCrm(req, res).catch(next));
   app.use('/api/auth', require('./routes/auth'));
   app.use('/api/portal', require('./routes/portal'));
   const api = express.Router();
   api.use(A.autenticado());
+  // Lembretes de ponto esquecido: verificados a cada 5 minutos aproveitando o uso do sistema (e por /api/cron/ponto).
+  api.use(async (req, res, next) => {
+    try { await require('./ponto').talvezVerificarAvisos(); } catch (e) { console.error('avisos do ponto:', e.message); }
+    next();
+  });
   api.use('/cadastros', require('./routes/cadastros'));
   api.use('/clientes', require('./routes/clientes'));
   api.use('/pedidos', require('./routes/pedidos'));

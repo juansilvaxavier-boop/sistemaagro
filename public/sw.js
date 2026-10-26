@@ -1,6 +1,6 @@
 // Service worker: guarda a "casca" do aplicativo para abrir rápido e funcionar como app instalado.
 // A API nunca é guardada em cache (os dados sempre vêm do servidor).
-const VERSAO = 'agt-v6';
+const VERSAO = 'agt-v7';
 const CASCA = ['/', '/index.html', '/css/app.css', '/js/app.js', '/js/core.js', '/img/icone.svg', '/img/logo.png', '/img/favicon.png', '/manifest.webmanifest',
   '/vendor/bootstrap/css/bootstrap.min.css', '/vendor/bootstrap/js/bootstrap.bundle.min.js', '/vendor/bootstrap-icons/bootstrap-icons.min.css',
   '/vendor/chart.js/chart.umd.js', '/vendor/fonte/index.css'];
@@ -23,6 +23,14 @@ self.addEventListener('fetch', (e) => {
       })
       .catch(() => caches.match(e.request).then((r) => r || caches.match('/index.html'))),
   );
+});
+// Lembretes enviados pelo servidor (Web Push), mesmo com o sistema fechado.
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { corpo: e.data?.text() }; }
+  e.waitUntil(self.registration.showNotification(d.titulo || 'Acelera Fertilizantes', {
+    body: d.corpo || '', icon: '/img/icone-192.png', badge: '/img/icone-192.png', data: { url: d.url || '/' }, tag: d.tag, renotify: !!d.tag,
+  }));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();

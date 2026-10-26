@@ -472,6 +472,7 @@ async function abrirApp() {
   montarMenu();
   conectarEventos();
   atualizarContadores();
+  lembretePonto();
   clearInterval(state.timerContadores);
   state.timerContadores = setInterval(atualizarContadores, 60000);
   if (!location.hash || location.hash === '#/') location.hash = '#/dashboard';
@@ -606,6 +607,11 @@ function conectarEventos() {
     avisar(`Chamado #${d.numero}`, d.texto, `/#/chamados?id=${d.id}`);
     atualizarContadores();
   });
+  fonte.addEventListener('ponto', (e) => {
+    const d = JSON.parse(e.data);
+    toast(`${d.texto} Abra Meu ponto para registrar.`, 'warning', 'Lembrete de ponto');
+    avisar('Lembrete de ponto', d.texto, '/#/ponto');
+  });
   fonte.addEventListener('rh', (e) => {
     const d = JSON.parse(e.data);
     toast(d.texto, 'info', 'RH');
@@ -638,6 +644,19 @@ function conectarEventos() {
     window.dispatchEvent(new CustomEvent('compras-atualizadas', { detail: d }));
   });
   fonte.addEventListener('chat_lida', (e) => chat.lidas(JSON.parse(e.data)));
+}
+
+/** Ao abrir o sistema: avisa quem esqueceu de marcar o ponto (pelo horário cadastrado). Uma vez por tipo e dia. */
+async function lembretePonto() {
+  if (!state.me?.usuario?.colaborador_id) return;
+  try {
+    const { lembrete } = await get('/api/ponto/lembrete');
+    if (!lembrete) return;
+    const chave = `agt-lembrete-${new Date().toISOString().slice(0, 10)}-${lembrete.tipo}`;
+    if (sessionStorage.getItem(chave)) return;
+    sessionStorage.setItem(chave, '1');
+    toast(`${lembrete.texto} Abra Meu ponto para registrar.`, 'warning', 'Lembrete de ponto');
+  } catch {}
 }
 
 /** Notificação do sistema operacional quando a aba não está em foco. */

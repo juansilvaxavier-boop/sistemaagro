@@ -61,6 +61,27 @@ r.get('/', async (req, res) => {
   const cob = await db.all(`SELECT usuario_id, tipo, COALESCE(resultado, '') AS resultado, COUNT(*) AS n, COUNT(DISTINCT cliente_id) AS clientes,
       COALESCE(SUM(CASE WHEN resultado = 'promessa' THEN valor_promessa ELSE 0 END), 0) AS promessas
     FROM cobranca_acoes WHERE created_at BETWEEN ? AND ? AND usuario_id IS NOT NULL${u('usuario_id')} GROUP BY usuario_id, tipo, COALESCE(resultado, '')`, ini, fim);
+  // Conversão: pagamentos de parcelas que já estavam vencidas, feitos até 30 dias depois de uma ação de cobrança do período.
+  // O pagamento conta para o último analista que cobrou o cliente antes dele (último toque).
+  const recuperado = await db.all(`SELECT t.usuario_id, COUNT(DISTINCT t.cliente_id) AS clientes, COUNT(*) AS parcelas, COALESCE(SUM(t.valor), 0) AS valor FROM (
+      SELECT p.cliente_id, p.valor_pago AS valor,
+        (SELECT a.usuario_id FROM cobranca_acoes a WHERE a.cliente_id = p.cliente_id AND a.usuario_id IS NOT NULL AND a.created_at BETWEEN ? AND ?
+          AND substr(a.created_at, 1, 10) <= p.data_pagamento AND substr(a.created_at, 1, 10) >= to_char(CAST(p.data_pagamento AS date) - 30, 'YYYY-MM-DD')
+          AND p.vencimento < substr(a.created_at, 1, 10)
+          ORDER BY a.created_at DESC, a.id DESC LIMIT 1) AS usuario_id
+      FROM parcelas p WHERE p.empresa_id = ? AND COALESCE(p.valor_pago, 0) > 0 AND p.data_pagamento >= ?
+        AND p.data_pagamento <= to_char(CAST(? AS date) + 30, 'YYYY-MM-DD')
+    ) t WHERE t.usuario_id IS NOT NULL${u('t.usuario_id')} GROUP BY t.usuario_id`, ini, fim, emp, de, ate);
+  // Promessas: cumprida = o cliente pagou algo entre a ação e 3 dias depois da data prometida.
+  const hoje = S.hoje();
+  const promessas = await db.all(`SELECT x.usuario_id, COUNT(*) AS n, SUM(x.cumprida) AS cumpridas,
+      SUM(CASE WHEN x.cumprida = 0 AND x.limite < ? THEN 1 ELSE 0 END) AS quebradas,
+      SUM(CASE WHEN x.cumprida = 0 AND x.limite >= ? THEN 1 ELSE 0 END) AS a_vencer FROM (
+      SELECT a.usuario_id, to_char(CAST(a.data_promessa AS date) + 3, 'YYYY-MM-DD') AS limite,
+        CASE WHEN EXISTS (SELECT 1 FROM parcelas p WHERE p.cliente_id = a.cliente_id AND p.empresa_id = ? AND COALESCE(p.valor_pago, 0) > 0
+          AND p.data_pagamento >= substr(a.created_at, 1, 10) AND p.data_pagamento <= to_char(CAST(a.data_promessa AS date) + 3, 'YYYY-MM-DD')) THEN 1 ELSE 0 END AS cumprida
+      FROM cobranca_acoes a WHERE a.resultado = 'promessa' AND a.data_promessa IS NOT NULL AND a.usuario_id IS NOT NULL AND a.created_at BETWEEN ? AND ?${u('a.usuario_id')}
+    ) x GROUP BY x.usuario_id`, hoje, hoje, emp, ini, fim);
   const acordos = await db.all(`SELECT usuario_id, COUNT(*) AS n, COALESCE(SUM(valor_acordo), 0) AS valor FROM acordos
     WHERE created_at BETWEEN ? AND ? AND usuario_id IS NOT NULL${u('usuario_id')} GROUP BY usuario_id`, ini, fim);
   // Interações de CRM sem contar as que a própria cobrança registra.
@@ -80,7 +101,8 @@ r.get('/', async (req, res) => {
   const pessoas = {};
   const pessoa = (id) => (pessoas[id] ||= {
     usuario_id: Number(id), vendas_qtd: 0, vendas_valor: 0, movimentos: 0, avancados: 0, devolvidos: 0, reprovados: 0, cancelados: 0,
-    cobrancas: 0, clientes_cobrados: 0, promessas: 0, promessas_valor: 0, acordos: 0, acordos_valor: 0, interacoes: 0, tarefas: 0, chamados: 0,
+    cobrancas: 0, clientes_cobrados: 0, promessas: 0, promessas_valor: 0, clientes_pagaram: 0, recuperado: 0, parcelas_recuperadas: 0,
+    promessas_cumpridas: 0, promessas_quebradas: 0, promessas_a_vencer: 0, conversao: null, cumprimento: null, acordos: 0, acordos_valor: 0, interacoes: 0, tarefas: 0, chamados: 0,
     por_etapa: {}, por_tipo_cobranca: {}, horas_ponto: null,
   });
   for (const m of movs) {
@@ -103,6 +125,15 @@ r.get('/', async (req, res) => {
     AND usuario_id IS NOT NULL${u('usuario_id')} GROUP BY usuario_id`, ini, fim);
   for (const c of clientesCobrados) pessoa(c.usuario_id).clientes_cobrados = Number(c.n);
   for (const a of acordos) Object.assign(pessoa(a.usuario_id), { acordos: Number(a.n), acordos_valor: r2(a.valor) });
+  for (const x of recuperado) Object.assign(pessoa(x.usuario_id), { clientes_pagaram: Number(x.clientes), recuperado: r2(x.valor), parcelas_recuperadas: Number(x.parcelas) });
+  for (const x of promessas) {
+    Object.assign(pessoa(x.usuario_id), { promessas_cumpridas: Number(x.cumpridas || 0), promessas_quebradas: Number(x.quebradas || 0), promessas_a_vencer: Number(x.a_vencer || 0) });
+  }
+  const taxa = (a, b) => (b ? r2((a / b) * 100) : null);
+  for (const x of Object.values(pessoas)) {
+    if (x.clientes_cobrados) x.conversao = taxa(Math.min(x.clientes_pagaram, x.clientes_cobrados), x.clientes_cobrados);
+    x.cumprimento = taxa(x.promessas_cumpridas, x.promessas_cumpridas + x.promessas_quebradas);
+  }
   for (const c of crm) pessoa(c.usuario_id).interacoes = Number(c.n);
   for (const t of tarefas) pessoa(t.usuario_id).tarefas = Number(t.n);
   for (const c of chamados) pessoa(c.usuario_id).chamados = Number(c.n);
@@ -168,6 +199,10 @@ r.get('/', async (req, res) => {
     resumo: {
       cobrancas: somaCob(() => true), clientes_cobrados: s('clientes_cobrados'), promessas: s('promessas'), promessas_valor: r2(s('promessas_valor')),
       acordos: s('acordos'), acordos_valor: r2(s('acordos_valor')),
+      clientes_pagaram: s('clientes_pagaram'), recuperado: r2(s('recuperado')),
+      conversao: s('clientes_cobrados') ? r2((Math.min(s('clientes_pagaram'), s('clientes_cobrados')) / s('clientes_cobrados')) * 100) : null,
+      promessas_cumpridas: s('promessas_cumpridas'), promessas_quebradas: s('promessas_quebradas'), promessas_a_vencer: s('promessas_a_vencer'),
+      cumprimento: s('promessas_cumpridas') + s('promessas_quebradas') ? r2((s('promessas_cumpridas') / (s('promessas_cumpridas') + s('promessas_quebradas'))) * 100) : null,
       analisados: analise?.n || 0, analise_aprovados: analise?.avancado || 0, analise_devolvidos: analise?.devolvido || 0, analise_reprovados: analise?.reprovado || 0,
       analise_horas: analise?.n_tempo ? r2(analise.horas_soma / analise.n_tempo) : null,
       notas: Number(notas.n), faturado: r2(notas.valor), vendas_qtd: s('vendas_qtd'), vendas_valor: r2(s('vendas_valor')),

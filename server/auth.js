@@ -201,7 +201,7 @@ async function sessaoAssinada(token) {
 }
 
 // Rotas que alteram dados mas não dependem da empresa (liberadas na visão de todas as empresas).
-const ROTAS_LIVRES_TODAS = [/^\/api\/auth\//, /^\/api\/chat\b/, /^\/api\/assistente\b/, /^\/api\/mensagens\/(\d+\/lida|todas-lidas)$/, /^\/api\/ponto\/bater$/];
+const ROTAS_LIVRES_TODAS = [/^\/api\/auth\//, /^\/api\/chat\b/, /^\/api\/assistente\b/, /^\/api\/mensagens\/(\d+\/lida|todas-lidas)$/, /^\/api\/ponto\/(bater|push|push\/remover)$/];
 
 const ipDe = (req) => String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
 

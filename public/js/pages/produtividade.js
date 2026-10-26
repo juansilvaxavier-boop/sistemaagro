@@ -7,6 +7,7 @@ const RESULTADOS = { ...ROTULOS.resultado, sem_resultado: 'Sem resultado informa
 const ATALHOS = [['mes', 'Este mês'], ['mes_ant', 'Mês passado'], ['7d', 'Últimos 7 dias'], ['30d', 'Últimos 30 dias'], ['90d', 'Últimos 90 dias'], ['ano', 'Este ano']];
 const horasTxt = (h) => (h == null ? '—' : h < 24 ? `${fmt.num(h)} h` : `${fmt.num(Math.round((h / 24) * 10) / 10)} dias`);
 const rotulo = (mapa, v) => mapa[v] || String(v || '').replace(/_/g, ' ');
+const pctTxt = (v) => (v == null ? '—' : `${fmt.num(v)}%`);
 let grafico;
 
 export default async function produtividade(conteudo, _ctx, filtro) {
@@ -44,6 +45,12 @@ export default async function produtividade(conteudo, _ctx, filtro) {
       ${todos && !f.usuario_id ? kpi('Faturamento', fmt.money(r.faturado), { icone: 'bi-receipt', cor: 'success', sub: `${fmt.num(r.notas)} notas emitidas` }) : ''}
       ${kpi('Vendas lançadas', fmt.money(r.vendas_valor), { icone: 'bi-cart-check', cor: 'success', sub: `${fmt.num(r.vendas_qtd)} pedidos` })}
       ${kpi('Acordos fechados', fmt.num(r.acordos), { icone: 'bi-hand-thumbs-up', cor: 'secondary', sub: fmt.money(r.acordos_valor) })}
+    </div>
+    <h6 class="secao-titulo">Conversão da cobrança <span class="small text-body-secondary fw-normal">o que as ações de cobrança do período trouxeram de volta</span></h6>
+    <div class="kpis mb-3">
+      ${kpi('Taxa de conversão', pctTxt(r.conversao), { icone: 'bi-funnel', cor: 'success', sub: `${fmt.num(r.clientes_pagaram)} de ${fmt.num(r.clientes_cobrados)} clientes cobrados pagaram em até 30 dias`, dica: 'Clientes que pagaram uma parcela vencida em até 30 dias depois de uma ação de cobrança do período.' })}
+      ${kpi('Valor recuperado', fmt.money(r.recuperado), { icone: 'bi-cash-coin', cor: 'success', sub: 'parcelas vencidas pagas após a cobrança', dica: 'Cada pagamento conta para o último analista que cobrou o cliente antes dele.' })}
+      ${kpi('Promessas cumpridas', pctTxt(r.cumprimento), { icone: 'bi-calendar-check', cor: r.cumprimento != null && r.cumprimento < 50 ? 'warning' : 'info', sub: `${fmt.num(r.promessas_cumpridas)} cumpridas · ${fmt.num(r.promessas_quebradas)} quebradas · ${fmt.num(r.promessas_a_vencer)} a vencer`, dica: 'Cumprida: o cliente pagou entre a ação e 3 dias depois da data prometida.' })}
     </div>
     <div class="row g-3 mb-3">
       <div class="col-xl-8"><div class="card h-100"><div class="card-header">Atividade por dia</div><div class="card-body">
@@ -97,12 +104,14 @@ function tabelaColaboradores(lista) {
   const n = (v) => (v ? fmt.num(v) : '<span class="text-body-secondary">—</span>');
   return `<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr>
     <th>Colaborador</th><th class="num">Vendas</th><th class="num">Pedidos tratados</th><th class="num">Devolvidos / reprovados</th><th class="num">Cobranças</th>
-    <th class="num">Promessas</th><th class="num">Acordos</th><th class="num">CRM</th><th class="num">Chamados</th><th class="num">Horas no ponto</th><th class="num">Total</th></tr></thead>
+    <th class="num">Promessas</th><th class="num">Conversão</th><th class="num">Recuperado</th><th class="num">Acordos</th><th class="num">CRM</th><th class="num">Chamados</th><th class="num">Horas no ponto</th><th class="num">Total</th></tr></thead>
     <tbody>${lista.map((x) => `<tr role="button" tabindex="0" data-usuario="${x.usuario_id}">
       <td><b>${esc(x.nome)}</b><div class="small text-body-secondary">${esc(x.perfil_label || '')}${x.departamento ? ` · ${esc(x.departamento)}` : ''}</div></td>
       <td class="num">${x.vendas_qtd ? `${fmt.num(x.vendas_qtd)}<div class="small text-body-secondary">${fmt.money(x.vendas_valor)}</div>` : n(0)}</td>
       <td class="num">${n(x.movimentos)}</td><td class="num">${n(x.devolvidos + x.reprovados)}</td><td class="num">${n(x.cobrancas)}</td>
-      <td class="num">${x.promessas ? `${fmt.num(x.promessas)}<div class="small text-body-secondary">${fmt.money(x.promessas_valor)}</div>` : n(0)}</td>
+      <td class="num">${x.promessas ? `${fmt.num(x.promessas)}<div class="small text-body-secondary">${x.cumprimento != null ? `${pctTxt(x.cumprimento)} cumpridas` : fmt.money(x.promessas_valor)}</div>` : n(0)}</td>
+      <td class="num">${x.conversao != null ? `${pctTxt(x.conversao)}<div class="small text-body-secondary">${x.clientes_pagaram}/${x.clientes_cobrados} clientes</div>` : n(0)}</td>
+      <td class="num">${x.recuperado ? fmt.money(x.recuperado) : n(0)}</td>
       <td class="num">${n(x.acordos)}</td><td class="num">${n(x.interacoes + x.tarefas)}</td><td class="num">${n(x.chamados)}</td>
       <td class="num">${x.horas_ponto != null ? `${fmt.num(x.horas_ponto)} h` : n(0)}</td><td class="num"><b>${fmt.num(x.total)}</b></td></tr>`).join('')}</tbody></table></div>
     <div class="form-text px-3 pb-2">Total = vendas + movimentações de pedido + cobranças + acordos + CRM + chamados resolvidos.</div>`;
@@ -114,7 +123,9 @@ function detalheHtml(x) {
       ${item('Vendas lançadas', fmt.num(x.vendas_qtd), fmt.money(x.vendas_valor))}
       ${item('Pedidos tratados', fmt.num(x.movimentos), `${x.avancados} avançados · ${x.devolvidos} devolvidos · ${x.reprovados} reprovados`)}
       ${item('Cobranças', fmt.num(x.cobrancas), `${fmt.num(x.clientes_cobrados)} clientes`)}
-      ${item('Promessas', fmt.num(x.promessas), fmt.money(x.promessas_valor))}
+      ${item('Promessas', fmt.num(x.promessas), `${fmt.money(x.promessas_valor)} · ${x.promessas_cumpridas} cumpridas · ${x.promessas_quebradas} quebradas`)}
+      ${item('Conversão da cobrança', pctTxt(x.conversao), `${x.clientes_pagaram} de ${x.clientes_cobrados} clientes pagaram`)}
+      ${item('Valor recuperado', fmt.money(x.recuperado), `${x.parcelas_recuperadas} parcelas vencidas`)}
       ${item('Acordos', fmt.num(x.acordos), fmt.money(x.acordos_valor))}
       ${item('CRM', fmt.num(x.interacoes), `${fmt.num(x.tarefas)} tarefas concluídas`)}
       ${item('Chamados resolvidos', fmt.num(x.chamados))}
