@@ -264,3 +264,76 @@ test('conversão da cobrança: pagamento depois da ação e promessa cumprida', 
   assert.equal(x.cumprimento, x.promessas_cumpridas + x.promessas_quebradas ? Math.round((x.promessas_cumpridas / (x.promessas_cumpridas + x.promessas_quebradas)) * 10000) / 100 : null);
   assert.ok(d.resumo.recuperado >= x.recuperado);
 });
+
+test('feriados: nacionais calculados, cadastro, decisão de folga e efeito no ponto', async () => {
+  const F = require('../server/feriados');
+  assert.equal(F.pascoa(2026), '2026-04-05');
+  assert.equal(F.pascoa(2027), '2027-03-28');
+  const n26 = F.nacionais(2026);
+  assert.ok(n26.some((x) => x.data === '2026-04-03' && x.tipo === 'nacional' && x.folga), 'Sexta-feira Santa');
+  assert.ok(n26.some((x) => x.data === '2026-02-17' && x.tipo === 'facultativo' && !x.folga), 'Carnaval facultativo, sem folga');
+  assert.ok(n26.some((x) => x.data === '2026-06-04'), 'Corpus Christi');
+  assert.ok(n26.some((x) => x.data === '2026-11-20'), 'Consciência Negra');
+
+  const rh = await sessao('rh');
+  const ana = await sessao('ana');
+  assert.equal((await ana.req('GET', '/api/rh/feriados')).status, 403);
+  const d = await rh.get('/api/rh/feriados?ano=2026');
+  assert.equal(d.ano, 2026);
+  assert.ok(d.feriados.find((x) => x.data === '2026-12-25').folga);
+
+  // Feriado municipal num dia útil passado, com um colaborador que trabalhou nele.
+  const dias = [];
+  for (let x = S.addDias(S.hoje(), -1); dias.length < 2; x = S.addDias(x, -1)) {
+    const w = new Date(`${x}T12:00:00Z`).getUTCDay();
+    if (w > 0 && w < 6) dias.unshift(x);
+  }
+  const [d1, d2] = dias;
+  assert.equal((await rh.req('POST', '/api/rh/feriados', { data: d2, nome: 'X', tipo: 'municipal' })).status, 400, 'nome curto');
+  const { id: fid } = await rh.post('/api/rh/feriados', { data: d2, nome: 'Aniversário da cidade', tipo: 'municipal', anual: 1, folga: 1 });
+  const { id: cid } = await rh.post('/api/rh/colaboradores', {
+    nome: 'Feriado de Teste', cpf: '153.509.460-56', cargo: 'Operador de produção', departamento: 'Produção', tipo_contrato: 'clt', data_admissao: '2020-01-02',
+    carga_horaria: 40, escala: '5x2',
+  });
+  const ins = (data, hora) => db.insert('rh_ponto', { colaborador_id: cid, empresa_id: 1, data, hora, origem: 'web' });
+  for (const h of ['08:00:00', '12:00:00', '13:00:00', '17:00:00']) await ins(d1, h);
+  for (const h of ['08:00:00', '10:00:00']) await ins(d2, h);
+  await db.run('UPDATE colaboradores SET empresa_id = 1 WHERE id = ?', cid);
+  const esp = async () => (await rh.get(`/api/ponto/colaborador/${cid}?mes=${d2.slice(0, 7)}`)).espelho.dias;
+  let dia = (await esp()).find((x) => x.data === d2);
+  assert.equal(dia.situacao, 'feriado');
+  assert.match(dia.situacao_label, /Aniversário da cidade/);
+  assert.equal(dia.previsto, 0);
+  assert.equal(dia.saldo, 120, 'horas trabalhadas no feriado viram crédito');
+  // Anual: aparece também no ano seguinte.
+  const prox = await rh.get(`/api/rh/feriados?ano=${Number(d2.slice(0, 4)) + 1}`);
+  assert.ok(prox.feriados.some((x) => x.id === fid && x.data.slice(5) === d2.slice(5)));
+
+  // Desligar a folga: o dia volta a cobrar as 8 horas.
+  await rh.put(`/api/rh/feriados/${fid}`, { folga: false });
+  dia = (await esp()).find((x) => x.data === d2);
+  assert.equal(dia.situacao, 'normal');
+  assert.equal(dia.saldo, 120 - 480);
+  await rh.del(`/api/rh/feriados/${fid}`);
+
+  // Decisão sobre um nacional: Carnaval passa a ser folga só nesta empresa.
+  await rh.post('/api/rh/feriados/decisao', { data: '2026-02-17', folga: true });
+  const carn = (await rh.get('/api/rh/feriados?ano=2026')).feriados.find((x) => x.data === '2026-02-17');
+  assert.equal(carn.folga, true);
+  assert.equal(carn.origem, 'ajuste');
+  assert.ok((await F.folgas(1, '2026-02-01', '2026-02-28')).has('2026-02-17'));
+  assert.ok(!(await F.folgas(2, '2026-02-01', '2026-02-28')).has('2026-02-17'), 'outra empresa não muda');
+  assert.equal((await rh.req('POST', '/api/rh/feriados/decisao', { data: '2026-03-10', folga: true })).status, 400);
+
+  // Sem lembrete de ponto no feriado.
+  const todos = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((i) => [i, { e: '08:00', s: '17:00' }]));
+  await rh.put(`/api/ponto/colaborador/${cid}/horario`, { horario: todos });
+  await db.run('DELETE FROM rh_ponto_avisos');
+  const hoje = S.hoje();
+  const { id: fh } = await rh.post('/api/rh/feriados', { data: hoje, nome: 'Feriado de hoje', tipo: 'empresa', folga: 1 });
+  let v = await P.verificarAvisos(`${hoje} 09:00:00`);
+  assert.ok(!v.enviados.some((x) => x.colaborador_id === cid), 'feriado não tem lembrete');
+  await rh.del(`/api/rh/feriados/${fh}`);
+  v = await P.verificarAvisos(`${hoje} 09:00:00`);
+  assert.ok(v.enviados.some((x) => x.colaborador_id === cid));
+});

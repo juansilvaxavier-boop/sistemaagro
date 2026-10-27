@@ -11,7 +11,7 @@ const ROTULOS = ['Entrada', 'Saída para intervalo', 'Volta do intervalo', 'Saí
 const rotulo = (i) => ROTULOS[i] || (i % 2 === 0 ? 'Entrada (extra)' : 'Saída (extra)');
 const SITUACOES = {
   normal: 'Normal', incompleto: 'Marcação incompleta', sem_marcacao: 'Sem marcação', folga: 'Folga', ferias: 'Férias',
-  abonado: 'Abonado', falta: 'Falta lançada', hoje: 'Em andamento', fora: 'Fora do contrato',
+  abonado: 'Abonado', falta: 'Falta lançada', hoje: 'Em andamento', fora: 'Fora do contrato', feriado: 'Feriado',
 };
 
 const minutos = (hora) => { const [h, m, s] = String(hora).split(':').map(Number); return h * 60 + (m || 0) + (s || 0) / 60; };
@@ -117,6 +117,8 @@ async function apurar(c, de, ate, { comAnuladas = false, regras: rg } = {}) {
       WHERE colaborador_id = ? AND tipo IN ('atestado','falta_justificada','falta') AND data <= ?`, c.id, ate))
     .map((o) => ({ tipo: o.tipo, inicio: o.data, fim: S.addDias(o.data, Math.max(1, Math.ceil(Number(o.dias) || 1)) - 1) }));
   const primeira = (await db.get('SELECT MIN(data) AS d FROM rh_ponto WHERE colaborador_id = ? AND anulada = 0', c.id))?.d;
+  // Feriado de folga da empresa do colaborador. Na 12x36 sem horário a escala segue (o feriado é pago à parte, não muda o previsto).
+  const feriados = c.escala === '12x36' && !horario ? new Map() : await require('./feriados').folgas(c.empresa_id, de, ate);
 
   const porDia = {};
   for (const m of marc) (porDia[m.data] ||= []).push(m);
@@ -134,6 +136,7 @@ async function apurar(c, de, ate, { comAnuladas = false, regras: rg } = {}) {
     let previsto = previstoDia(c, d);
     let situacao = 'normal';
     if (cobre(ferias, d)) { previsto = 0; situacao = 'ferias'; }
+    else if (feriados.has(d)) { previsto = 0; situacao = 'feriado'; }
     else if (ocs.some((o) => o.tipo !== 'falta' && o.inicio <= d && o.fim >= d)) {
       // O abono cobre a ausência: não gera débito, mas o que passar da jornada continua sendo crédito.
       const base = previsto ?? previstoDiaTrabalhado(c);
@@ -143,6 +146,8 @@ async function apurar(c, de, ate, { comAnuladas = false, regras: rg } = {}) {
     else if (ocs.some((o) => o.tipo === 'falta' && o.inicio <= d && o.fim >= d)) { previsto = 0; situacao = 'falta'; }
     else if (foraContrato) { previsto = 0; situacao = 'fora'; }
     else if (previsto == null) previsto = validas.length ? previstoDiaTrabalhado(c) : 0;
+    // Trabalhou no feriado: as horas viram crédito, mas marcação ímpar ainda precisa de ajuste.
+    if (situacao === 'feriado' && validas.length % 2) situacao = ehHoje ? 'hoje' : 'incompleto';
     if (situacao === 'normal') {
       if (ehHoje) situacao = 'hoje';
       else if (validas.length % 2) situacao = 'incompleto';
@@ -165,7 +170,7 @@ async function apurar(c, de, ate, { comAnuladas = false, regras: rg } = {}) {
     }
     if (atraso || antecipada) { tot.atrasos++; tot.atraso_min += atraso + antecipada; }
     dias.push({
-      data: d, dia_semana: diaSemana(d), situacao, situacao_label: SITUACOES[situacao], trabalhado, previsto: Math.round(previsto), saldo,
+      data: d, dia_semana: diaSemana(d), situacao, situacao_label: situacao === 'feriado' ? `Feriado: ${feriados.get(d)}` : SITUACOES[situacao], trabalhado, previsto: Math.round(previsto), saldo,
       horario: hd || null, atraso, saida_antecipada: antecipada,
       marcacoes: (comAnuladas ? todas : validas).map((m) => ({ ...m, tipo: m.anulada ? 'Anulada' : m.tipo })),
     });
@@ -375,9 +380,13 @@ async function verificarAvisos(agora = S.agora()) {
   if (!colabs.length) return { enviados: [] };
   const ausentes = await ausentesNoDia(data);
   const cacheRegras = {};
+  const cacheFeriado = {};
   const enviados = [];
   for (const c of colabs) {
     if (ausentes.has(c.id)) continue;
+    const k = c.empresa_id || 0;
+    if (!(k in cacheFeriado)) cacheFeriado[k] = (await require('./feriados').folgas(c.empresa_id, data, data)).has(data);
+    if (cacheFeriado[k]) continue;
     const rg = (cacheRegras[c.empresa_id || 0] ||= await regras(c.empresa_id));
     if (!rg.avisos) continue;
     const h = lerHorario(c)?.[dow];
@@ -415,7 +424,7 @@ async function lembreteDe(c) {
   const agora = S.agora();
   const data = agora.slice(0, 10);
   const h = lerHorario(c)?.[diaSemana(data)];
-  if (!h || (await ausentesNoDia(data)).has(c.id)) return null;
+  if (!h || (await ausentesNoDia(data)).has(c.id) || (await require('./feriados').folgas(c.empresa_id, data, data)).has(data)) return null;
   const rg = await regras(c.empresa_id);
   const n = Number((await db.get('SELECT COUNT(*) AS n FROM rh_ponto WHERE colaborador_id = ? AND data = ? AND anulada = 0', c.id, data)).n);
   const tipo = avisoDevido(h, n, minutos(agora.slice(11)), rg);

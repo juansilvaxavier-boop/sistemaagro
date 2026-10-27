@@ -3,7 +3,7 @@
 import { get, post, put, del, esc, fmt, titulo, toast, erro, kpi, modal, campo, confirmar, pedirTexto, pode, baixar, tentar, lerForm } from '../core.js';
 
 const DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const SIT_COR = { normal: 'success', incompleto: 'warning', sem_marcacao: 'danger', folga: 'secondary', ferias: 'info', abonado: 'info', falta: 'danger', hoje: 'primary', fora: 'secondary' };
+const SIT_COR = { normal: 'success', incompleto: 'warning', sem_marcacao: 'danger', folga: 'secondary', ferias: 'info', abonado: 'info', falta: 'danger', hoje: 'primary', fora: 'secondary', feriado: 'info' };
 const mesAtual = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60e3).toISOString().slice(0, 7);
 
 /** Minutos → "7h45" (com sinal quando pedido). */
@@ -139,6 +139,7 @@ export default async function meuPonto(conteudo, { mes } = {}) {
       <div class="text-body-secondary" id="pt-data"></div>
       <div class="fw-bold" style="font-size:2.6rem;font-variant-numeric:tabular-nums;line-height:1" id="pt-relogio" aria-live="off">--:--:--</div>
       ${hHoje !== undefined ? `<div class="small">Seu horário hoje: <b>${esc(horarioTxt(hHoje))}</b></div>` : ''}
+      ${d.feriados?.length ? `<div class="small text-body-secondary"><i class="bi bi-calendar-event"></i> ${d.feriados[0].data === d.hoje ? 'Hoje é feriado' : 'Próximo feriado'}: <b>${fmt.date(d.feriados[0].data).slice(0, 5)} · ${esc(d.feriados[0].nome)}</b></div>` : ''}
       ${registra ? `<button class="btn btn-success btn-lg mt-2 mx-auto px-4" id="pt-bater"><i class="bi bi-fingerprint"></i> Registrar ${esc(d.proxima.toLowerCase())}</button>
         <div class="small text-body-secondary"><i class="bi bi-geo-alt"></i> A localização do aparelho${d.regras.exigir_foto ? ' e uma foto são registradas' : ' é registrada'} junto com a marcação.</div>
         ${d.regras.bloquear_fora_cerca && d.locais.length ? `<div class="small text-body-secondary"><i class="bi bi-building"></i> Aceito em: ${d.locais.map((l) => `${esc(l.nome)} (até ${fmt.num(l.raio)} m)`).join(', ')}</div>` : ''}

@@ -47,6 +47,7 @@ r.get('/meu', async (req, res) => {
     vinculado: true, colaborador: resumoColab(c), mes, hoje, agora: S.agora(),
     regras: { exigir_foto: rg.exigir_foto, bloquear_fora_cerca: rg.bloquear_fora_cerca && !c.ponto_externo }, locais,
     lembrete: await P.lembreteDe(c), push_chave: await require('../push').chavePublica(),
+    feriados: [...(await require('../feriados').folgas(c.empresa_id || req.empresaId, hoje, S.addDias(hoje, 120)))].slice(0, 3).map(([data, nome]) => ({ data, nome })),
     marcacoes_hoje: marcHoje, proxima: P.rotulo(marcHoje.length),
     espelho: await P.apurar(c, de, ate), banco: await P.bancoDeHoras(c),
   });

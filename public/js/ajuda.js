@@ -462,6 +462,18 @@ export const AJUDA = {
       ['Exportar', ['**Exportar espelhos** gera a planilha do mês com marcações, horas, saldo e local de cada dia.']],
     ],
   },
+  '#/rh/feriados': {
+    t: 'Feriados', r: 'Feriados nacionais (calculados pelo sistema), estaduais, municipais e da empresa, e quais são folga para o ponto.',
+    s: [
+      ['Nacionais', ['Já vêm prontos para qualquer ano, inclusive os que mudam de data (Carnaval, Sexta-feira Santa, Corpus Christi, calculados pela Páscoa).',
+        'Carnaval, Quarta-feira de Cinzas e Corpus Christi são **ponto facultativo**: vêm como dia normal; ligue a **Folga** se a empresa não trabalha.']],
+      ['Estaduais, municipais e da empresa', ['**Adicionar feriado**: data, nome e tipo. Marque **Repete todo ano** para os de data fixa (ex.: aniversário da cidade).',
+        'Por padrão vale só para a empresa escolhida no topo; marque "todas as empresas" quando for de todas.']],
+      ['O que muda no ponto', ['Em dia de **folga** o espelho mostra "Feriado", não cobra horas, o que for trabalhado vira crédito no banco de horas e ninguém recebe lembrete de marcação.',
+        'Na escala 12x36 sem horário cadastrado o feriado não muda o previsto (o plantão segue a escala).',
+        'Depois que a competência é fechada na folha, os feriados daquele mês ficam travados.']],
+    ],
+  },
   '#/rh/ocorrencias': {
     t: 'Ocorrências', r: 'Faltas, atestados, atrasos, horas extras, créditos e débitos manuais no banco de horas, advertências e elogios.',
     s: [['Como usar', ['**Lançar ocorrência**: colaborador, data, tipo, horas/dias e descrição.', 'Horas extras, faltas e atrasos viram eventos da folha ao gerar os eventos do mês.',
